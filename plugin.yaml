@@ -1,6 +1,6 @@
 name: hermes-relay
 version: 0.1.0
-description: YoYoPod Relay operator control surface for the Hermes Relay shadow runtime.
+description: Hermes Relay operator control surface and runtime plugin.
 author: Hermes Agent
 provides_hooks: []
 provides_tools: []
