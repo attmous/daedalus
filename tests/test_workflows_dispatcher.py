@@ -6,9 +6,6 @@ from pathlib import Path
 import pytest
 
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-
-
 def test_load_workflow_returns_module_when_contract_is_complete(tmp_path, monkeypatch):
     """A package exposing all five required attributes loads and is returned as-is."""
     # Build a fake workflow sub-package in tmp_path/workflows/fake_wf/
