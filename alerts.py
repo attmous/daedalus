@@ -4,13 +4,23 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
-import subprocess
+import os
 from pathlib import Path
 from typing import Any
 
+from adapters.yoyopod_core.paths import resolve_default_workflow_root as resolve_yoyopod_core_workflow_root
+from adapters.yoyopod_core.paths import runtime_paths as yoyopod_runtime_paths
+
 PLUGIN_DIR = Path(__file__).resolve().parent
-DEFAULT_WORKFLOW_ROOT = (PLUGIN_DIR.parent.parent.parent).resolve()
-DEFAULT_STATE_PATH = DEFAULT_WORKFLOW_ROOT / "memory" / "hermes-relay-alert-state.json"
+DEFAULT_WORKFLOW_ROOT_ENV_VARS = ("YOYOPOD_RELAY_WORKFLOW_ROOT", "HERMES_RELAY_WORKFLOW_ROOT")
+
+
+def resolve_default_workflow_root() -> Path:
+    return resolve_yoyopod_core_workflow_root(plugin_dir=PLUGIN_DIR)
+
+
+DEFAULT_WORKFLOW_ROOT = resolve_default_workflow_root()
+DEFAULT_STATE_PATH = yoyopod_runtime_paths(DEFAULT_WORKFLOW_ROOT)["alert_state_path"]
 
 
 def _load_tools_module():
@@ -35,16 +45,17 @@ def _load_optional_json(path: Path) -> dict[str, Any] | None:
     if not path.exists():
         return None
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        payload = json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return None
+    return payload if isinstance(payload, dict) else None
 
 
 def _critical_issues(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
     issues: list[dict[str, Any]] = []
     doctor = snapshot.get("doctor") or {}
     for check in doctor.get("checks") or []:
-        if check.get("severity") == "critical" and check.get("status") != "pass":
+        if check.get("severity") == "critical" and check.get("status") == "fail":
             reasons = ((check.get("details") or {}).get("reasons") or [])
             issues.append(
                 {
@@ -53,13 +64,13 @@ def _critical_issues(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
                     "reasons": [str(reason) for reason in reasons],
                 }
             )
-    cutover = snapshot.get("cutover") or {}
-    if not cutover.get("allowed", True):
+    active_gate = snapshot.get("active_gate") or {}
+    if not active_gate.get("allowed", True):
         issues.append(
             {
-                "code": "cutover_gate",
-                "summary": "Relay cutover gate is blocked",
-                "reasons": [str(reason) for reason in (cutover.get("reasons") or [])],
+                "code": "active_execution_gate",
+                "summary": "Relay active execution gate is blocked",
+                "reasons": [str(reason) for reason in (active_gate.get("reasons") or [])],
             }
         )
     return issues
@@ -68,11 +79,15 @@ def _critical_issues(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
 def _fingerprint_for_issues(issues: list[dict[str, Any]]) -> str | None:
     if not issues:
         return None
-    parts = []
-    for issue in issues:
-        reasons = ",".join(sorted(issue.get("reasons") or []))
-        parts.append(f"{issue.get('code')}:{reasons}" if reasons else str(issue.get("code")))
-    return "|".join(sorted(parts))
+    normalized = [
+        {
+            "code": str(issue.get("code")),
+            "summary": str(issue.get("summary")),
+            "reasons": sorted(str(reason) for reason in (issue.get("reasons") or [])),
+        }
+        for issue in issues
+    ]
+    return json.dumps(sorted(normalized, key=lambda issue: (issue["code"], issue["summary"], issue["reasons"])), sort_keys=True, separators=(",", ":"))
 
 
 def _owner_summary(snapshot: dict[str, Any]) -> dict[str, Any]:
@@ -89,7 +104,6 @@ def _alert_message(*, issues: list[dict[str, Any]], snapshot: dict[str, Any]) ->
     return (
         "YoYoPod Relay alert: "
         f"primary={owner.get('primary_owner')} "
-        f"watchdog={owner.get('legacy_watchdog_mode')} "
         f"issues=" + "; ".join(issue_bits)
     )
 
@@ -99,7 +113,6 @@ def _resolution_message(snapshot: dict[str, Any]) -> str:
     return (
         "YoYoPod Relay recovered: "
         f"primary={owner.get('primary_owner')} "
-        f"watchdog={owner.get('legacy_watchdog_mode')} "
         f"gate_allowed={owner.get('gate_allowed')}"
     )
 
@@ -135,25 +148,45 @@ def build_alert_decision(*, snapshot: dict[str, Any], previous_state: dict[str, 
     }
 
 
+
+def _write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    tmp_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    tmp_path.replace(path)
+
+
+
+def persist_alert_state(*, state_path: Path, decision: dict[str, Any], delivery_result: dict[str, Any]) -> dict[str, Any]:
+    if not delivery_result.get("delivered"):
+        return {"persisted": False, "reason": "delivery-not-successful"}
+    if decision.get("should_alert"):
+        next_state = dict(decision.get("next_state_on_alert") or {})
+        state_kind = "alert"
+    elif decision.get("should_resolve"):
+        next_state = dict(decision.get("next_state_on_resolve") or {})
+        state_kind = "resolve"
+    else:
+        return {"persisted": False, "reason": "no-state-change"}
+    payload = {
+        **next_state,
+        "state_kind": state_kind,
+        "delivery": {key: value for key, value in delivery_result.items() if value is not None},
+    }
+    _write_json_atomic(state_path, payload)
+    return {"persisted": True, "state_path": str(state_path), "state_kind": state_kind}
+
+
+
 def collect_snapshot(*, workflow_root: Path) -> dict[str, Any]:
     doctor_text = _execute_plugin_command(f"doctor --workflow-root {workflow_root} --json")
-    cutover_text = _execute_plugin_command(f"cutover-status --workflow-root {workflow_root} --json")
-    wrapper_status = json.loads(
-        subprocess.run(
-            ["python3", "scripts/yoyopod_workflow.py", "status", "--json"],
-            cwd=str(workflow_root),
-            text=True,
-            capture_output=True,
-            check=True,
-        ).stdout
-    )
+    active_gate_text = _execute_plugin_command(f"active-gate-status --workflow-root {workflow_root} --json")
     doctor = json.loads(doctor_text)
-    cutover = json.loads(cutover_text)
+    active_gate = json.loads(active_gate_text)
     return {
         "report_generated_at": doctor.get("report_generated_at"),
         "doctor": doctor,
-        "cutover": cutover,
-        "wrapper": wrapper_status,
+        "active_gate": active_gate,
     }
 
 
@@ -172,6 +205,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Build Relay outage alert decisions.")
     parser.add_argument("--workflow-root", default=str(DEFAULT_WORKFLOW_ROOT))
     parser.add_argument("--state-path", default=str(DEFAULT_STATE_PATH))
+    parser.add_argument("--delivery-json")
     parser.add_argument("--json", action="store_true")
     return parser
 
@@ -182,6 +216,13 @@ def main() -> int:
         workflow_root=Path(args.workflow_root),
         state_path=Path(args.state_path),
     )
+    if args.delivery_json:
+        delivery_result = json.loads(args.delivery_json)
+        result["persistence"] = persist_alert_state(
+            state_path=Path(args.state_path),
+            decision=result["decision"],
+            delivery_result=delivery_result,
+        )
     if args.json:
         print(json.dumps(result, indent=2, sort_keys=True))
     else:

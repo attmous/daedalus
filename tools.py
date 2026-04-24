@@ -11,12 +11,21 @@ from contextlib import redirect_stderr
 from pathlib import Path
 from typing import Any
 
+from adapters.yoyopod_core.paths import (
+    resolve_default_workflow_root as resolve_yoyopod_core_workflow_root,
+    yoyopod_cli_argv,
+)
+from adapters.yoyopod_core.status import build_status as build_yoyopod_core_status
+
 PLUGIN_DIR = Path(__file__).resolve().parent
-DEFAULT_WORKFLOW_ROOT = Path(
-    os.environ.get("YOYOPOD_RELAY_WORKFLOW_ROOT")
-    or os.environ.get("HERMES_RELAY_WORKFLOW_ROOT")
-    or PLUGIN_DIR.parent.parent.parent
-).resolve()
+DEFAULT_WORKFLOW_ROOT_ENV_VARS = ("YOYOPOD_RELAY_WORKFLOW_ROOT", "HERMES_RELAY_WORKFLOW_ROOT")
+
+
+def resolve_default_workflow_root() -> Path:
+    return resolve_yoyopod_core_workflow_root(plugin_dir=PLUGIN_DIR)
+
+
+DEFAULT_WORKFLOW_ROOT = resolve_default_workflow_root()
 DEFAULT_PROJECT_KEY = "yoyopod"
 DEFAULT_INSTANCE_ID = "relay-plugin"
 DEFAULT_SHADOW_SERVICE_INSTANCE_ID = "relay-shadow-service-1"
@@ -58,6 +67,10 @@ def _load_relay_module(workflow_root: Path):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def _build_project_status(workflow_root: Path) -> dict[str, Any]:
+    return build_yoyopod_core_status(workflow_root)
 
 
 def _compatibility_pairs() -> set[tuple[str | None, str | None]]:
@@ -162,6 +175,11 @@ def _service_unit_path(service_name: str | None = None, service_mode: str = "sha
     return _systemd_user_dir() / _resolve_service_name(service_name=service_name, service_mode=service_mode)
 
 
+def _expected_plugin_runtime_path(workflow_root: Path) -> Path:
+    return workflow_root / ".hermes" / "plugins" / "hermes-relay" / "runtime.py"
+
+
+
 def _render_service_unit(
     *,
     workflow_root: Path,
@@ -222,6 +240,11 @@ def install_supervised_service(
     service_name: str | None = None,
     service_mode: str = "shadow",
 ) -> dict[str, Any]:
+    plugin_runtime_path = _expected_plugin_runtime_path(workflow_root)
+    if not plugin_runtime_path.exists():
+        raise RelayCommandError(
+            f"relay plugin runtime not found at {plugin_runtime_path}; install/copy the plugin payload into the workflow root before installing the service"
+        )
     resolved_service_name = _resolve_service_name(service_name=service_name, service_mode=service_mode)
     resolved_instance_id = _resolve_service_instance_id(instance_id=instance_id, service_mode=service_mode)
     unit_path = _service_unit_path(service_name=resolved_service_name, service_mode=service_mode)
@@ -372,8 +395,7 @@ def build_shadow_report(*, workflow_root: Path, recent_actions_limit: int = 5) -
     if runtime_status.get("runtime_status") == "missing":
         raise RelayCommandError("Relay runtime is not initialized; run `relay start` first")
 
-    legacy = relay._load_legacy_workflow_module(workflow_root)
-    legacy_status = legacy.build_status()
+    legacy_status = _build_project_status(workflow_root)
     now_iso = relay._now_iso()
     now_epoch = relay._iso_to_epoch(now_iso)
     ingest = relay.ingest_legacy_status(
@@ -396,11 +418,8 @@ def build_shadow_report(*, workflow_root: Path, recent_actions_limit: int = 5) -
     )
     owner_summary = {
         "primary_owner": gate.get("primary_owner"),
-        "desired_owner": (gate.get("ownership") or {}).get("desired_owner"),
         "relay_primary": gate.get("primary_owner") == relay.RELAY_OWNER,
-        "active_execution_enabled": (gate.get("ownership") or {}).get("active_execution_enabled"),
-        "legacy_watchdog_mode": gate.get("legacy_watchdog_mode"),
-        "watchdog_disabled": gate.get("watchdog_disabled"),
+        "active_execution_enabled": (gate.get("execution") or {}).get("active_execution_enabled"),
         "gate_allowed": gate.get("allowed"),
         "gate_reasons": gate.get("reasons") or [],
     }
@@ -608,8 +627,7 @@ def build_doctor_report(*, workflow_root: Path, recent_actions_limit: int = 5) -
         recent_actions_limit=recent_actions_limit,
     )
     relay = _load_relay_module(workflow_root)
-    legacy = relay._load_legacy_workflow_module(workflow_root)
-    legacy_status = legacy.build_status()
+    legacy_status = _build_project_status(workflow_root)
     runtime = shadow_report.get("runtime") or {}
     heartbeat = shadow_report.get("heartbeat") or {}
     active_lane = shadow_report.get("active_lane") or {}
@@ -762,6 +780,43 @@ def build_doctor_report(*, workflow_root: Path, recent_actions_limit: int = 5) -
                 "installed": service.get("installed"),
                 "enabled": service.get("enabled"),
                 "active": service.get("active"),
+            },
+        )
+    )
+
+    active_lane_id = active_lane.get("lane_id")
+    stuck_dispatched_actions = relay.query_stuck_dispatched_actions(
+        workflow_root=workflow_root,
+        lane_id=active_lane_id,
+        now_iso=shadow_report.get("report_generated_at"),
+        limit=10,
+    ) if active_lane_id else []
+
+    checks.append(
+        _make_check(
+            code="stuck_dispatched_actions",
+            status="fail" if stuck_dispatched_actions else "pass",
+            severity="critical" if stuck_dispatched_actions else "info",
+            summary=(
+                "Stuck dispatched actions require the new dispatcher_lost reaper"
+                if stuck_dispatched_actions
+                else "No stuck dispatched actions detected"
+            ),
+            details={
+                "lane_id": active_lane_id,
+                "timeout_seconds": relay.DISPATCHED_ACTION_TIMEOUT_SECONDS,
+                "count": len(stuck_dispatched_actions),
+                "actions": [
+                    {
+                        "action_id": action.get("action_id"),
+                        "action_type": action.get("action_type"),
+                        "dispatched_at": action.get("dispatched_at"),
+                        "dispatched_age_seconds": action.get("dispatched_age_seconds"),
+                        "retry_count": action.get("retry_count"),
+                        "recovery_attempt_count": action.get("recovery_attempt_count"),
+                    }
+                    for action in stuck_dispatched_actions
+                ],
             },
         )
     )
@@ -955,17 +1010,16 @@ def configure_subcommands(parser: argparse.ArgumentParser) -> argparse.ArgumentP
     run_cmd.add_argument("--json", action="store_true")
     run_cmd.set_defaults(func=run_cli_command)
 
-    cutover_status_cmd = sub.add_parser("cutover-status", help="Show active-ownership gate state and current cutover readiness.")
-    cutover_status_cmd.add_argument("--workflow-root", default=str(DEFAULT_WORKFLOW_ROOT))
-    cutover_status_cmd.add_argument("--json", action="store_true")
-    cutover_status_cmd.set_defaults(func=run_cli_command)
+    active_gate_status_cmd = sub.add_parser("active-gate-status", help="Show Relay active-execution gate state.")
+    active_gate_status_cmd.add_argument("--workflow-root", default=str(DEFAULT_WORKFLOW_ROOT))
+    active_gate_status_cmd.add_argument("--json", action="store_true")
+    active_gate_status_cmd.set_defaults(func=run_cli_command)
 
-    cutover_switch_cmd = sub.add_parser("cutover-switch", help="Coordinated owner switch between legacy watchdog and Relay active ownership.")
-    cutover_switch_cmd.add_argument("--workflow-root", default=str(DEFAULT_WORKFLOW_ROOT))
-    cutover_switch_cmd.add_argument("--owner", required=True, choices=["relay", "legacy-watchdog"])
-    cutover_switch_cmd.add_argument("--instance-id", default=DEFAULT_INSTANCE_ID)
-    cutover_switch_cmd.add_argument("--json", action="store_true")
-    cutover_switch_cmd.set_defaults(func=run_cli_command)
+    set_active_execution_cmd = sub.add_parser("set-active-execution", help="Enable or disable Relay active execution.")
+    set_active_execution_cmd.add_argument("--workflow-root", default=str(DEFAULT_WORKFLOW_ROOT))
+    set_active_execution_cmd.add_argument("--enabled", required=True, choices=["true", "false"])
+    set_active_execution_cmd.add_argument("--json", action="store_true")
+    set_active_execution_cmd.set_defaults(func=run_cli_command)
 
     iterate_active_cmd = sub.add_parser("iterate-active", help="Run one guarded active-mode loop iteration.")
     iterate_active_cmd.add_argument("--workflow-root", default=str(DEFAULT_WORKFLOW_ROOT))
@@ -1009,15 +1063,19 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _run_wrapper_json_command(*, workflow_root: Path, command: str) -> dict[str, Any]:
+    """Run a YoYoPod workflow CLI command via the plugin-side entrypoint."""
+    argv = yoyopod_cli_argv(workflow_root, *shlex.split(command))
     completed = subprocess.run(
-        ["python3", str(workflow_root / "scripts" / "yoyopod_workflow.py"), *shlex.split(command)],
+        argv,
         capture_output=True,
         text=True,
         cwd=workflow_root,
         check=False,
     )
     if completed.returncode != 0:
-        raise RelayCommandError(completed.stderr.strip() or completed.stdout.strip() or f"wrapper command failed: {command}")
+        raise RelayCommandError(
+            completed.stderr.strip() or completed.stdout.strip() or f"wrapper command failed: {command}"
+        )
     return json.loads(completed.stdout)
 
 
@@ -1131,35 +1189,21 @@ def execute_namespace(args: argparse.Namespace) -> dict[str, Any]:
             interval_seconds=args.interval_seconds,
             max_iterations=args.max_iterations,
         )
-    if args.relay_command == "cutover-status":
+    if args.relay_command == "active-gate-status":
         legacy_status = _run_wrapper_json_command(workflow_root=workflow_root, command="status --json")
         return relay.evaluate_active_execution_gate(
             workflow_root=workflow_root,
             legacy_status=legacy_status,
         )
-    if args.relay_command == "cutover-switch":
-        if args.owner == "relay":
-            wrapper_result = _run_wrapper_json_command(workflow_root=workflow_root, command="pause")
-            relay.set_ownership_control(
-                workflow_root=workflow_root,
-                desired_owner=relay.RELAY_OWNER,
-                active_execution_enabled=True,
-                require_watchdog_paused=True,
-                metadata={"source": "relay-control", "requested_owner": args.owner, "instance_id": args.instance_id},
-            )
-        else:
-            relay.set_ownership_control(
-                workflow_root=workflow_root,
-                desired_owner=relay.LEGACY_OWNER,
-                active_execution_enabled=False,
-                require_watchdog_paused=True,
-                metadata={"source": "relay-control", "requested_owner": args.owner, "instance_id": args.instance_id},
-            )
-            wrapper_result = _run_wrapper_json_command(workflow_root=workflow_root, command="resume")
+    if args.relay_command == "set-active-execution":
+        relay.set_execution_control(
+            workflow_root=workflow_root,
+            active_execution_enabled=(args.enabled == "true"),
+            metadata={"source": "relay-control", "enabled": args.enabled},
+        )
         legacy_status = _run_wrapper_json_command(workflow_root=workflow_root, command="status --json")
         return {
-            "requested_owner": args.owner,
-            "wrapper_result": wrapper_result,
+            "requested_enabled": (args.enabled == "true"),
             "gate": relay.evaluate_active_execution_gate(workflow_root=workflow_root, legacy_status=legacy_status),
         }
     if args.relay_command == "iterate-active":
@@ -1230,7 +1274,7 @@ def render_result(command: str, result: dict[str, Any], *, json_output: bool) ->
         if owner_summary:
             lines.append(
                 f"owner summary: primary={owner_summary.get('primary_owner')} relay_primary={owner_summary.get('relay_primary')} "
-                f"watchdog_mode={owner_summary.get('legacy_watchdog_mode')} gate_allowed={owner_summary.get('gate_allowed')}"
+                f"active_execution_enabled={owner_summary.get('active_execution_enabled')} gate_allowed={owner_summary.get('gate_allowed')}"
             )
         lines.extend([
             f"live lane: issue={lane.get('issue_number')} lane={lane.get('lane_id')} state={lane.get('workflow_state')}/{lane.get('review_state')}/{lane.get('merge_state')}",
@@ -1308,18 +1352,18 @@ def render_result(command: str, result: dict[str, Any], *, json_output: bool) ->
             f"loop={result.get('loop_status')} iterations={result.get('iterations')} "
             f"lane={comparison.get('lane_id')} compatible={comparison.get('compatible')}"
         )
-    if command == "cutover-status":
-        ownership = result.get("ownership") or {}
+    if command == "active-gate-status":
+        execution = result.get("execution") or {}
         return (
-            f"allowed={result.get('allowed')} owner={ownership.get('desired_owner')} "
-            f"active_execution_enabled={ownership.get('active_execution_enabled')} reasons={','.join(result.get('reasons') or [])}"
+            f"allowed={result.get('allowed')} active_execution_enabled={execution.get('active_execution_enabled')} "
+            f"reasons={','.join(result.get('reasons') or [])}"
         )
-    if command == "cutover-switch":
+    if command == "set-active-execution":
         gate = result.get("gate") or {}
-        ownership = gate.get("ownership") or {}
+        execution = gate.get("execution") or {}
         return (
-            f"requested_owner={result.get('requested_owner')} allowed={gate.get('allowed')} "
-            f"owner={ownership.get('desired_owner')} reasons={','.join(gate.get('reasons') or [])}"
+            f"requested_enabled={result.get('requested_enabled')} allowed={gate.get('allowed')} "
+            f"active_execution_enabled={execution.get('active_execution_enabled')} reasons={','.join(gate.get('reasons') or [])}"
         )
     if command == "iterate-active":
         executed = result.get("executed_action") or {}
@@ -1364,6 +1408,8 @@ def execute_raw_args(raw_args: str) -> str:
     except SystemExit:
         detail = stderr_buffer.getvalue().strip()
         return f"relay error: {detail or parser.format_usage().strip()}"
+    except Exception as exc:
+        return f"relay error: unexpected {type(exc).__name__}: {exc}"
 
 
 def run_cli_command(args: argparse.Namespace) -> None:

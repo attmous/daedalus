@@ -1,4 +1,5 @@
 import argparse
+import calendar
 import importlib.util
 import json
 import sqlite3
@@ -7,16 +8,24 @@ import time
 from pathlib import Path
 from typing import Any
 
-RELAY_SCHEMA_VERSION = 1
+from adapters.yoyopod_core.paths import (
+    plugin_entrypoint_path,
+    runtime_paths as yoyopod_runtime_paths,
+    yoyopod_cli_argv,
+)
+from adapters.yoyopod_core.status import build_status as build_yoyopod_core_status
+import sys
+
+RELAY_SCHEMA_VERSION = 2
 RUNTIME_LEASE_KEY = "primary-orchestrator"
 RUNTIME_LEASE_SCOPE = "runtime"
-OWNERSHIP_CONTROL_ID = "primary"
-LEGACY_OWNER = "legacy-watchdog"
+EXECUTION_CONTROL_ID = "primary"
 RELAY_OWNER = "relay"
-WORKFLOW_WATCHDOG_JOB_NAME = "yoyopod-workflow-watchdog"
 WORKFLOW_ERROR_ANALYST_ROLE = "Workflow_Error_Analyst"
 STALLED_RECOVERY_AGE_THRESHOLD_SECONDS = 600
 STALLED_RECOVERY_DETECTION_THRESHOLD = 2
+DISPATCHED_ACTION_TIMEOUT_SECONDS = 1800
+SCHEMA_MIGRATIONS_TABLE = "relay_schema_migrations"
 
 
 def _now_iso() -> str:
@@ -28,7 +37,7 @@ def _iso_to_epoch(value: str | None) -> int | None:
         return None
     for fmt in ("%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%dT%H:%M:%S.%fZ"):
         try:
-            return int(time.mktime(time.strptime(value, fmt)))
+            return int(calendar.timegm(time.strptime(value, fmt)))
         except Exception:
             continue
     return None
@@ -60,6 +69,114 @@ def _connect(db_path: Path) -> sqlite3.Connection:
     conn.execute("PRAGMA temp_store = MEMORY")
     conn.execute("PRAGMA busy_timeout = 5000")
     return conn
+
+
+def _table_exists(conn: sqlite3.Connection, table_name: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        (table_name,),
+    ).fetchone()
+    return bool(row)
+
+
+def _column_exists(conn: sqlite3.Connection, table_name: str, column_name: str) -> bool:
+    return any(row[1] == column_name for row in conn.execute(f"PRAGMA table_info({table_name})").fetchall())
+
+
+def _create_execution_controls_table(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS execution_controls (
+          control_id TEXT PRIMARY KEY,
+          active_execution_enabled INTEGER NOT NULL DEFAULT 1,
+          updated_at TEXT NOT NULL,
+          metadata_json TEXT
+        )
+        """
+    )
+
+
+
+def _migrate_execution_control_table(conn: sqlite3.Connection, *, now_iso: str) -> None:
+    expected_columns = [
+        ("control_id", "TEXT", 0, None, 1),
+        ("active_execution_enabled", "INTEGER", 1, "1", 0),
+        ("updated_at", "TEXT", 1, None, 0),
+        ("metadata_json", "TEXT", 0, None, 0),
+    ]
+    if _table_exists(conn, "execution_controls"):
+        current_columns = [tuple(row[1:6]) for row in conn.execute("PRAGMA table_info(execution_controls)").fetchall()]
+        if current_columns != expected_columns:
+            raise RuntimeError(f"unsupported execution_controls schema: {current_columns}")
+        if _table_exists(conn, "ownership_controls"):
+            conn.execute("DROP TABLE ownership_controls")
+        return
+    if not _table_exists(conn, "ownership_controls"):
+        _create_execution_controls_table(conn)
+        return
+    legacy_rows = conn.execute(
+        "SELECT control_id, active_execution_enabled, updated_at, metadata_json FROM ownership_controls"
+    ).fetchall()
+    _create_execution_controls_table(conn)
+    for control_id, active_execution_enabled, updated_at, metadata_json in legacy_rows:
+        conn.execute(
+            "INSERT OR REPLACE INTO execution_controls (control_id, active_execution_enabled, updated_at, metadata_json) VALUES (?, ?, ?, ?)",
+            (
+                control_id,
+                1 if active_execution_enabled is None else int(bool(active_execution_enabled)),
+                updated_at or now_iso,
+                metadata_json,
+            ),
+        )
+    conn.execute("DROP TABLE ownership_controls")
+
+
+
+
+
+def _create_schema_migrations_table(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        f"""
+        CREATE TABLE IF NOT EXISTS {SCHEMA_MIGRATIONS_TABLE} (
+          migration_version INTEGER PRIMARY KEY,
+          from_version INTEGER NOT NULL,
+          to_version INTEGER NOT NULL,
+          applied_at TEXT NOT NULL,
+          details_json TEXT
+        )
+        """
+    )
+
+
+
+def _migrate_relay_schema_v1_to_v2(*, conn: sqlite3.Connection, now_iso: str) -> None:
+    _create_schema_migrations_table(conn)
+    if not _column_exists(conn, "lane_actions", "recovery_attempt_count"):
+        conn.execute(
+            "ALTER TABLE lane_actions ADD COLUMN recovery_attempt_count INTEGER NOT NULL DEFAULT 0"
+        )
+    conn.execute(
+        f"""
+        INSERT OR REPLACE INTO {SCHEMA_MIGRATIONS_TABLE} (
+          migration_version, from_version, to_version, applied_at, details_json
+        ) VALUES (?, ?, ?, ?, ?)
+        """,
+        (
+            2,
+            1,
+            2,
+            now_iso,
+            json.dumps(
+                {
+                    "from_version": 1,
+                    "to_version": 2,
+                    "changes": ["lane_actions.recovery_attempt_count"],
+                },
+                sort_keys=True,
+            ),
+        ),
+    )
+
 
 
 def init_relay_db(*, db_path: Path, project_key: str) -> dict[str, Any]:
@@ -144,22 +261,16 @@ def init_relay_db(*, db_path: Path, project_key: str) -> dict[str, Any]:
               actor_id TEXT PRIMARY KEY,
               lane_id TEXT NOT NULL,
               actor_role TEXT NOT NULL,
-              actor_name TEXT NOT NULL,
-              backend_type TEXT NOT NULL,
+              actor_backend TEXT NOT NULL,
               backend_identity TEXT,
               backend_session_id TEXT,
-              backend_thread_id TEXT,
-              backend_record_id TEXT,
+              backend_process_id TEXT,
+              backend_endpoint TEXT,
+              backend_command TEXT,
+              backend_extra_json TEXT,
               model_name TEXT,
-              runtime_status TEXT NOT NULL,
-              session_action_recommendation TEXT,
+              status TEXT NOT NULL,
               last_seen_at TEXT,
-              last_used_at TEXT,
-              can_continue INTEGER NOT NULL DEFAULT 0,
-              can_nudge INTEGER NOT NULL DEFAULT 0,
-              restart_count INTEGER NOT NULL DEFAULT 0,
-              failure_count INTEGER NOT NULL DEFAULT 0,
-              metadata_json TEXT,
               created_at TEXT NOT NULL,
               updated_at TEXT NOT NULL,
               FOREIGN KEY (lane_id) REFERENCES lanes(lane_id)
@@ -187,6 +298,7 @@ def init_relay_db(*, db_path: Path, project_key: str) -> dict[str, Any]:
               result_payload_json TEXT,
               error_payload_json TEXT,
               retry_count INTEGER NOT NULL DEFAULT 0,
+              recovery_attempt_count INTEGER NOT NULL DEFAULT 0,
               superseded_by_action_id TEXT,
               causal_event_id TEXT,
               FOREIGN KEY (lane_id) REFERENCES lanes(lane_id),
@@ -254,13 +366,12 @@ def init_relay_db(*, db_path: Path, project_key: str) -> dict[str, Any]:
               UNIQUE (projection_type, target_path)
             );
 
-            CREATE TABLE IF NOT EXISTS ownership_controls (
-              control_id TEXT PRIMARY KEY,
-              desired_owner TEXT NOT NULL,
-              active_execution_enabled INTEGER NOT NULL DEFAULT 0,
-              require_watchdog_paused INTEGER NOT NULL DEFAULT 1,
-              updated_at TEXT NOT NULL,
-              metadata_json TEXT
+            CREATE TABLE IF NOT EXISTS relay_schema_migrations (
+              migration_version INTEGER PRIMARY KEY,
+              from_version INTEGER NOT NULL,
+              to_version INTEGER NOT NULL,
+              applied_at TEXT NOT NULL,
+              details_json TEXT
             );
 
             CREATE INDEX IF NOT EXISTS idx_leases_scope_key ON leases(lease_scope, lease_key);
@@ -276,47 +387,74 @@ def init_relay_db(*, db_path: Path, project_key: str) -> dict[str, Any]:
             """
         )
         now_iso = _now_iso()
+        runtime_row = conn.execute(
+            "SELECT schema_version FROM relay_runtime WHERE runtime_id='relay'"
+        ).fetchone()
+        current_schema_version = int(runtime_row[0]) if runtime_row else RELAY_SCHEMA_VERSION
+        if runtime_row is None:
+            conn.execute(
+                """
+                INSERT INTO relay_runtime (
+                  runtime_id, project_key, schema_version, runtime_status, engine_name, engine_owner,
+                  active_orchestrator_instance_id, current_mode, current_epoch,
+                  latest_checkpoint_path, latest_checkpoint_sha256,
+                  latest_boot_at, latest_heartbeat_at, latest_reconcile_at,
+                  latest_error_at, latest_error_summary, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ?, ?)
+                """,
+                (
+                    "relay",
+                    project_key,
+                    RELAY_SCHEMA_VERSION,
+                    "initialized",
+                    "Hermes Relay",
+                    "Workflow_Orchestrator",
+                    "shadow",
+                    "relay-shadow-v1",
+                    now_iso,
+                    now_iso,
+                ),
+            )
+        else:
+            if current_schema_version > RELAY_SCHEMA_VERSION:
+                raise RuntimeError(f"unsupported relay schema version: {current_schema_version}")
+            conn.execute(
+                """
+                UPDATE relay_runtime
+                SET project_key=?, updated_at=?
+                WHERE runtime_id='relay'
+                """,
+                (project_key, now_iso),
+            )
+            if current_schema_version < RELAY_SCHEMA_VERSION:
+                _migrate_relay_schema_v1_to_v2(conn=conn, now_iso=now_iso)
+                conn.execute(
+                    """
+                    UPDATE relay_runtime
+                    SET schema_version=?, updated_at=?
+                    WHERE runtime_id='relay'
+                    """,
+                    (RELAY_SCHEMA_VERSION, now_iso),
+                )
+        _migrate_execution_control_table(conn, now_iso=now_iso)
         conn.execute(
             """
-            INSERT INTO relay_runtime (
-              runtime_id, project_key, schema_version, runtime_status, engine_name, engine_owner,
-              active_orchestrator_instance_id, current_mode, current_epoch,
-              latest_checkpoint_path, latest_checkpoint_sha256,
-              latest_boot_at, latest_heartbeat_at, latest_reconcile_at,
-              latest_error_at, latest_error_summary, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ?, ?)
-            ON CONFLICT(runtime_id) DO UPDATE SET
-              project_key=excluded.project_key,
-              schema_version=excluded.schema_version,
-              updated_at=excluded.updated_at
-            """,
-            (
-                "relay",
-                project_key,
-                RELAY_SCHEMA_VERSION,
-                "initialized",
-                "Hermes Relay",
-                "Workflow_Orchestrator",
-                "shadow",
-                "relay-shadow-v1",
-                now_iso,
-                now_iso,
-            ),
-        )
-        conn.execute(
-            """
-            INSERT INTO ownership_controls (
-              control_id, desired_owner, active_execution_enabled, require_watchdog_paused, updated_at, metadata_json
-            ) VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO execution_controls (
+              control_id, active_execution_enabled, updated_at, metadata_json
+            ) VALUES (?, ?, ?, ?)
             ON CONFLICT(control_id) DO NOTHING
             """,
-            (OWNERSHIP_CONTROL_ID, LEGACY_OWNER, 0, 1, now_iso, json.dumps({"source": "init"}, sort_keys=True)),
+            (
+                EXECUTION_CONTROL_ID,
+                1,
+                now_iso,
+                json.dumps({"source": "init"}, sort_keys=True),
+            ),
         )
         conn.commit()
         return {"ok": True, "db_path": str(db_path), "project_key": project_key}
     finally:
         conn.close()
-
 
 def append_relay_event(*, event_log_path: Path, event: dict[str, Any]) -> dict[str, Any]:
     _ensure_parent(event_log_path)
@@ -408,57 +546,46 @@ def release_lease(
 
 
 def _runtime_paths(workflow_root: Path) -> dict[str, Path]:
-    return {
-        "db_path": workflow_root / "state" / "relay" / "relay.db",
-        "event_log_path": workflow_root / "memory" / "relay-events.jsonl",
-    }
+    return yoyopod_runtime_paths(workflow_root)
 
 
-def _default_ownership_control(*, now_iso: str | None = None) -> dict[str, Any]:
+def _default_execution_control(*, now_iso: str | None = None) -> dict[str, Any]:
     return {
-        "control_id": OWNERSHIP_CONTROL_ID,
-        "desired_owner": LEGACY_OWNER,
-        "active_execution_enabled": False,
-        "require_watchdog_paused": True,
+        "control_id": EXECUTION_CONTROL_ID,
+        "active_execution_enabled": True,
         "updated_at": now_iso or _now_iso(),
         "metadata": {},
     }
 
 
-def get_ownership_control(*, workflow_root: Path) -> dict[str, Any]:
+def get_execution_control(*, workflow_root: Path) -> dict[str, Any]:
     paths = _runtime_paths(workflow_root)
     init_relay_db(db_path=paths["db_path"], project_key="yoyopod")
     conn = _connect(paths["db_path"])
     try:
         row = conn.execute(
-            "SELECT control_id, desired_owner, active_execution_enabled, require_watchdog_paused, updated_at, metadata_json FROM ownership_controls WHERE control_id=?",
-            (OWNERSHIP_CONTROL_ID,),
+            "SELECT control_id, active_execution_enabled, updated_at, metadata_json FROM execution_controls WHERE control_id=?",
+            (EXECUTION_CONTROL_ID,),
         ).fetchone()
     finally:
         conn.close()
     if not row:
-        return _default_ownership_control()
+        return _default_execution_control()
     return {
         "control_id": row[0],
-        "desired_owner": row[1],
-        "active_execution_enabled": bool(row[2]),
-        "require_watchdog_paused": bool(row[3]),
-        "updated_at": row[4],
-        "metadata": _parse_json_blob(row[5]) or {},
+        "active_execution_enabled": bool(row[1]),
+        "updated_at": row[2],
+        "metadata": _parse_json_blob(row[3]) or {},
     }
 
 
-def set_ownership_control(
+def set_execution_control(
     *,
     workflow_root: Path,
-    desired_owner: str,
     active_execution_enabled: bool,
-    require_watchdog_paused: bool = True,
     metadata: dict[str, Any] | None = None,
     now_iso: str | None = None,
 ) -> dict[str, Any]:
-    if desired_owner not in {LEGACY_OWNER, RELAY_OWNER}:
-        raise RuntimeError(f"unsupported desired_owner: {desired_owner}")
     now_iso = now_iso or _now_iso()
     metadata = metadata or {}
     paths = _runtime_paths(workflow_root)
@@ -467,21 +594,17 @@ def set_ownership_control(
     try:
         conn.execute(
             """
-            INSERT INTO ownership_controls (
-              control_id, desired_owner, active_execution_enabled, require_watchdog_paused, updated_at, metadata_json
-            ) VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO execution_controls (
+              control_id, active_execution_enabled, updated_at, metadata_json
+            ) VALUES (?, ?, ?, ?)
             ON CONFLICT(control_id) DO UPDATE SET
-              desired_owner=excluded.desired_owner,
               active_execution_enabled=excluded.active_execution_enabled,
-              require_watchdog_paused=excluded.require_watchdog_paused,
               updated_at=excluded.updated_at,
               metadata_json=excluded.metadata_json
             """,
             (
-                OWNERSHIP_CONTROL_ID,
-                desired_owner,
+                EXECUTION_CONTROL_ID,
                 1 if active_execution_enabled else 0,
-                1 if require_watchdog_paused else 0,
                 now_iso,
                 json.dumps(metadata, sort_keys=True),
             ),
@@ -492,8 +615,8 @@ def set_ownership_control(
     append_relay_event(
         event_log_path=paths["event_log_path"],
         event={
-            "event_id": f"evt:ownership_control_updated:{desired_owner}:{now_iso}",
-            "event_type": "ownership_control_updated",
+            "event_id": f"evt:active_execution_control_updated:{int(bool(active_execution_enabled))}:{now_iso}",
+            "event_type": "active_execution_control_updated",
             "event_version": 1,
             "created_at": now_iso,
             "producer": "Workflow_Orchestrator",
@@ -503,16 +626,15 @@ def set_ownership_control(
             "head_sha": None,
             "causal_event_id": None,
             "causal_action_id": None,
-            "dedupe_key": f"ownership_control_updated:{desired_owner}:{int(bool(active_execution_enabled))}:{int(bool(require_watchdog_paused))}",
+            "dedupe_key": f"active_execution_control_updated:{int(bool(active_execution_enabled))}",
             "payload": {
-                "desired_owner": desired_owner,
+                "primary_owner": RELAY_OWNER,
                 "active_execution_enabled": bool(active_execution_enabled),
-                "require_watchdog_paused": bool(require_watchdog_paused),
                 "metadata": metadata,
             },
         },
     )
-    return get_ownership_control(workflow_root=workflow_root)
+    return get_execution_control(workflow_root=workflow_root)
 
 
 def evaluate_active_execution_gate(
@@ -520,47 +642,22 @@ def evaluate_active_execution_gate(
     workflow_root: Path,
     legacy_status: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    legacy_status = legacy_status or _load_legacy_workflow_module(workflow_root).build_status()
     runtime = get_runtime_status(workflow_root=workflow_root)
-    control = get_ownership_control(workflow_root=workflow_root)
-    disabled_core_jobs = legacy_status.get("disabledCoreJobs") or []
-    watchdog_present = legacy_status.get("legacyWatchdogPresent")
-    if watchdog_present is None:
-        watchdog_present = bool(
-            WORKFLOW_WATCHDOG_JOB_NAME in (legacy_status.get("hermesJobNames") or [])
-            or WORKFLOW_WATCHDOG_JOB_NAME in (legacy_status.get("coreJobNames") or [])
-            or WORKFLOW_WATCHDOG_JOB_NAME in ((legacy_status.get("coreJobs") or {}).keys())
-        )
-        if not watchdog_present and legacy_status.get("engineOwner") != "hermes":
-            watchdog_present = True
-    watchdog_disabled = (not bool(watchdog_present)) or WORKFLOW_WATCHDOG_JOB_NAME in disabled_core_jobs
-    primary_owner = control.get("desired_owner")
-    if primary_owner == RELAY_OWNER:
-        legacy_watchdog_mode = "fallback_reconciler" if watchdog_present else "retired"
-    else:
-        legacy_watchdog_mode = "primary_dispatcher"
-    archived_job_health_is_advisory = legacy_status.get("engineOwner") == "hermes"
+    control = get_execution_control(workflow_root=workflow_root)
     reasons: list[str] = []
-    if control.get("desired_owner") != RELAY_OWNER:
-        reasons.append("relay-not-primary-owner")
     if not control.get("active_execution_enabled"):
         reasons.append("active-execution-disabled")
     if runtime.get("runtime_status") != "running":
         reasons.append("runtime-not-running")
     if runtime.get("current_mode") != "active":
         reasons.append("runtime-not-active-mode")
-    if control.get("require_watchdog_paused") and not archived_job_health_is_advisory and not watchdog_disabled:
-        reasons.append("legacy-watchdog-still-enabled")
     return {
         "allowed": not reasons,
         "reasons": reasons,
-        "ownership": control,
-        "primary_owner": primary_owner,
-        "legacy_watchdog_mode": legacy_watchdog_mode,
+        "execution": control,
+        "primary_owner": RELAY_OWNER,
         "runtime": runtime,
-        "watchdog_disabled": watchdog_disabled,
-        "disabled_core_jobs": disabled_core_jobs,
-        "legacy_health": legacy_status.get("health"),
+        "legacy_health": (legacy_status or {}).get("health"),
     }
 
 
@@ -715,6 +812,17 @@ def ingest_legacy_status(*, workflow_root: Path, legacy_status: dict[str, Any], 
     repair_brief_json = json.dumps((legacy_status.get("ledger") or {}).get("repairBrief"))
     actor_id = _actor_id(lane_id, "coder")
     effort_label = next((label.get("name") for label in active_lane.get("labels") or [] if str(label.get("name", "")).startswith("effort:")), None)
+    legacy_attention_required = bool((legacy_status.get("ledger") or {}).get("workflowState") == "operator_attention_required")
+    legacy_attention_reason = None
+    if legacy_attention_required:
+        next_action = legacy_status.get("nextAction") or {}
+        stale_lane_reasons = legacy_status.get("staleLaneReasons") or []
+        legacy_attention_reason = (
+            next_action.get("reason")
+            or legacy_status.get("activeLaneError")
+            or (stale_lane_reasons[0] if stale_lane_reasons else None)
+            or "legacy-operator-attention"
+        )
     paths = _runtime_paths(workflow_root)
     conn = _connect(paths["db_path"])
     try:
@@ -728,7 +836,7 @@ def ingest_legacy_status(*, workflow_root: Path, legacy_status: dict[str, Any], 
               merge_blockers_json, repair_brief_json, active_actor_id, current_action_id,
               last_completed_action_id, last_meaningful_progress_at, last_meaningful_progress_kind,
               operator_attention_required, operator_attention_reason, archived_at, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, NULL, NULL, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, NULL, ?, ?)
             ON CONFLICT(lane_id) DO UPDATE SET
               issue_url=excluded.issue_url,
               issue_title=excluded.issue_title,
@@ -755,7 +863,18 @@ def ingest_legacy_status(*, workflow_root: Path, legacy_status: dict[str, Any], 
               active_actor_id=excluded.active_actor_id,
               last_meaningful_progress_at=excluded.last_meaningful_progress_at,
               last_meaningful_progress_kind=excluded.last_meaningful_progress_kind,
-              operator_attention_required=excluded.operator_attention_required,
+              operator_attention_required=CASE
+                WHEN lanes.operator_attention_reason LIKE 'active-action-failed:%' AND excluded.operator_attention_required=0
+                THEN lanes.operator_attention_required
+                ELSE excluded.operator_attention_required
+              END,
+              operator_attention_reason=CASE
+                WHEN lanes.operator_attention_reason LIKE 'active-action-failed:%' AND excluded.operator_attention_required=0
+                THEN lanes.operator_attention_reason
+                WHEN excluded.operator_attention_required=1
+                THEN excluded.operator_attention_reason
+                ELSE NULL
+              END,
               updated_at=excluded.updated_at
             """,
             (
@@ -769,7 +888,8 @@ def ingest_legacy_status(*, workflow_root: Path, legacy_status: dict[str, Any], 
                 1 if legacy_status.get("derivedMergeBlocked") else 0, merge_blockers_json, repair_brief_json, actor_id,
                 lane_state.get("lastMeaningfulProgressAt") or now_iso,
                 lane_state.get("lastMeaningfulProgressKind") or ((legacy_status.get("ledger") or {}).get("workflowState") or "unknown"),
-                1 if ((legacy_status.get("ledger") or {}).get("workflowState") == "operator_attention_required") else 0,
+                1 if legacy_attention_required else 0,
+                legacy_attention_reason,
                 now_iso, now_iso,
             ),
         )
@@ -1143,7 +1263,7 @@ def request_active_actions_for_lane(*, workflow_root: Path, lane_id: str, now_is
             dict(row)
             for row in conn.execute(
                 """
-                SELECT action_id, lane_id, action_type, action_reason AS reason, target_head_sha, retry_count, requested_at
+                SELECT action_id, lane_id, action_type, action_reason AS reason, target_head_sha, retry_count, recovery_attempt_count, requested_at
                 FROM lane_actions
                 WHERE lane_id=? AND action_mode='active' AND status='requested'
                 ORDER BY requested_at ASC
@@ -1171,7 +1291,7 @@ def request_active_actions_for_lane(*, workflow_root: Path, lane_id: str, now_is
             base_idempotency_key = f"active:{action['action_type']}:{lane_id}:{action.get('target_head_sha') or 'none'}"
             failed_predecessor = conn.execute(
                 """
-                SELECT action_id, retry_count
+                SELECT action_id, retry_count, recovery_attempt_count
                 FROM lane_actions
                 WHERE lane_id=?
                   AND action_mode='active'
@@ -1184,9 +1304,11 @@ def request_active_actions_for_lane(*, workflow_root: Path, lane_id: str, now_is
                 (lane_id, action["action_type"], action.get("target_head_sha")),
             ).fetchone()
             retry_count = int((dict(failed_predecessor).get("retry_count") if failed_predecessor else 0) or 0)
+            recovery_attempt_count = int((dict(failed_predecessor).get("recovery_attempt_count") if failed_predecessor else 0) or 0)
             idempotency_key = base_idempotency_key
             if failed_predecessor is not None:
                 retry_count += 1
+                recovery_attempt_count += 1
                 idempotency_key = f"{base_idempotency_key}:retry:{retry_count}"
             action_id = f"act:active:{lane_id}:{action['action_type']}:{now_iso}:{idx}"
             target_actor_role = _target_actor_role_for_active_action(action["action_type"])
@@ -1197,9 +1319,9 @@ def request_active_actions_for_lane(*, workflow_root: Path, lane_id: str, now_is
                   action_id, lane_id, action_type, action_reason, action_mode, requested_by,
                   target_actor_role, target_actor_id, target_head_sha, idempotency_key, status,
                   requested_at, dispatched_at, completed_at, failed_at, result_code, result_summary,
-                  request_payload_json, result_payload_json, error_payload_json, retry_count,
+                  request_payload_json, result_payload_json, error_payload_json, retry_count, recovery_attempt_count,
                   superseded_by_action_id, causal_event_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, NULL, ?, NULL, NULL, ?, NULL, NULL)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, NULL, ?, NULL, NULL, ?, ?, NULL, NULL)
                 ON CONFLICT(idempotency_key) DO NOTHING
                 """,
                 (
@@ -1217,6 +1339,7 @@ def request_active_actions_for_lane(*, workflow_root: Path, lane_id: str, now_is
                     now_iso,
                     json.dumps(action, sort_keys=True),
                     retry_count,
+                    recovery_attempt_count,
                 ),
             )
             if conn.execute("SELECT changes()").fetchone()[0]:
@@ -1233,6 +1356,7 @@ def request_active_actions_for_lane(*, workflow_root: Path, lane_id: str, now_is
                     "target_actor_role": target_actor_role,
                     "action_reason": action.get("reason"),
                     "retry_count": retry_count,
+                    "recovery_attempt_count": recovery_attempt_count,
                     "requested_at": now_iso,
                 }
                 persisted.append(persisted_action)
@@ -1253,7 +1377,8 @@ def request_active_actions_for_lane(*, workflow_root: Path, lane_id: str, now_is
                         "action_type": action["action_type"],
                         "reason": action.get("reason"),
                         "mode": "active",
-                        "retry_count": 0,
+                        "retry_count": retry_count,
+                        "recovery_attempt_count": recovery_attempt_count,
                     },
                 })
                 events_to_emit.extend(
@@ -1273,130 +1398,51 @@ def request_active_actions_for_lane(*, workflow_root: Path, lane_id: str, now_is
     return persisted
 
 
-def _run_legacy_dispatch_implementation_turn(*, workflow_root: Path) -> dict[str, Any]:
+def _run_yoyopod_cli_json(*, workflow_root: Path, command: str) -> dict[str, Any]:
+    """Spawn the YoYoPod CLI (plugin entrypoint preferred, wrapper fallback) and parse JSON output."""
+    argv = yoyopod_cli_argv(workflow_root, command, "--json")
     completed = subprocess.run(
-        [
-            "python3",
-            str(workflow_root / "scripts" / "yoyopod_workflow.py"),
-            "dispatch-implementation-turn",
-            "--json",
-        ],
+        argv,
         capture_output=True,
         text=True,
         cwd=workflow_root,
         check=False,
     )
     if completed.returncode != 0:
-        raise RuntimeError(completed.stderr.strip() or completed.stdout.strip() or f"dispatch-implementation-turn exited {completed.returncode}")
+        raise RuntimeError(
+            completed.stderr.strip()
+            or completed.stdout.strip()
+            or f"{command} exited {completed.returncode}"
+        )
     return json.loads(completed.stdout)
+
+
+def _run_legacy_dispatch_implementation_turn(*, workflow_root: Path) -> dict[str, Any]:
+    return _run_yoyopod_cli_json(workflow_root=workflow_root, command="dispatch-implementation-turn")
 
 
 def _run_legacy_push_pr_update(*, workflow_root: Path) -> dict[str, Any]:
-    completed = subprocess.run(
-        [
-            "python3",
-            str(workflow_root / "scripts" / "yoyopod_workflow.py"),
-            "push-pr-update",
-            "--json",
-        ],
-        capture_output=True,
-        text=True,
-        cwd=workflow_root,
-        check=False,
-    )
-    if completed.returncode != 0:
-        raise RuntimeError(completed.stderr.strip() or completed.stdout.strip() or f"push-pr-update exited {completed.returncode}")
-    return json.loads(completed.stdout)
+    return _run_yoyopod_cli_json(workflow_root=workflow_root, command="push-pr-update")
 
 
 def _run_legacy_publish_pr(*, workflow_root: Path) -> dict[str, Any]:
-    completed = subprocess.run(
-        [
-            "python3",
-            str(workflow_root / "scripts" / "yoyopod_workflow.py"),
-            "publish-ready-pr",
-            "--json",
-        ],
-        capture_output=True,
-        text=True,
-        cwd=workflow_root,
-        check=False,
-    )
-    if completed.returncode != 0:
-        raise RuntimeError(completed.stderr.strip() or completed.stdout.strip() or f"publish-ready-pr exited {completed.returncode}")
-    return json.loads(completed.stdout)
+    return _run_yoyopod_cli_json(workflow_root=workflow_root, command="publish-ready-pr")
 
 
 def _run_legacy_request_internal_review(*, workflow_root: Path) -> dict[str, Any]:
-    completed = subprocess.run(
-        [
-            "python3",
-            str(workflow_root / "scripts" / "yoyopod_workflow.py"),
-            "dispatch-claude-review",
-            "--json",
-        ],
-        capture_output=True,
-        text=True,
-        cwd=workflow_root,
-        check=False,
-    )
-    if completed.returncode != 0:
-        raise RuntimeError(completed.stderr.strip() or completed.stdout.strip() or f"dispatch-claude-review exited {completed.returncode}")
-    return json.loads(completed.stdout)
+    return _run_yoyopod_cli_json(workflow_root=workflow_root, command="dispatch-claude-review")
 
 
 def _run_legacy_merge_pr(*, workflow_root: Path) -> dict[str, Any]:
-    completed = subprocess.run(
-        [
-            "python3",
-            str(workflow_root / "scripts" / "yoyopod_workflow.py"),
-            "merge-and-promote",
-            "--json",
-        ],
-        capture_output=True,
-        text=True,
-        cwd=workflow_root,
-        check=False,
-    )
-    if completed.returncode != 0:
-        raise RuntimeError(completed.stderr.strip() or completed.stdout.strip() or f"merge-and-promote exited {completed.returncode}")
-    return json.loads(completed.stdout)
+    return _run_yoyopod_cli_json(workflow_root=workflow_root, command="merge-and-promote")
 
 
 def _run_legacy_dispatch_repair_handoff(*, workflow_root: Path) -> dict[str, Any]:
-    completed = subprocess.run(
-        [
-            "python3",
-            str(workflow_root / "scripts" / "yoyopod_workflow.py"),
-            "dispatch-repair-handoff",
-            "--json",
-        ],
-        capture_output=True,
-        text=True,
-        cwd=workflow_root,
-        check=False,
-    )
-    if completed.returncode != 0:
-        raise RuntimeError(completed.stderr.strip() or completed.stdout.strip() or f"dispatch-repair-handoff exited {completed.returncode}")
-    return json.loads(completed.stdout)
+    return _run_yoyopod_cli_json(workflow_root=workflow_root, command="dispatch-repair-handoff")
 
 
 def _run_legacy_restart_actor_session(*, workflow_root: Path) -> dict[str, Any]:
-    completed = subprocess.run(
-        [
-            "python3",
-            str(workflow_root / "scripts" / "yoyopod_workflow.py"),
-            "restart-actor-session",
-            "--json",
-        ],
-        capture_output=True,
-        text=True,
-        cwd=workflow_root,
-        check=False,
-    )
-    if completed.returncode != 0:
-        raise RuntimeError(completed.stderr.strip() or completed.stdout.strip() or f"restart-actor-session exited {completed.returncode}")
-    return json.loads(completed.stdout)
+    return _run_yoyopod_cli_json(workflow_root=workflow_root, command="restart-actor-session")
 
 
 def _default_active_action_runners(*, workflow_root: Path) -> dict[str, Any]:
@@ -1468,12 +1514,19 @@ def _failure_urgency(*, recovery_state: str | None, failure_age_seconds: int | N
 
 
 
-def query_recent_failures(*, workflow_root: Path, limit: int = 5, unresolved_only: bool = True, now_iso: str | None = None) -> list[dict[str, Any]]:
+def query_recent_failures(*, workflow_root: Path, limit: int = 5, unresolved_only: bool = True, now_iso: str | None = None, lane_id: str | None = None) -> list[dict[str, Any]]:
     paths = _runtime_paths(workflow_root)
     conn = _connect(paths["db_path"])
     conn.row_factory = sqlite3.Row
     try:
-        where = "WHERE f.resolved_at IS NULL" if unresolved_only else ""
+        where_clauses = []
+        params: list[Any] = []
+        if unresolved_only:
+            where_clauses.append("f.resolved_at IS NULL")
+        if lane_id:
+            where_clauses.append("f.lane_id=?")
+            params.append(lane_id)
+        where = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
         rows = conn.execute(
             f"""
             SELECT f.failure_id,
@@ -1506,7 +1559,7 @@ def query_recent_failures(*, workflow_root: Path, limit: int = 5, unresolved_onl
             ORDER BY f.detected_at DESC
             LIMIT ?
             """,
-            (limit,),
+            (tuple(params) + (limit,)),
         ).fetchall()
     finally:
         conn.close()
@@ -1552,6 +1605,271 @@ def query_recent_failures(*, workflow_root: Path, limit: int = 5, unresolved_onl
         )
         failures.append(failure)
     return failures
+
+
+
+def query_stuck_dispatched_actions(*, workflow_root: Path, lane_id: str | None = None, now_iso: str | None = None, timeout_seconds: int = DISPATCHED_ACTION_TIMEOUT_SECONDS, limit: int = 25) -> list[dict[str, Any]]:
+    now_iso = now_iso or _now_iso()
+    cutoff_epoch = max(0, (_iso_to_epoch(now_iso) or int(time.time())) - timeout_seconds)
+    cutoff_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(cutoff_epoch))
+    paths = _runtime_paths(workflow_root)
+    conn = _connect(paths["db_path"])
+    conn.row_factory = sqlite3.Row
+    try:
+        where_clauses = ["status='dispatched'", "dispatched_at IS NOT NULL", "dispatched_at <= ?"]
+        params: list[Any] = [cutoff_iso]
+        if lane_id:
+            where_clauses.append("lane_id=?")
+            params.append(lane_id)
+        rows = conn.execute(
+            f"""
+            SELECT action_id,
+                   lane_id,
+                   action_type,
+                   action_reason,
+                   action_mode,
+                   requested_by,
+                   target_actor_role,
+                   target_actor_id,
+                   target_head_sha,
+                   status,
+                   requested_at,
+                   dispatched_at,
+                   retry_count,
+                   recovery_attempt_count,
+                   idempotency_key,
+                   superseded_by_action_id,
+                   causal_event_id
+            FROM lane_actions
+            WHERE {' AND '.join(where_clauses)}
+            ORDER BY dispatched_at ASC
+            LIMIT ?
+            """,
+            (*params, limit),
+        ).fetchall()
+    finally:
+        conn.close()
+    stuck_actions: list[dict[str, Any]] = []
+    for row in rows:
+        stuck_action = dict(row)
+        stuck_action["dispatched_age_seconds"] = _failure_age_seconds(detected_at=stuck_action.get("dispatched_at"), now_iso=now_iso)
+        stuck_action["timeout_seconds"] = timeout_seconds
+        stuck_actions.append(stuck_action)
+    return stuck_actions
+
+
+
+def reap_stuck_dispatched_actions(*, workflow_root: Path, lane_id: str, now_iso: str | None = None, timeout_seconds: int = DISPATCHED_ACTION_TIMEOUT_SECONDS) -> dict[str, Any]:
+    now_iso = now_iso or _now_iso()
+    paths = _runtime_paths(workflow_root)
+    stuck_actions = query_stuck_dispatched_actions(
+        workflow_root=workflow_root,
+        lane_id=lane_id,
+        now_iso=now_iso,
+        timeout_seconds=timeout_seconds,
+    )
+    if not stuck_actions:
+        return {"checked": 0, "reaped": 0, "failures": [], "recovery_actions": []}
+
+    conn = _connect(paths["db_path"])
+    conn.row_factory = sqlite3.Row
+    events_to_emit: list[dict[str, Any]] = []
+    reaped_failures: list[dict[str, Any]] = []
+    recovery_actions: list[dict[str, Any]] = []
+    try:
+        for stuck_action in stuck_actions:
+            action_row = conn.execute("SELECT * FROM lane_actions WHERE action_id=?", (stuck_action["action_id"],)).fetchone()
+            if not action_row:
+                continue
+            action = dict(action_row)
+            if action.get("status") != "dispatched":
+                continue
+            failure_id = f"failure:{action['action_id']}"
+            failure_scope = _failure_scope_for_action(action.get("action_type"))
+            failure_summary = (
+                f"dispatcher lost after {timeout_seconds} seconds waiting for {action.get('action_type')} to complete"
+            )
+            recovery = _deterministic_recovery_for_failure(action) or {
+                "analyst_status": "completed",
+                "recommended_action": "mark_operator_attention",
+                "confidence": 0.0,
+                "escalated": 1,
+                "queue_recovery_action": None,
+                "summary": failure_summary,
+                "failure_class": "dispatcher_lost",
+            }
+            recovery_metadata = {
+                **(recovery.get("metadata") or {}),
+                "source": "dispatch_reaper",
+                "timeout_seconds": timeout_seconds,
+                "dispatched_at": action.get("dispatched_at"),
+                "dispatched_age_seconds": stuck_action.get("dispatched_age_seconds"),
+            }
+            recovery = {
+                **recovery,
+                "failure_class": "dispatcher_lost",
+                "metadata": recovery_metadata,
+            }
+            evidence = {
+                "action_type": action.get("action_type"),
+                "error": "dispatcher lost",
+                "timeout_seconds": timeout_seconds,
+                "dispatched_at": action.get("dispatched_at"),
+                "dispatched_age_seconds": stuck_action.get("dispatched_age_seconds"),
+                "target_head_sha": action.get("target_head_sha"),
+            }
+            conn.execute(
+                """
+                UPDATE lane_actions
+                SET status='failed', failed_at=?, result_code=?, result_summary=?, error_payload_json=?
+                WHERE action_id=?
+                """,
+                (now_iso, "timeout", failure_summary, json.dumps(evidence, sort_keys=True), action["action_id"]),
+            )
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO failures (
+                  failure_id, lane_id, related_action_id, related_actor_id, failure_scope,
+                  failure_class, severity, detected_at, evidence_json, analyst_status,
+                  analyst_recommended_action, analyst_confidence, analyst_summary,
+                  escalated, resolved_at, resolution_action_id, metadata_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?)
+                """,
+                (
+                    failure_id,
+                    action.get("lane_id"),
+                    action["action_id"],
+                    action.get("target_actor_id"),
+                    failure_scope,
+                    "dispatcher_lost",
+                    "error",
+                    now_iso,
+                    json.dumps(evidence, sort_keys=True),
+                    recovery.get("analyst_status"),
+                    recovery.get("recommended_action"),
+                    recovery.get("confidence"),
+                    recovery.get("summary") or failure_summary,
+                    recovery.get("escalated"),
+                    json.dumps(recovery.get("metadata") or {"source": "dispatch_reaper"}, sort_keys=True),
+                ),
+            )
+            conn.execute(
+                """
+                UPDATE relay_runtime
+                SET latest_error_at=?, latest_error_summary=?, updated_at=?
+                WHERE runtime_id='relay'
+                """,
+                (now_iso, failure_summary, now_iso),
+            )
+            reaped_record = {
+                "failure_id": failure_id,
+                "action_id": action["action_id"],
+                "lane_id": action.get("lane_id"),
+                "action_type": action.get("action_type"),
+                "failure_class": "dispatcher_lost",
+                "failure_summary": failure_summary,
+                "timeout_seconds": timeout_seconds,
+            }
+            if recovery.get("queue_recovery_action"):
+                recovery_action = _queue_recovery_action(
+                    conn=conn,
+                    action=action,
+                    now_iso=now_iso,
+                    recovery_action_type=recovery["queue_recovery_action"],
+                )
+                recovery_actions.append(recovery_action)
+                reaped_record["recovery_action"] = recovery_action
+                events_to_emit.append(
+                    {
+                        "event_id": f"evt:recovery_requested:dispatch-timeout:{failure_id}:{now_iso}",
+                        "event_type": "recovery_requested",
+                        "event_version": 1,
+                        "created_at": now_iso,
+                        "producer": "Workflow_Orchestrator",
+                        "project_key": "yoyopod",
+                        "lane_id": action.get("lane_id"),
+                        "issue_number": None,
+                        "head_sha": action.get("target_head_sha"),
+                        "causal_event_id": None,
+                        "causal_action_id": action["action_id"],
+                        "dedupe_key": f"recovery_requested:dispatch-timeout:{failure_id}",
+                        "payload": {
+                            "failure_id": failure_id,
+                            "recovery_action_type": recovery_action["action_type"],
+                            "action_id": recovery_action["action_id"],
+                            "reason": recovery_action["action_reason"],
+                        },
+                    }
+                )
+            else:
+                attention_reason = f"dispatcher_lost:{action.get('action_type')}"
+                conn.execute(
+                    """
+                    UPDATE lanes
+                    SET operator_attention_required=1,
+                        operator_attention_reason=?,
+                        updated_at=?
+                    WHERE lane_id=?
+                    """,
+                    (attention_reason, now_iso, action.get("lane_id")),
+                )
+                events_to_emit.append(
+                    {
+                        "event_id": f"evt:operator_attention_required:dispatch-timeout:{failure_id}:{now_iso}",
+                        "event_type": "operator_attention_required",
+                        "event_version": 1,
+                        "created_at": now_iso,
+                        "producer": "Workflow_Orchestrator",
+                        "project_key": "yoyopod",
+                        "lane_id": action.get("lane_id"),
+                        "issue_number": None,
+                        "head_sha": action.get("target_head_sha"),
+                        "causal_event_id": None,
+                        "causal_action_id": action["action_id"],
+                        "dedupe_key": f"operator_attention_required:dispatch-timeout:{failure_id}",
+                        "payload": {
+                            "reason": attention_reason,
+                            "failure_id": failure_id,
+                            "summary": failure_summary,
+                        },
+                    }
+                )
+            events_to_emit.append(
+                {
+                    "event_id": f"evt:active_action_failed:dispatch-timeout:{failure_id}:{now_iso}",
+                    "event_type": "active_action_failed",
+                    "event_version": 1,
+                    "created_at": now_iso,
+                    "producer": "Workflow_Orchestrator",
+                    "project_key": "yoyopod",
+                    "lane_id": action.get("lane_id"),
+                    "issue_number": None,
+                    "head_sha": action.get("target_head_sha"),
+                    "causal_event_id": None,
+                    "causal_action_id": action["action_id"],
+                    "dedupe_key": f"active_action_failed:dispatch-timeout:{failure_id}",
+                    "payload": {
+                        "action_id": action["action_id"],
+                        "action_type": action.get("action_type"),
+                        "failure_class": "dispatcher_lost",
+                        "reason": failure_summary,
+                        "timeout_seconds": timeout_seconds,
+                    },
+                }
+            )
+            reaped_failures.append(reaped_record)
+        conn.commit()
+    finally:
+        conn.close()
+    for event in events_to_emit:
+        append_relay_event(event_log_path=paths["event_log_path"], event=event)
+    return {
+        "checked": len(stuck_actions),
+        "reaped": len(reaped_failures),
+        "failures": reaped_failures,
+        "recovery_actions": recovery_actions,
+    }
+
 
 
 def _active_action_types() -> set[str]:
@@ -2382,11 +2700,12 @@ def _analyze_ambiguous_failure(
 
 
 def _queue_recovery_action(*, conn: sqlite3.Connection, action: dict[str, Any], now_iso: str, recovery_action_type: str) -> dict[str, Any]:
-    retry_count = int(action.get("retry_count") or 0) + 1
-    action_id = f"act:recovery:{action.get('lane_id')}:{recovery_action_type}:{now_iso}:{retry_count}"
+    retry_count = int(action.get("retry_count") or 0) + 1 if recovery_action_type == action.get("action_type") else 0
+    recovery_attempt_count = int(action.get("recovery_attempt_count") or 0) + 1
+    action_id = f"act:recovery:{action.get('lane_id')}:{recovery_action_type}:{now_iso}:{recovery_attempt_count}"
     idempotency_key = (
         f"active-recovery:{recovery_action_type}:{action.get('lane_id')}:"
-        f"{action.get('target_head_sha') or 'none'}:{retry_count}"
+        f"{action.get('target_head_sha') or 'none'}:{recovery_attempt_count}"
     )
     payload = _parse_json_blob(action.get("request_payload_json")) or {
         "action_type": action.get("action_type"),
@@ -2403,8 +2722,8 @@ def _queue_recovery_action(*, conn: sqlite3.Connection, action: dict[str, Any], 
           target_actor_role, target_actor_id, target_head_sha, idempotency_key, status,
           requested_at, dispatched_at, completed_at, failed_at, result_code, result_summary,
           request_payload_json, result_payload_json, error_payload_json, retry_count,
-          superseded_by_action_id, causal_event_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, NULL, ?, NULL, NULL, ?, NULL, NULL)
+          recovery_attempt_count, superseded_by_action_id, causal_event_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, NULL, ?, NULL, NULL, ?, ?, NULL, NULL)
         """,
         (
             action_id,
@@ -2421,6 +2740,7 @@ def _queue_recovery_action(*, conn: sqlite3.Connection, action: dict[str, Any], 
             now_iso,
             json.dumps({**payload, "recovery": recovery_action_type, "prior_action_id": action.get("action_id")}, sort_keys=True),
             retry_count,
+            recovery_attempt_count,
         ),
     )
     conn.execute(
@@ -2438,6 +2758,7 @@ def _queue_recovery_action(*, conn: sqlite3.Connection, action: dict[str, Any], 
         "action_reason": action_reason,
         "target_head_sha": action.get("target_head_sha"),
         "retry_count": retry_count,
+        "recovery_attempt_count": recovery_attempt_count,
         "requested_at": now_iso,
     }
 
@@ -2528,12 +2849,13 @@ def execute_requested_action(
         result = runner()
         post_action_status = result.get("after") if isinstance(result.get("after"), dict) else None
         if post_action_status is None:
-            legacy_module_path = workflow_root / "scripts" / "yoyopod_workflow.py"
-            if legacy_module_path.exists():
-                try:
-                    post_action_status = _load_legacy_workflow_module(workflow_root).build_status()
-                except Exception:
-                    post_action_status = None
+            # Post-action status read prefers the plugin-side workspace
+            # accessor; falls back to the legacy wrapper module if the plugin
+            # is not yet installed under the workflow root.
+            try:
+                post_action_status = _load_legacy_workflow_module(workflow_root).build_status()
+            except Exception:
+                post_action_status = None
         if post_action_status is not None:
             ingest_legacy_status(workflow_root=workflow_root, legacy_status=post_action_status, now_iso=now_iso)
         if action.get("lane_id"):
@@ -2903,8 +3225,9 @@ def reconcile_stalled_recoveries(*, workflow_root: Path, lane_id: str, now_iso: 
             limit=50,
             unresolved_only=True,
             now_iso=now_iso,
+            lane_id=lane_id,
         )
-        if failure.get("lane_id") == lane_id and failure.get("recovery_state") == "recovery_stalled"
+        if failure.get("recovery_state") == "recovery_stalled"
     ]
     if not recent_failures:
         return {"checked": 0, "stalled": 0, "escalated": []}
@@ -3088,6 +3411,7 @@ def run_active_iteration(*, workflow_root: Path, instance_id: str, legacy_status
             "gate": gate,
             "comparison": comparison,
             "ingested": ingested,
+            "dispatched_reap": {"checked": 0, "reaped": 0, "failures": [], "recovery_actions": []},
         }
     lane_id = ingested.get("lane_id")
     if not lane_id:
@@ -3101,7 +3425,13 @@ def run_active_iteration(*, workflow_root: Path, instance_id: str, legacy_status
             "requested_actions": [],
             "executed_action": None,
             "stalled_recoveries": {"checked": 0, "stalled": 0, "escalated": []},
+            "dispatched_reap": {"checked": 0, "reaped": 0, "failures": [], "recovery_actions": []},
         }
+    dispatched_reap = reap_stuck_dispatched_actions(
+        workflow_root=workflow_root,
+        lane_id=lane_id,
+        now_iso=now_iso,
+    )
     stalled_recoveries = reconcile_stalled_recoveries(
         workflow_root=workflow_root,
         lane_id=lane_id,
@@ -3123,6 +3453,7 @@ def run_active_iteration(*, workflow_root: Path, instance_id: str, legacy_status
             "requested_actions": [],
             "executed_action": None,
             "stalled_recoveries": stalled_recoveries,
+            "dispatched_reap": dispatched_reap,
         }
     executed_action = execute_requested_action(
         workflow_root=workflow_root,
@@ -3139,6 +3470,7 @@ def run_active_iteration(*, workflow_root: Path, instance_id: str, legacy_status
         "requested_actions": requested_actions,
         "executed_action": executed_action,
         "stalled_recoveries": stalled_recoveries,
+        "dispatched_reap": dispatched_reap,
     }
 
 
@@ -3201,18 +3533,31 @@ def run_active_loop(
 
 
 def _load_legacy_workflow_module(workflow_root: Path):
-    module_path = workflow_root / "scripts" / "yoyopod_workflow.py"
-    spec = importlib.util.spec_from_file_location("yoyopod_workflow", module_path)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"unable to load legacy workflow module from {module_path}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    """Build the plugin's workspace accessor for the given workflow root.
+
+    Returns an object that exposes the full YoYoPod workflow attribute
+    surface (``build_status``, ``reconcile``, ``doctor``, ``dispatch_*``,
+    config constants, helper methods). Historically this function used to
+    prefer a workspace-scoped ``yoyopod_workflow.py`` wrapper script; that
+    wrapper has been retired, so the only supported resolution is via
+    ``adapters.yoyopod_core.workspace.load_workspace_from_config``.
+    """
+    plugin_main = plugin_entrypoint_path(workflow_root)
+    if not plugin_main.exists():
+        raise RuntimeError(
+            f"hermes-relay plugin not installed under {workflow_root}; "
+            f"expected entrypoint at {plugin_main}. Run ./scripts/install.sh "
+            "from the hermes-relay repo to install it."
+        )
+    plugin_root = plugin_main.parents[2]
+    if str(plugin_root) not in sys.path:
+        sys.path.insert(0, str(plugin_root))
+    workspace_mod = importlib.import_module("adapters.yoyopod_core.workspace")
+    return workspace_mod.load_workspace_from_config(workspace_root=workflow_root)
 
 
 def ingest_live_legacy_status(*, workflow_root: Path, now_iso: str | None = None) -> dict[str, Any]:
-    legacy = _load_legacy_workflow_module(workflow_root)
-    legacy_status = legacy.build_status()
+    legacy_status = build_yoyopod_core_status(workflow_root)
     return ingest_legacy_status(workflow_root=workflow_root, legacy_status=legacy_status, now_iso=now_iso)
 
 
@@ -3259,16 +3604,14 @@ def build_parser() -> argparse.ArgumentParser:
     run_cmd.add_argument("--max-iterations", type=int)
     run_cmd.add_argument("--json", action="store_true")
 
-    ownership_status_cmd = sub.add_parser("ownership-status", help="Show Relay active-ownership control and gate state.")
-    ownership_status_cmd.add_argument("--workflow-root", required=True)
-    ownership_status_cmd.add_argument("--json", action="store_true")
+    active_gate_status_cmd = sub.add_parser("active-gate-status", help="Show Relay active-execution gate state.")
+    active_gate_status_cmd.add_argument("--workflow-root", required=True)
+    active_gate_status_cmd.add_argument("--json", action="store_true")
 
-    set_ownership_cmd = sub.add_parser("set-ownership", help="Set desired active owner and execution gate policy.")
-    set_ownership_cmd.add_argument("--workflow-root", required=True)
-    set_ownership_cmd.add_argument("--desired-owner", required=True, choices=[LEGACY_OWNER, RELAY_OWNER])
-    set_ownership_cmd.add_argument("--active-execution-enabled", choices=["true", "false"], required=True)
-    set_ownership_cmd.add_argument("--require-watchdog-paused", choices=["true", "false"], default="true")
-    set_ownership_cmd.add_argument("--json", action="store_true")
+    set_active_execution_cmd = sub.add_parser("set-active-execution", help="Enable or disable Relay active execution.")
+    set_active_execution_cmd.add_argument("--workflow-root", required=True)
+    set_active_execution_cmd.add_argument("--enabled", choices=["true", "false"], required=True)
+    set_active_execution_cmd.add_argument("--json", action="store_true")
 
     iterate_active_cmd = sub.add_parser("iterate-active", help="Run one guarded active-mode loop iteration against live or provided legacy state.")
     iterate_active_cmd.add_argument("--workflow-root", required=True)
@@ -3352,18 +3695,16 @@ def main() -> int:
         )
         print(json.dumps(result, indent=2) if args.json else f"{result['loop_status']} iterations={result.get('iterations', 0)}")
         return 0
-    if args.command == "ownership-status":
+    if args.command == "active-gate-status":
         result = evaluate_active_execution_gate(workflow_root=workflow_root)
-        print(json.dumps(result, indent=2) if args.json else f"allowed={result.get('allowed')} owner={((result.get('ownership') or {}).get('desired_owner'))} reasons={','.join(result.get('reasons') or [])}")
+        print(json.dumps(result, indent=2) if args.json else f"allowed={result.get('allowed')} active_execution_enabled={((result.get('execution') or {}).get('active_execution_enabled'))} reasons={','.join(result.get('reasons') or [])}")
         return 0
-    if args.command == "set-ownership":
-        result = set_ownership_control(
+    if args.command == "set-active-execution":
+        result = set_execution_control(
             workflow_root=workflow_root,
-            desired_owner=args.desired_owner,
-            active_execution_enabled=(args.active_execution_enabled == "true"),
-            require_watchdog_paused=(args.require_watchdog_paused == "true"),
+            active_execution_enabled=(args.enabled == "true"),
         )
-        print(json.dumps(result, indent=2) if args.json else f"owner={result.get('desired_owner')} active_execution_enabled={result.get('active_execution_enabled')}")
+        print(json.dumps(result, indent=2) if args.json else f"active_execution_enabled={result.get('active_execution_enabled')}")
         return 0
     if args.command == "iterate-active":
         result = run_active_iteration(
