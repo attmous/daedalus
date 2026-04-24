@@ -350,3 +350,123 @@ def test_workspace_runtime_accessor_errors_on_unknown_name(tmp_path):
     assert "nonexistent-runtime" in str(exc.value)
     # Error message names the known runtime profiles
     assert "acpx-codex" in str(exc.value) or "claude-cli" in str(exc.value)
+
+
+def test_workspace_from_yaml_exposes_same_surface_as_legacy_json(tmp_path):
+    """Given the new YAML shape, workspace exposes the same attribute surface
+    callers have historically used (REPO_PATH, INTER_REVIEW_AGENT_MODEL, etc.)."""
+    from pathlib import Path as _Path
+    from workflows.code_review.workspace import make_workspace
+
+    yaml_cfg = {
+        "workflow": "code-review",
+        "schema-version": 1,
+        "instance": {"name": "yoyopod", "engine-owner": "hermes"},
+        "repository": {
+            "local-path": str(tmp_path / "repo"),
+            "github-slug": "owner/repo",
+            "active-lane-label": "active-lane",
+        },
+        "runtimes": {
+            "acpx-codex": {
+                "kind": "acpx-codex",
+                "session-idle-freshness-seconds": 900,
+                "session-idle-grace-seconds": 1800,
+                "session-nudge-cooldown-seconds": 600,
+            },
+            "claude-cli": {
+                "kind": "claude-cli",
+                "max-turns-per-invocation": 24,
+                "timeout-seconds": 1200,
+            },
+        },
+        "agents": {
+            "coder": {
+                "default": {"name": "Internal_Coder_Agent", "model": "gpt-5.3-codex-spark/high", "runtime": "acpx-codex"},
+                "high-effort": {"name": "Internal_Coder_Agent", "model": "gpt-5.3-codex", "runtime": "acpx-codex"},
+                "escalated": {"name": "Escalation_Coder_Agent", "model": "gpt-5.4", "runtime": "acpx-codex"},
+            },
+            "internal-reviewer": {
+                "name": "Internal_Reviewer_Agent",
+                "model": "claude-sonnet-4-6",
+                "runtime": "claude-cli",
+                "freeze-coder-while-running": True,
+            },
+            "external-reviewer": {
+                "enabled": True, "name": "External_Reviewer_Agent",
+                "provider": "codex-cloud", "cache-seconds": 1800,
+            },
+        },
+        "gates": {
+            "internal-review": {
+                "pass-with-findings-tolerance": 1,
+                "require-pass-clean-before-publish": True,
+                "request-cooldown-seconds": 1200,
+            },
+            "external-review": {"required-for-merge": True},
+            "merge": {"require-ci-acceptable": True},
+        },
+        "triggers": {"lane-selector": {"type": "github-label", "label": "active-lane"}},
+        "storage": {
+            "ledger": "memory/workflow-status.json",
+            "health": "memory/workflow-health.json",
+            "audit-log": "memory/workflow-audit.jsonl",
+            "cron-jobs-path": str(tmp_path / "cron.json"),
+            "hermes-cron-jobs-path": str(tmp_path / "hermes-cron.json"),
+            "sessions-state": "state/sessions",
+        },
+        "codex-bot": {
+            "logins": ["chatgpt-codex-connector"],
+            "clean-reactions": ["+1"],
+            "pending-reactions": ["eyes"],
+        },
+    }
+
+    ws = make_workspace(workspace_root=tmp_path, config=yaml_cfg)
+
+    # Legacy attribute surface still present after YAML config:
+    assert str(ws.REPO_PATH) == str(tmp_path / "repo")
+    assert ws.ACTIVE_LANE_LABEL == "active-lane"
+    assert ws.ENGINE_OWNER == "hermes"
+    assert ws.CODEX_MODEL_DEFAULT == "gpt-5.3-codex-spark/high"
+    assert ws.CODEX_MODEL_HIGH_EFFORT == "gpt-5.3-codex"
+    assert ws.CODEX_MODEL_ESCALATED == "gpt-5.4"
+    assert ws.INTER_REVIEW_AGENT_MODEL == "claude-sonnet-4-6"
+    assert ws.INTER_REVIEW_AGENT_MAX_TURNS == 24
+    assert ws.INTER_REVIEW_AGENT_TIMEOUT_SECONDS == 1200
+    assert ws.CODEX_SESSION_FRESHNESS_SECONDS == 900
+    assert ws.CODEX_SESSION_POKE_GRACE_SECONDS == 1800
+    assert ws.CODEX_SESSION_NUDGE_COOLDOWN_SECONDS == 600
+    assert ws.INTERNAL_CODER_AGENT_NAME == "Internal_Coder_Agent"
+    assert ws.ESCALATION_CODER_AGENT_NAME == "Escalation_Coder_Agent"
+    assert ws.INTERNAL_REVIEWER_AGENT_NAME == "Internal_Reviewer_Agent"
+    assert ws.EXTERNAL_REVIEWER_AGENT_NAME == "External_Reviewer_Agent"
+    # Runtime accessor (from Task 3.4) works with YAML-derived runtimes
+    assert callable(ws.runtime)
+    assert hasattr(ws.runtime("acpx-codex"), "ensure_session")
+    assert hasattr(ws.runtime("claude-cli"), "run_prompt")
+
+
+def test_workspace_raises_on_agent_referencing_unknown_runtime(tmp_path):
+    """YAML shape: agents pointing at runtimes that aren't declared raise ValueError."""
+    from workflows.code_review.workspace import make_workspace
+
+    cfg = {
+        "workflow": "code-review",
+        "schema-version": 1,
+        "instance": {"name": "test", "engine-owner": "hermes"},
+        "repository": {"local-path": str(tmp_path), "github-slug": "o/r", "active-lane-label": "active-lane"},
+        "runtimes": {"acpx-codex": {"kind": "acpx-codex", "session-idle-freshness-seconds": 900, "session-idle-grace-seconds": 1800, "session-nudge-cooldown-seconds": 600}},
+        "agents": {
+            "coder": {"default": {"name": "C", "model": "m", "runtime": "nonexistent-runtime"}},
+            "internal-reviewer": {"name": "R", "model": "m", "runtime": "acpx-codex"},
+            "external-reviewer": {"enabled": False, "name": "E"},
+        },
+        "gates": {"internal-review": {}, "external-review": {}, "merge": {}},
+        "triggers": {"lane-selector": {"type": "github-label", "label": "l"}},
+        "storage": {"ledger": "l", "health": "h", "audit-log": "a"},
+    }
+    import pytest
+    with pytest.raises(ValueError) as exc:
+        make_workspace(workspace_root=tmp_path, config=cfg)
+    assert "nonexistent-runtime" in str(exc.value)

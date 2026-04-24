@@ -13,6 +13,103 @@ from typing import Any
 from workflows.code_review.runtimes import build_runtimes
 
 
+def _yaml_to_legacy_view(yaml_cfg: dict) -> dict:
+    """Project the new YAML shape onto the old JSON key shape.
+
+    This is a temporary bridge that keeps the ~1600-LOC workspace factory
+    body untouched during Phase 4. Phase 6 cleanup can fold the bridge
+    into the factory once the shape is stable.
+    """
+    from pathlib import Path as _Path
+
+    instance = yaml_cfg.get("instance", {}) or {}
+    repo = yaml_cfg.get("repository", {}) or {}
+    runtimes = yaml_cfg.get("runtimes", {}) or {}
+    agents = yaml_cfg.get("agents", {}) or {}
+    gates = yaml_cfg.get("gates", {}) or {}
+    storage = yaml_cfg.get("storage", {}) or {}
+    escalation = yaml_cfg.get("escalation", {}) or {}
+
+    acpx = runtimes.get("acpx-codex", {}) or {}
+    claude_cli = runtimes.get("claude-cli", {}) or {}
+
+    coder_default = (agents.get("coder") or {}).get("default", {}) or {}
+    coder_high = (agents.get("coder") or {}).get("high-effort", {}) or coder_default
+    coder_escalated = (agents.get("coder") or {}).get("escalated", {}) or coder_default
+    int_reviewer = agents.get("internal-reviewer", {}) or {}
+    ext_reviewer = agents.get("external-reviewer", {}) or {}
+    adv_reviewer = agents.get("advisory-reviewer", {}) or {}
+    internal_review_gate = gates.get("internal-review", {}) or {}
+
+    # Resolve storage paths relative to the workspace root when they aren't
+    # absolute. The consumer code expects absolute paths for ledger/health/audit.
+    def _abs_or_join(value: str, local_path: str) -> str:
+        if not value:
+            return value
+        p = _Path(value)
+        if p.is_absolute():
+            return str(p)
+        base = _Path(local_path).expanduser().resolve()
+        return str(base.parent.parent / value) if local_path else value
+
+    local_path = repo.get("local-path", "")
+
+    return {
+        "repoPath": local_path,
+        "cronJobsPath": storage.get("cron-jobs-path", ""),
+        "hermesCronJobsPath": storage.get("hermes-cron-jobs-path"),
+        "ledgerPath": _abs_or_join(storage.get("ledger", "memory/workflow-status.json"), local_path),
+        "healthPath": _abs_or_join(storage.get("health", "memory/workflow-health.json"), local_path),
+        "auditLogPath": _abs_or_join(storage.get("audit-log", "memory/workflow-audit.jsonl"), local_path),
+        "activeLaneLabel": repo.get("active-lane-label", "active-lane"),
+        "engineOwner": instance.get("engine-owner", "openclaw"),
+        "coreJobNames": [],
+        # Hardcoded to the one hermes-owned job name emitted by the schedules
+        # section; revisit when adding more hermes-scheduled jobs.
+        "hermesJobNames": ["yoyopod-workflow-milestone-telegram"],
+        "issueWatcherNameRegex": r"issue-\d+-watch",
+        "staleness": {
+            "coreJobMissMultiplier": 2.5,
+            "activeLaneWithoutPrMinutes": 45,
+            "reviewHeadMissingMinutes": 20,
+        },
+        "reviewCache": {
+            "codexCloudSeconds": ext_reviewer.get("cache-seconds", 1800),
+            "claudeReviewRequestCooldownSeconds": internal_review_gate.get("request-cooldown-seconds", 1200),
+        },
+        "sessionPolicy": {
+            "codexModel": coder_default.get("model", "gpt-5.3-codex-spark/high"),
+            "codexModelLargeEffort": coder_high.get("model"),
+            "codexModelEscalated": coder_escalated.get("model"),
+            "codexEscalateRestartCount": escalation.get("restart-count-threshold", 2),
+            "codexEscalateLocalReviewCount": escalation.get("local-review-count-threshold", 2),
+            "codexEscalatePostpublishFindingCount": escalation.get("postpublish-finding-threshold", 3),
+            "laneFailureRetryBudget": escalation.get("lane-failure-retry-budget", 3),
+            "laneNoProgressTickBudget": escalation.get("no-progress-tick-budget", 3),
+            "laneOperatorAttentionRetryThreshold": escalation.get("operator-attention-retry-threshold", 5),
+            "laneOperatorAttentionNoProgressThreshold": escalation.get("operator-attention-no-progress-threshold", 5),
+            "laneCounterIncrementMinSeconds": escalation.get("lane-counter-increment-min-seconds", 240),
+            "codexSessionFreshnessSeconds": acpx.get("session-idle-freshness-seconds", 900),
+            "codexSessionPokeGraceSeconds": acpx.get("session-idle-grace-seconds", 1800),
+            "codexSessionNudgeCooldownSeconds": acpx.get("session-nudge-cooldown-seconds", 600),
+        },
+        "reviewPolicy": {
+            "interReviewAgentPassWithFindingsReviews": internal_review_gate.get("pass-with-findings-tolerance", 1),
+            "interReviewAgentModel": int_reviewer.get("model", "claude-sonnet-4-6"),
+            "interReviewAgentMaxTurns": claude_cli.get("max-turns-per-invocation", 24),
+            "interReviewAgentTimeoutSeconds": claude_cli.get("timeout-seconds", 1200),
+            "freezeCoderWhileInterReviewAgentRunning": int_reviewer.get("freeze-coder-while-running", True),
+        },
+        "agentLabels": {
+            "internalCoderAgent": coder_default.get("name", "Internal_Coder_Agent"),
+            "escalationCoderAgent": coder_escalated.get("name", "Escalation_Coder_Agent"),
+            "internalReviewerAgent": int_reviewer.get("name", "Internal_Reviewer_Agent"),
+            "externalReviewerAgent": ext_reviewer.get("name", "External_Reviewer_Agent"),
+            "advisoryReviewerAgent": adv_reviewer.get("name", "Advisory_Reviewer_Agent"),
+        },
+    }
+
+
 """YoYoPod Core workspace.
 
 The :class:`Workspace` type is the canonical holder of YoYoPod-project-scoped
@@ -179,6 +276,15 @@ def make_workspace(*, workspace_root: Path, config: dict[str, Any]) -> SimpleNam
     """
 
     workspace_root = Path(workspace_root).resolve()
+
+    # Detect new YAML shape (has top-level `workflow:` + `runtimes:` + `agents:`)
+    # and bridge to the legacy JSON view for the existing body. Old-JSON callers
+    # pass through unchanged.
+    if "workflow" in config and "runtimes" in config and "agents" in config:
+        yaml_cfg = config
+        config = _yaml_to_legacy_view(config)
+    else:
+        yaml_cfg = None
 
     # -- paths -----------------------------------------------------------
     repo_path = Path(config["repoPath"])
@@ -432,6 +538,27 @@ def make_workspace(*, workspace_root: Path, config: dict[str, Any]) -> SimpleNam
         return _runtimes[name]
 
     ns.runtime = _runtime_accessor
+
+    # YAML-shape cross-reference validation: every agent's runtime: field must
+    # name a key in the top-level runtimes: mapping. The schema doesn't enforce
+    # this (it's a structural-vs-referential distinction); the factory does.
+    if yaml_cfg is not None:
+        yaml_agents = yaml_cfg.get("agents", {}) or {}
+        known_runtimes = set((yaml_cfg.get("runtimes", {}) or {}).keys())
+        for tier_name, tier in (yaml_agents.get("coder") or {}).items():
+            rt = tier.get("runtime")
+            if rt and rt not in known_runtimes:
+                raise ValueError(
+                    f"agents.coder.{tier_name}.runtime={rt!r} not defined in runtimes: "
+                    f"{sorted(known_runtimes)}"
+                )
+        int_rev = yaml_agents.get("internal-reviewer", {}) or {}
+        rt = int_rev.get("runtime")
+        if rt and rt not in known_runtimes:
+            raise ValueError(
+                f"agents.internal-reviewer.runtime={rt!r} not defined in runtimes: "
+                f"{sorted(known_runtimes)}"
+            )
 
     return ns
 
