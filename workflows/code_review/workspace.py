@@ -13,12 +13,16 @@ from typing import Any
 from workflows.code_review.runtimes import build_runtimes
 
 
-def _yaml_to_legacy_view(yaml_cfg: dict) -> dict:
+def _yaml_to_legacy_view(yaml_cfg: dict, workspace_root: "Path | None" = None) -> dict:
     """Project the new YAML shape onto the old JSON key shape.
 
     This is a temporary bridge that keeps the ~1600-LOC workspace factory
     body untouched during Phase 4. Phase 6 cleanup can fold the bridge
     into the factory once the shape is stable.
+
+    workspace_root must be supplied so that relative storage paths (e.g.
+    ``memory/workflow-status.json``) are anchored to the workflow root dir
+    rather than guessed from the repo path.
     """
     from pathlib import Path as _Path
 
@@ -41,14 +45,18 @@ def _yaml_to_legacy_view(yaml_cfg: dict) -> dict:
     adv_reviewer = agents.get("advisory-reviewer", {}) or {}
     internal_review_gate = gates.get("internal-review", {}) or {}
 
-    # Resolve storage paths relative to the workspace root when they aren't
+    # Resolve storage paths relative to workspace_root when they aren't
     # absolute. The consumer code expects absolute paths for ledger/health/audit.
+    # workspace_root is the preferred anchor; fall back to inferring from
+    # local_path only when workspace_root is not provided (legacy codepath).
     def _abs_or_join(value: str, local_path: str) -> str:
         if not value:
             return value
         p = _Path(value)
         if p.is_absolute():
             return str(p)
+        if workspace_root is not None:
+            return str(_Path(workspace_root).resolve() / value)
         base = _Path(local_path).expanduser().resolve()
         return str(base.parent.parent / value) if local_path else value
 
@@ -282,7 +290,7 @@ def make_workspace(*, workspace_root: Path, config: dict[str, Any]) -> SimpleNam
     # pass through unchanged.
     if "workflow" in config and "runtimes" in config and "agents" in config:
         yaml_cfg = config
-        config = _yaml_to_legacy_view(config)
+        config = _yaml_to_legacy_view(config, workspace_root=workspace_root)
     else:
         yaml_cfg = None
 
