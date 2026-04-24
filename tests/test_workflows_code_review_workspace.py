@@ -259,3 +259,94 @@ def test_workspace_lane_operator_attention_reasons(tmp_path):
     assert any("no-progress-ticks=10" in r for r in reasons)
     assert ws._lane_operator_attention_needed({"failure": {"retryCount": 5}}) is True
     assert ws._lane_operator_attention_needed({"failure": {"retryCount": 1}, "budget": {"noProgressTicks": 1}}) is False
+
+
+def test_workspace_exposes_runtime_accessor_with_named_profiles(tmp_path):
+    """make_workspace instantiates runtimes from the (bridged) config.
+
+    In Phase 3 the runtime configs are derived from the old JSON shape's
+    sessionPolicy / reviewPolicy; Phase 4 will swap the source to YAML
+    runtimes: section. Either way, ws.runtime('acpx-codex') must return
+    an object implementing the Runtime protocol.
+    """
+    import importlib
+    import sys
+    from pathlib import Path as _Path
+
+    REPO_ROOT = _Path(__file__).resolve().parents[1]
+    if str(REPO_ROOT) not in sys.path:
+        sys.path.insert(0, str(REPO_ROOT))
+
+    # Minimal old-shape JSON config that make_workspace accepts.
+    config = {
+        "repoPath": str(tmp_path / "repo"),
+        "cronJobsPath": str(tmp_path / "cron.json"),
+        "ledgerPath": str(tmp_path / "ledger.json"),
+        "healthPath": str(tmp_path / "health.json"),
+        "auditLogPath": str(tmp_path / "audit.jsonl"),
+        "activeLaneLabel": "active-lane",
+        "engineOwner": "hermes",
+        "coreJobNames": [],
+        "hermesJobNames": [],
+        "staleness": {},
+        "sessionPolicy": {
+            "codexSessionFreshnessSeconds": 900,
+            "codexSessionPokeGraceSeconds": 1800,
+            "codexSessionNudgeCooldownSeconds": 600,
+        },
+        "reviewPolicy": {
+            "interReviewAgentMaxTurns": 24,
+            "interReviewAgentTimeoutSeconds": 1200,
+        },
+        "agentLabels": {},
+    }
+    workspace_mod = importlib.import_module("workflows.code_review.workspace")
+    ws = workspace_mod.make_workspace(workspace_root=tmp_path, config=config)
+
+    assert hasattr(ws, "runtime"), "workspace must expose `runtime(name)` accessor"
+
+    acpx = ws.runtime("acpx-codex")
+    claude = ws.runtime("claude-cli")
+
+    # Duck-type: both respond to the protocol's four methods.
+    for r in (acpx, claude):
+        assert callable(getattr(r, "ensure_session", None))
+        assert callable(getattr(r, "run_prompt", None))
+        assert callable(getattr(r, "assess_health", None))
+        assert callable(getattr(r, "close_session", None))
+
+
+def test_workspace_runtime_accessor_errors_on_unknown_name(tmp_path):
+    """Requesting an unknown runtime name raises KeyError with a helpful message."""
+    import importlib
+    import sys
+    from pathlib import Path as _Path
+
+    REPO_ROOT = _Path(__file__).resolve().parents[1]
+    if str(REPO_ROOT) not in sys.path:
+        sys.path.insert(0, str(REPO_ROOT))
+
+    config = {
+        "repoPath": str(tmp_path / "repo"),
+        "cronJobsPath": str(tmp_path / "cron.json"),
+        "ledgerPath": str(tmp_path / "ledger.json"),
+        "healthPath": str(tmp_path / "health.json"),
+        "auditLogPath": str(tmp_path / "audit.jsonl"),
+        "activeLaneLabel": "active-lane",
+        "engineOwner": "hermes",
+        "coreJobNames": [],
+        "hermesJobNames": [],
+        "staleness": {},
+        "sessionPolicy": {},
+        "reviewPolicy": {},
+        "agentLabels": {},
+    }
+    workspace_mod = importlib.import_module("workflows.code_review.workspace")
+    ws = workspace_mod.make_workspace(workspace_root=tmp_path, config=config)
+
+    import pytest
+    with pytest.raises(KeyError) as exc:
+        ws.runtime("nonexistent-runtime")
+    assert "nonexistent-runtime" in str(exc.value)
+    # Error message names the known runtime profiles
+    assert "acpx-codex" in str(exc.value) or "claude-cli" in str(exc.value)

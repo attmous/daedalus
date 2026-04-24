@@ -10,6 +10,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+from workflows.code_review.runtimes import build_runtimes
+
 
 """YoYoPod Core workspace.
 
@@ -385,6 +387,52 @@ def make_workspace(*, workspace_root: Path, config: dict[str, Any]) -> SimpleNam
     for loader_name, loader_fn in _build_adapter_module_loaders(workspace_root).items():
         setattr(ns, loader_name, loader_fn)
     _install_wrapper_adapter_shims(ns)
+
+    # -- runtimes -------------------------------------------------------
+    # Phase 3 bridges runtime profiles from the old-JSON session/review
+    # policy fields. Phase 4 replaces this with YAML-driven instantiation.
+    _session_policy = config.get("sessionPolicy", {}) or {}
+    _review_policy = config.get("reviewPolicy", {}) or {}
+
+    _runtimes_cfg = {
+        "acpx-codex": {
+            "kind": "acpx-codex",
+            "session-idle-freshness-seconds": int(
+                _session_policy.get("codexSessionFreshnessSeconds", 900)
+            ),
+            "session-idle-grace-seconds": int(
+                _session_policy.get("codexSessionPokeGraceSeconds", 1800)
+            ),
+            "session-nudge-cooldown-seconds": int(
+                _session_policy.get("codexSessionNudgeCooldownSeconds", 600)
+            ),
+        },
+        "claude-cli": {
+            "kind": "claude-cli",
+            "max-turns-per-invocation": int(
+                _review_policy.get("interReviewAgentMaxTurns")
+                or _review_policy.get("internalReviewerAgentMaxTurns")
+                or _review_policy.get("claudeReviewMaxTurns", 24)
+            ),
+            "timeout-seconds": int(
+                _review_policy.get("interReviewAgentTimeoutSeconds")
+                or _review_policy.get("internalReviewerAgentTimeoutSeconds")
+                or _review_policy.get("claudeReviewTimeoutSeconds", 1200)
+            ),
+        },
+    }
+
+    _runtimes = build_runtimes(_runtimes_cfg, run=ns._run, run_json=ns._run_json)
+
+    def _runtime_accessor(name: str):
+        if name not in _runtimes:
+            raise KeyError(
+                f"unknown runtime profile {name!r}; known: {sorted(_runtimes)}"
+            )
+        return _runtimes[name]
+
+    ns.runtime = _runtime_accessor
+
     return ns
 
 
