@@ -18,6 +18,10 @@ import sys
 from workflows import run_cli
 from workflows.__main__ import _resolve_workflow_root
 
+# Public alias so tests and external callers can call resolve_workflow_root
+# without knowing the private name from the parent package entrypoint.
+resolve_workflow_root = _resolve_workflow_root
+
 
 def main(argv: list[str] | None = None) -> int:
     raw = list(argv) if argv is not None else sys.argv[1:]

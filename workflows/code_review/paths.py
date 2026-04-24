@@ -64,8 +64,8 @@ def tick_dispatch_history_dir(workflow_root: Path) -> Path:
 def plugin_entrypoint_path(workflow_root: Path) -> Path:
     """Path to the installed plugin's CLI entrypoint.
 
-    Lives at ``<workflow_root>/.hermes/plugins/hermes-relay/adapters/yoyopod_core/__main__.py``
-    after ``./scripts/install.sh``. This is the canonical — and only — YoYoPod
+    Lives at ``<workflow_root>/.hermes/plugins/hermes-relay/workflows/code_review/__main__.py``
+    after ``./scripts/install.sh``. This is the canonical — and only — code-review
     workflow CLI surface; the historical ``scripts/yoyopod_workflow.py``
     wrapper has been retired.
     """
@@ -75,8 +75,8 @@ def plugin_entrypoint_path(workflow_root: Path) -> Path:
         / ".hermes"
         / "plugins"
         / "hermes-relay"
-        / "adapters"
-        / "yoyopod_core"
+        / "workflows"
+        / "code_review"
         / "__main__.py"
     )
 
