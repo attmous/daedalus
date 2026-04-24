@@ -1,0 +1,67 @@
+# ADR-0002: Workflows contract + YAML config surface
+
+**Status:** Accepted (2026-04-24)
+**Supersedes:** ADR-0001 (adapters/<project>/ layout)
+
+## Context
+
+The hermes-relay plugin initially hosted one adapter per project
+(`adapters/yoyopod_core/`). This conflated two concepts:
+
+- **Workflow type** (Code-Review, Testing, Security-Review, ...) — the engine
+- **Workspace instance** (YoyoPod, future projects) — the runtime binding
+
+Operators also could not tune workflow behavior (coder model, reviewer model,
+gate policy, ...) without editing Python, and the partial JSON config that
+did exist accumulated aliases from implementation history.
+
+## Decision
+
+Re-frame the plugin around a **workflow-plugin contract**:
+
+- Workflows live at `workflows/<name>/` as Python packages.
+- Each package exposes a five-attribute contract: `NAME`,
+  `SUPPORTED_SCHEMA_VERSIONS`, `CONFIG_SCHEMA_PATH`, `make_workspace`,
+  `cli_main`.
+- A dispatcher at `workflows/__init__.py` reads
+  `<workspace>/config/workflow.yaml`, validates against the workflow's
+  JSON Schema, and hands off to `cli_main`.
+- Runtimes (how we talk to models) are pluggable behind a `Runtime`
+  `Protocol`; `acpx-codex` and `claude-cli` are the initial
+  implementations. Adding a new runtime (Kimi, Gemini, HTTP-API) is a
+  new module + schema entry; no dispatcher change.
+- The workspace accessor exposes named runtime instances via
+  `ws.runtime(name)`.
+- The YAML config cleanly separates **role** (coder, reviewer) from
+  **identity** (name, model) from **runtime** (plumbing); no more
+  Claude-prefixed and inter-review-agent-prefixed aliases for the same
+  concept.
+
+## Consequences
+
+Positive:
+
+- Adding a new workflow (Testing, Security-Review, ...) is a new
+  directory implementing the five-attribute contract; no plugin-level
+  changes required.
+- Swapping the coder to a different model/runtime is a config-only
+  change in most cases.
+- One canonical CLI surface per workspace: `python3 -m workflows
+  --workflow-root <root> <cmd>`.
+- External callers (systemd, cron, runtime.py subprocess spawns) never
+  couple to a specific workflow module.
+
+Negative:
+
+- Config file shape changed; operators with custom configs must migrate
+  via `scripts/migrate_config.py`.
+- `plugin_entrypoint_path` now returns the generic dispatcher, not the
+  per-workflow module; callers that need to pin a workflow use the
+  `-m workflows.<name>` form.
+
+## References
+
+- Design spec:
+  `docs/superpowers/specs/2026-04-24-workflows-contract-and-code-review-design.md`
+- Implementation plan:
+  `docs/superpowers/plans/2026-04-24-workflows-contract-and-code-review.md`
