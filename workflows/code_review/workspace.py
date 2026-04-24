@@ -233,12 +233,11 @@ def _subprocess_failure_message(exc: subprocess.CalledProcessError) -> str:
 
 
 def _build_adapter_module_loaders(workspace_root: Path) -> dict[str, Any]:
-    """Return adapter-module loader closures cached per workspace.
+    """Return workflow-module loader closures cached per workspace.
 
-    The legacy wrapper used to host 9 near-identical ``_load_adapter_*_module``
-    functions plus a single parameterized ``_load_adapter_module(name)``.
-    Moving them here means every workspace accessor exposes the same surface
-    without the wrapper having to redeclare them.
+    Each loader loads the corresponding module from the installed plugin's
+    ``workflows/code_review/`` directory by file path so that the workspace
+    accessor can call into modules without a package-level import.
     """
     import importlib.util as _importlib_util
 
@@ -249,12 +248,12 @@ def _build_adapter_module_loaders(workspace_root: Path) -> dict[str, Any]:
         cached = cache.get(name)
         if cached is not None:
             return cached
-        module_path = plugin_root / "adapters" / "yoyopod_core" / f"{name}.py"
+        module_path = plugin_root / "workflows" / "code_review" / f"{name}.py"
         if not module_path.exists():
             raise FileNotFoundError(module_path)
-        spec = _importlib_util.spec_from_file_location(f"hermes_relay_yoyopod_core_{name}", module_path)
+        spec = _importlib_util.spec_from_file_location(f"hermes_relay_code_review_{name}", module_path)
         if spec is None or spec.loader is None:
-            raise RuntimeError(f"unable to load adapter {name} module from {module_path}")
+            raise RuntimeError(f"unable to load code_review {name} module from {module_path}")
         module = _importlib_util.module_from_spec(spec)
         spec.loader.exec_module(module)
         cache[name] = module

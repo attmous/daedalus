@@ -16,12 +16,11 @@ from workflows.code_review.sessions import (
 """YoYoPod Core action execution helpers.
 
 Each ``run_*`` function below is a pure, dependency-injected implementation of
-one operator action (publish, push, merge, dispatch, tick). The workspace
-accessor (``adapters/yoyopod_core/workspace.py``) exposes thin shims that call
-these with workspace-scoped primitives (``reconcile_fn``, ``_run``, ``audit``,
-etc.). The live CLI and systemd-supervised runtime both route through the
-workspace shims; the ``run_*`` functions are the single source of truth for
-the action bodies.
+one operator action (publish, push, merge, dispatch, tick). Callers inject
+workspace-scoped primitives (``reconcile_fn``, ``_run``, ``audit``, etc.).
+The live CLI (``python -m workflows``) and systemd-supervised runtime both
+route through these functions, which are the single source of truth for the
+action bodies.
 """
 
 
