@@ -23,17 +23,17 @@ except ImportError:
 
 def register(ctx):
     ctx.register_command(
-        "relay",
+        "daedalus",
         execute_raw_args,
-        description="Operate the Hermes Relay runtime from the current Hermes session.",
+        description="Operate the Daedalus workflow engine from the current Hermes session.",
     )
     ctx.register_cli_command(
-        name="relay",
-        help="Operate the Hermes Relay runtime.",
+        name="daedalus",
+        help="Operate the Daedalus workflow engine.",
         setup_fn=setup_cli,
-        description="Hermes Relay project control surface.",
+        description="Daedalus workflow engine control surface.",
     )
 
     skill_md = PLUGIN_DIR / "skills" / "operator" / "SKILL.md"
     if skill_md.exists():
-        ctx.register_skill("operator", skill_md, description="Operate the Hermes Relay plugin.")
+        ctx.register_skill("operator", skill_md, description="Operate the Daedalus engine.")
