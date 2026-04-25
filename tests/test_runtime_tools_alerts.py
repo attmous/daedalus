@@ -391,6 +391,15 @@ def test_doctor_reports_stuck_dispatched_actions(tools_module, monkeypatch):
             DISPATCHED_ACTION_TIMEOUT_SECONDS=relay_stub.DISPATCHED_ACTION_TIMEOUT_SECONDS,
         ),
     )
+    # _build_project_status calls build_yoyopod_core_status directly (which
+    # reads config/workflow.yaml from disk), bypassing the _load_daedalus_module
+    # mock above. Stub it so the test stays a unit test of doctor-report logic
+    # rather than incidentally requiring a YAML workspace fixture.
+    monkeypatch.setattr(
+        tools_module,
+        "_build_project_status",
+        lambda _wr: {"activeLane": {"number": 221}, "activeLaneError": None},
+    )
 
     report = tools_module.build_doctor_report(workflow_root=Path("/tmp/workflow"))
     checks = {check["code"]: check for check in report["checks"]}
