@@ -81,7 +81,7 @@ def test_init_daedalus_db_migrates_execution_control_to_clean_schema(runtime_mod
         lane_action_columns = [row[1] for row in conn.execute("PRAGMA table_info(lane_actions)").fetchall()]
         runtime_row = conn.execute(
             "SELECT schema_version FROM daedalus_runtime WHERE runtime_id=?",
-            ("relay",),
+            ("daedalus",),
         ).fetchone()
         row = conn.execute(
             "SELECT control_id, active_execution_enabled, updated_at, metadata_json FROM execution_controls WHERE control_id=?",
