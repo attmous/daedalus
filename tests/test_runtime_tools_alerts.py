@@ -320,12 +320,15 @@ def test_reap_stuck_dispatched_actions_marks_dispatcher_lost_and_queues_recovery
     conn = sqlite3.connect(paths["db_path"])
     try:
         original = conn.execute(
-            "SELECT status, failed_at, result_code, result_summary FROM lane_actions WHERE action_id=?",
+            "SELECT status, failed_at, result_code, result_summary, superseded_by_action_id FROM lane_actions WHERE action_id=?",
             ("act:dispatched:1",),
         ).fetchone()
+        # superseded_by_action_id forward-links from the failed action to its
+        # recovery (matches the canonical direction used by the failures
+        # JOIN at runtime.py:1683 and _queue_recovery_action's UPDATE).
         recovery = conn.execute(
-            "SELECT action_id, status, retry_count, recovery_attempt_count, superseded_by_action_id FROM lane_actions WHERE superseded_by_action_id=?",
-            ("act:dispatched:1",),
+            "SELECT action_id, status, retry_count, recovery_attempt_count FROM lane_actions WHERE action_id=?",
+            (original[4],),
         ).fetchone()
         failure_row = conn.execute(
             "SELECT failure_class, analyst_recommended_action, analyst_status FROM failures WHERE failure_id=?",
