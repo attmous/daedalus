@@ -1,14 +1,14 @@
 # hermes-relay
 
-![Hermes Relay wordmark](assets/hermes-relay-wordmark.svg)
+![Hermes Relay wordmark](assets/daedalus-wordmark.svg)
 
 Hermes Relay is the runtime and operator surface for workflow-oriented orchestration.
 It gives you relay bootstrap, shadow observation, active execution gating, alert logic, and day-2 operator commands.
 
 ## Brand assets
 
-- `assets/hermes-relay-wordmark.svg` — horizontal wordmark
-- `assets/hermes-relay-icon.svg` — square app icon
+- `assets/daedalus-wordmark.svg` — horizontal wordmark
+- `assets/daedalus-icon.svg` — square app icon
 
 ## Why this repo exists
 
