@@ -1,7 +1,18 @@
+import sys
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 
 PLUGIN_DIR = Path(__file__).resolve().parent
+
+# Put the plugin dir on sys.path so absolute imports of sibling top-level
+# packages (workflows/, etc.) resolve when Hermes loads us as a package.
+# Hermes' plugin loader puts ~/.hermes/plugins/ on sys.path so this package
+# (`daedalus`) is importable, but doesn't add this directory itself — so
+# tools.py's `from workflows.code_review.paths import ...` fails without
+# this bootstrap. Same self-bootstrap pattern as workflows/__main__.py.
+_PLUGIN_DIR_STR = str(PLUGIN_DIR)
+if _PLUGIN_DIR_STR not in sys.path:
+    sys.path.insert(0, _PLUGIN_DIR_STR)
 
 
 try:
