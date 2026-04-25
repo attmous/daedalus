@@ -23,8 +23,8 @@ def test_runtime_paths_use_project_runtime_subdirs_when_present(tmp_path):
 
     paths = paths_module.runtime_paths(workflow_root)
 
-    assert paths["db_path"] == workflow_root / "runtime" / "state" / "relay" / "relay.db"
-    assert paths["event_log_path"] == workflow_root / "runtime" / "memory" / "relay-events.jsonl"
+    assert paths["db_path"] == workflow_root / "runtime" / "state" / "daedalus" / "daedalus.db"
+    assert paths["event_log_path"] == workflow_root / "runtime" / "memory" / "daedalus-events.jsonl"
 
 
 def test_runtime_paths_fall_back_to_legacy_layout_without_project_runtime(tmp_path):
@@ -33,8 +33,8 @@ def test_runtime_paths_fall_back_to_legacy_layout_without_project_runtime(tmp_pa
 
     paths = paths_module.runtime_paths(workflow_root)
 
-    assert paths["db_path"] == workflow_root / "state" / "relay" / "relay.db"
-    assert paths["event_log_path"] == workflow_root / "memory" / "relay-events.jsonl"
+    assert paths["db_path"] == workflow_root / "state" / "daedalus" / "daedalus.db"
+    assert paths["event_log_path"] == workflow_root / "memory" / "daedalus-events.jsonl"
 
 
 def test_resolve_default_workflow_root_prefers_repo_project_dir_when_no_env_or_legacy_root(tmp_path):

@@ -44,9 +44,12 @@ def test_iso_to_epoch_uses_utc_timegm(runtime_module, monkeypatch):
 
 def test_init_relay_db_migrates_execution_control_to_clean_schema(runtime_module, tmp_path):
     workflow_root = tmp_path / "workflow"
-    db_path = runtime_module._runtime_paths(workflow_root)["db_path"]
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(db_path)
+    # Seed the legacy relay-era DB at its old path; the filesystem migrator
+    # wired into init_relay_db will rename it to the daedalus path before
+    # the SQL schema migration runs.
+    legacy_db_path = workflow_root / "state" / "relay" / "relay.db"
+    legacy_db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(legacy_db_path)
     try:
         conn.execute(
             """
@@ -68,21 +71,9 @@ def test_init_relay_db_migrates_execution_control_to_clean_schema(runtime_module
     finally:
         conn.close()
 
-    # Pre-create the daedalus DB target so the filesystem migrator
-    # detects the conflict and leaves the seeded relay.db in place
-    # (where runtime_paths still points). This isolates the test to
-    # the SQL-schema migration path without coupling to the in-progress
-    # paths.py rename (Task 2.1).
-    # TODO(daedalus-rename Task 2.1): remove this pre-create workaround once
-    # runtime_paths returns state/daedalus/daedalus.db. The test should then
-    # let migrate_filesystem_state do a real rename of the seeded relay.db
-    # instead of triggering the migrator's "new DB exists, skip" short-circuit.
-    daedalus_db = workflow_root / "state" / "daedalus" / "daedalus.db"
-    daedalus_db.parent.mkdir(parents=True, exist_ok=True)
-    daedalus_db.touch()
-
     runtime_module.init_relay_db(workflow_root=workflow_root, project_key="yoyopod")
 
+    db_path = runtime_module._runtime_paths(workflow_root)["db_path"]
     conn = sqlite3.connect(db_path)
     try:
         tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
@@ -463,7 +454,7 @@ def test_set_active_execution_updates_gate_without_wrapper_side_effects(tools_mo
 
     relay_stub = SimpleNamespace(
         RELAY_OWNER="relay",
-        _runtime_paths=lambda workflow_root: {"db_path": workflow_root / "state" / "relay" / "relay.db", "event_log_path": workflow_root / "memory" / "relay-events.jsonl"},
+        _runtime_paths=lambda workflow_root: {"db_path": workflow_root / "state" / "daedalus" / "daedalus.db", "event_log_path": workflow_root / "memory" / "daedalus-events.jsonl"},
         set_execution_control=lambda **kwargs: call_order.append(("set", kwargs["active_execution_enabled"])),
         evaluate_active_execution_gate=lambda **kwargs: {"allowed": True, "reasons": [], "execution": {"active_execution_enabled": True}},
     )

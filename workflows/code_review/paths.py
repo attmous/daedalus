@@ -31,9 +31,9 @@ def runtime_base_dir(workflow_root: Path) -> Path:
 def runtime_paths(workflow_root: Path) -> dict[str, Path]:
     base_dir = runtime_base_dir(workflow_root)
     return {
-        "db_path": base_dir / "state" / "relay" / "relay.db",
-        "event_log_path": base_dir / "memory" / "relay-events.jsonl",
-        "alert_state_path": base_dir / "memory" / "hermes-relay-alert-state.json",
+        "db_path": base_dir / "state" / "daedalus" / "daedalus.db",
+        "event_log_path": base_dir / "memory" / "daedalus-events.jsonl",
+        "alert_state_path": base_dir / "memory" / "daedalus-alert-state.json",
     }
 
 
