@@ -80,7 +80,7 @@ def test_init_daedalus_db_migrates_execution_control_to_clean_schema(runtime_mod
         columns = [row[1] for row in conn.execute("PRAGMA table_info(execution_controls)").fetchall()]
         lane_action_columns = [row[1] for row in conn.execute("PRAGMA table_info(lane_actions)").fetchall()]
         runtime_row = conn.execute(
-            "SELECT schema_version FROM relay_runtime WHERE runtime_id=?",
+            "SELECT schema_version FROM daedalus_runtime WHERE runtime_id=?",
             ("relay",),
         ).fetchone()
         row = conn.execute(
