@@ -19,7 +19,7 @@ def test_install_into_default_hermes_home_copies_plugin_tree(tmp_path):
 
     result = install.install_plugin(repo_root=repo_root, hermes_home=hermes_home)
 
-    plugin_dir = hermes_home / "plugins" / "hermes-relay"
+    plugin_dir = hermes_home / "plugins" / "daedalus"
     assert result == plugin_dir
     assert (plugin_dir / "plugin.yaml").exists()
     assert (plugin_dir / "runtime.py").exists()
@@ -32,7 +32,7 @@ def test_install_into_default_hermes_home_copies_plugin_tree(tmp_path):
 def test_install_into_explicit_destination_uses_given_path(tmp_path):
     install = load_install_module()
     repo_root = Path(__file__).resolve().parents[1]
-    target = tmp_path / "custom-plugins" / "hermes-relay"
+    target = tmp_path / "custom-plugins" / "daedalus"
 
     result = install.install_plugin(repo_root=repo_root, destination=target)
 
@@ -46,19 +46,19 @@ def test_install_into_explicit_destination_uses_given_path(tmp_path):
 def test_install_follows_symlink_destination_and_preserves_the_link(tmp_path):
     """Reinstall into a symlinked plugin path works and leaves the symlink intact.
 
-    Matches the real-world setup where ``~/.hermes/plugins/hermes-relay`` is a
-    symlink to ``~/.hermes/workflows/<project>/.hermes/plugins/hermes-relay``.
+    Matches the real-world setup where ``~/.hermes/plugins/daedalus`` is a
+    symlink to ``~/.hermes/workflows/<project>/.hermes/plugins/daedalus``.
     Before this fix ``shutil.rmtree`` errored with ``OSError: Cannot call
     rmtree on a symbolic link``.
     """
     install = load_install_module()
     repo_root = Path(__file__).resolve().parents[1]
-    real_plugin_dir = tmp_path / "workflow" / ".hermes" / "plugins" / "hermes-relay"
+    real_plugin_dir = tmp_path / "workflow" / ".hermes" / "plugins" / "daedalus"
     real_plugin_dir.mkdir(parents=True)
     # Seed the real dir with a stale file that must be wiped by reinstall.
     (real_plugin_dir / "stale.txt").write_text("stale", encoding="utf-8")
 
-    symlink_target = tmp_path / ".hermes" / "plugins" / "hermes-relay"
+    symlink_target = tmp_path / ".hermes" / "plugins" / "daedalus"
     symlink_target.parent.mkdir(parents=True)
     symlink_target.symlink_to(real_plugin_dir)
 
@@ -77,7 +77,7 @@ def test_install_replaces_existing_regular_directory(tmp_path):
     """Reinstall over an existing (non-symlink) directory wipes and rebuilds it."""
     install = load_install_module()
     repo_root = Path(__file__).resolve().parents[1]
-    target = tmp_path / "plugins" / "hermes-relay"
+    target = tmp_path / "plugins" / "daedalus"
     target.mkdir(parents=True)
     (target / "stale.txt").write_text("stale", encoding="utf-8")
 

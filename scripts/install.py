@@ -5,7 +5,7 @@ import argparse
 import shutil
 from pathlib import Path
 
-PLUGIN_NAME = "hermes-relay"
+PLUGIN_NAME = "daedalus"
 PAYLOAD_ITEMS = [
     "__init__.py",
     "alerts.py",
@@ -32,7 +32,7 @@ def _check_runtime_deps() -> None:
         missing.append("jsonschema (apt: python3-jsonschema)")
     if missing:
         raise RuntimeError(
-            "hermes-relay plugin requires the following python modules on the host: "
+            "daedalus plugin requires the following python modules on the host: "
             + ", ".join(missing)
         )
 
@@ -50,9 +50,9 @@ def resolve_destination(*, hermes_home: Path | None = None, destination: Path | 
 def _prepare_install_target(target: Path) -> Path:
     """Return the concrete directory to install into.
 
-    If ``target`` is a symlink (common setup: ``~/.hermes/plugins/hermes-relay``
+    If ``target`` is a symlink (common setup: ``~/.hermes/plugins/daedalus``
     pointing at a workflow-scoped plugin tree under
-    ``~/.hermes/workflows/<project>/.hermes/plugins/hermes-relay``), follow
+    ``~/.hermes/workflows/<project>/.hermes/plugins/daedalus``), follow
     the symlink and install into the real directory. The symlink itself is
     preserved so callers that hard-code the symlink path keep working.
 
@@ -91,7 +91,7 @@ def install_plugin(*, repo_root: Path, hermes_home: Path | None = None, destinat
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Install the hermes-relay plugin into a Hermes plugins directory.")
+    parser = argparse.ArgumentParser(description="Install the daedalus plugin into a Hermes plugins directory.")
     parser.add_argument("--hermes-home", help="Hermes home directory. Default: ~/.hermes")
     parser.add_argument("--destination", help="Explicit plugin destination directory. Overrides --hermes-home.")
     parser.add_argument("--repo-root", default=str(Path(__file__).resolve().parents[1]), help="Source repository root. Default: this repository root.")
