@@ -286,37 +286,50 @@ def migrate_filesystem_state(workflow_root: Path) -> list[str]:
 
 Behavior:
 
-1. If `state/daedalus/daedalus.db` does not exist AND `state/relay/relay.db` does → mkdir new parent, rename file, log
+1. If `state/daedalus/daedalus.db` does not exist AND `state/relay/relay.db` does → mkdir new parent, rename `relay.db` → `daedalus.db`. Also rename SQLite sidecars if present: `relay.db-wal` → `daedalus.db-wal`, `relay.db-shm` → `daedalus.db-shm` (SQLite WAL mode requires the sidecar filenames to match the DB filename — if we leave them mismatched SQLite either ignores the WAL or creates fresh empty sidecars and loses uncommitted data).
 2. If `memory/daedalus-events.jsonl` does not exist AND `memory/relay-events.jsonl` does → rename, log
 3. If `memory/daedalus-alert-state.json` does not exist AND `memory/hermes-relay-alert-state.json` does → rename, log
 4. If old `state/relay/` dir is empty after the move → remove
 
-**Trigger:** called at the top of `init_daedalus_db` in `runtime.py`, before any DB connection opens. Also exposed as `python3 -m daedalus migrate-filesystem` for explicit operator invocation.
+**Trigger:** called at the top of `init_daedalus_db` in `runtime.py`, before any DB connection opens. Also exposed as `daedalus migrate-filesystem` (a new subcommand of the registered Daedalus CLI, defined in `schemas.py::setup_cli` and dispatched in `tools.py`) for explicit operator invocation.
 
-After the file rename runs, `init_daedalus_db` then handles the SQL-level rename (Section 4.4) atomically:
+**Order of operations inside `init_daedalus_db`:**
 
 ```python
 def init_daedalus_db(db_path: Path, project_key: str) -> sqlite3.Connection:
-    migrate_filesystem_state(db_path.parent.parent)  # state/daedalus → workflow_root
-    conn = sqlite3.connect(...)
-    # If table 'relay_runtime' exists, rename to 'daedalus_runtime'
-    # If runtime_id='relay' row exists, update to 'daedalus'
-    # Then the normal init flow continues
-    ...
+    # 1. Filesystem-level migration (renames files if old paths exist)
+    migrate_filesystem_state(workflow_root_for(db_path))
+
+    # 2. Open SQLite connection on the now-canonical path
+    conn = sqlite3.connect(str(db_path))
+
+    # 3. SQL-level identity migration (idempotent)
+    _migrate_schema_identity(conn)
+    #    - if table 'relay_runtime' exists: ALTER TABLE relay_runtime RENAME TO daedalus_runtime
+    #    - if row with runtime_id='relay' exists: UPDATE daedalus_runtime SET runtime_id='daedalus' WHERE runtime_id='relay'
+    #    - both no-ops on a fresh DB or already-migrated DB
+
+    # 4. Normal init: CREATE TABLE IF NOT EXISTS daedalus_runtime (...) and the rest.
+    #    No-ops on an already-migrated DB; full init on a fresh one.
+    _create_schema(conn)
+    _ensure_runtime_row(conn, project_key)
+    return conn
 ```
 
-### 5.2 `python3 -m daedalus migrate-systemd` (new operator command)
+The SQL identity migration runs **before** the `CREATE TABLE IF NOT EXISTS daedalus_runtime` so the rename happens cleanly without creating a duplicate table.
 
-A separate explicit command for the systemd-side cutover. Implemented in `tools.py` as a new argparse subcommand `migrate-systemd`:
+### 5.2 `daedalus migrate-systemd` (new operator command)
 
-1. Detects old units (`yoyopod-relay-active.service`, `yoyopod-relay-shadow.service`) under `~/.config/systemd/user/`
-2. Stops + disables them via `systemctl --user`
-3. Removes the old unit files
-4. Installs the new template units (`daedalus-active@.service`, `daedalus-shadow@.service`)
-5. Enables + starts the appropriate instance (`daedalus-active@<workspace>.service`) based on which old unit was active
-6. Reports the transition
+A separate explicit subcommand for the systemd-side cutover. Defined in `schemas.py::setup_cli` and dispatched in `tools.py`:
 
-Idempotent: if old units don't exist, just installs the new template (Section 4.8).
+1. Detects old units (`yoyopod-relay-active.service`, `yoyopod-relay-shadow.service`) under `~/.config/systemd/user/`. **Tolerant of missing units** — if the shadow unit was never installed (the live system runs in active mode only), skip it without error.
+2. For each detected old unit: stop (ignore "Unit not loaded" errors), disable (ignore "Failed to disable" errors), then `unlink` the unit file.
+3. Installs the new template units (`daedalus-active@.service`, `daedalus-shadow@.service`) per Section 4.8.
+4. If an old unit was active before this command ran, enable + start the corresponding new instance (`daedalus-active@<workspace>.service`) where `<workspace>` is derived from the workflow_root the command was invoked under.
+5. Reports the transition: `removed: [...]`, `installed: [...]`, `started: [...]`.
+6. Runs `systemctl --user daemon-reload` after unit file changes.
+
+Idempotent: if old units don't exist, just installs (or refreshes) the new template. Safe to re-run.
 
 This is **not** auto-triggered. The operator runs it explicitly during the cutover sequence (Section 6).
 
@@ -351,7 +364,7 @@ This is the only operationally interesting part. Order matters.
 2. `cd ~/WS/hermes-relay && git pull` (fetch the rename branch)
 3. `./scripts/install.sh` — installs the new payload to `~/.hermes/plugins/daedalus/`
    - Note: install script removes the old `~/.hermes/plugins/hermes-relay/` symlink and creates a new `~/.hermes/plugins/daedalus/` symlink
-4. `python3 -m daedalus migrate-systemd` — removes old units, installs new template units, starts `daedalus-active@yoyopod.service`
+4. `daedalus migrate-systemd --workflow-root ~/.hermes/workflows/yoyopod` — removes old units, installs new template units, starts `daedalus-active@yoyopod.service`
 5. First run of `runtime.py` triggers the filesystem migrator (Section 5.1) automatically — DB + event log + alert state files renamed
 6. Verify: `/daedalus status` → healthy, `/daedalus doctor` → no issues
 7. Optional smoke: `/workflow code-review status` → idle, no active lane
@@ -424,6 +437,12 @@ The rename is complete when:
 3. `pytest` runs green for 244 + new tests (excluding the pre-existing `test_runtime_tools_alerts.py` failure)
 4. The cutover sequence (Section 6) has run successfully on the live YoyoPod machine
 5. `/daedalus status` and `/workflow code-review status` both return healthy on the live workspace
-6. A grep audit finds no residual `hermes-relay`, `Hermes Relay`, `HERMES_RELAY`, `_load_relay_module`, `RelayCommandError`, `relay.db`, `relay-events.jsonl`, `yoyopod-relay-*.service` strings in the codebase (except in committed historical artifacts: ADRs, prior spec/plan documents, and event log entries pre-cutover)
+6. A grep audit finds no residual `hermes-relay`, `Hermes Relay`, `HERMES_RELAY`, `_load_relay_module`, `RelayCommandError`, `relay.db`, `relay-events.jsonl`, `yoyopod-relay-*.service` strings in the codebase. Allowlisted historical artifacts:
+   - `docs/adr/ADR-0001-*.md`, `docs/adr/ADR-0002-*.md` — historical decisions, immutable
+   - `docs/superpowers/specs/2026-04-24-*.md`, `docs/superpowers/plans/2026-04-24-*.md` — prior workflows-contract spec/plan, immutable
+   - This spec itself (`docs/superpowers/specs/2026-04-25-daedalus-rename-design.md`) — references old names by necessity in the rename mapping
+   - The new ADR-0003 — references old names for context
+   - Git commit messages — immutable
+   - Event log entries written pre-cutover — immutable history
 7. ADR-0003 captures the rebrand decision (similar shape to ADR-0002)
 8. `plugin.yaml` version bumps from `0.2.0` → `0.3.0` to reflect the breaking identity change
