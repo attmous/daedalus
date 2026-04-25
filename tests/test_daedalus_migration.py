@@ -163,3 +163,59 @@ def test_cli_migrate_filesystem_invokes_migrator(tmp_path, monkeypatch):
     assert "daedalus error" not in result.lower()
     assert "renamed" in result.lower() or "migrated" in result.lower()
     assert (tmp_path / "state" / "daedalus" / "daedalus.db").exists()
+
+
+def test_migrate_filesystem_state_uses_project_runtime_layout_when_present(tmp_path):
+    """FU-2: when the workflow root has runtime/ (or any other project-
+    runtime layout marker), the migrator should look for legacy data under
+    runtime/ and put new data there too — matching paths.runtime_paths()
+    resolution. Without this, the migrator would strand data at top-level
+    state/daedalus/ while the runtime would look for it under runtime/."""
+    migration = load_migration_module()
+
+    # Create a project-runtime layout: presence of any of (runtime, config,
+    # workspace, docs) flips the layout. Use runtime/ here since it's the
+    # most common marker in real workspaces.
+    (tmp_path / "runtime").mkdir()
+
+    # Seed legacy data under the project-runtime layout
+    old_dir = tmp_path / "runtime" / "state" / "relay"
+    old_dir.mkdir(parents=True)
+    (old_dir / "relay.db").write_bytes(b"sqlite-data")
+    memory_dir = tmp_path / "runtime" / "memory"
+    memory_dir.mkdir(parents=True)
+    (memory_dir / "relay-events.jsonl").write_text("event-1\n", encoding="utf-8")
+    (memory_dir / "hermes-relay-alert-state.json").write_text('{"k":"v"}', encoding="utf-8")
+
+    result = migration.migrate_filesystem_state(tmp_path)
+
+    # New data lives under runtime/, NOT at top-level
+    assert (tmp_path / "runtime" / "state" / "daedalus" / "daedalus.db").read_bytes() == b"sqlite-data"
+    assert (tmp_path / "runtime" / "memory" / "daedalus-events.jsonl").read_text(encoding="utf-8") == "event-1\n"
+    assert (tmp_path / "runtime" / "memory" / "daedalus-alert-state.json").read_text(encoding="utf-8") == '{"k":"v"}'
+    # Top-level paths should NOT have been created
+    assert not (tmp_path / "state" / "daedalus" / "daedalus.db").exists()
+    # Old paths under runtime/ are gone
+    assert not (old_dir / "relay.db").exists()
+    # Result reports the renames
+    assert any("relay.db" in line for line in result)
+    assert any("relay-events.jsonl" in line for line in result)
+
+
+def test_migrate_filesystem_state_top_level_layout_unchanged_without_markers(tmp_path):
+    """When no project-runtime layout markers exist, migrator stays at
+    top-level (back-compat with legacy workspaces). Pin the existing
+    behavior so a future refactor doesn't accidentally always use runtime/."""
+    migration = load_migration_module()
+
+    # No runtime/, config/, workspace/, docs/ — pure legacy layout
+    old_dir = tmp_path / "state" / "relay"
+    old_dir.mkdir(parents=True)
+    (old_dir / "relay.db").write_bytes(b"sqlite-data")
+
+    migration.migrate_filesystem_state(tmp_path)
+
+    # New data at top-level
+    assert (tmp_path / "state" / "daedalus" / "daedalus.db").read_bytes() == b"sqlite-data"
+    # NOT under runtime/
+    assert not (tmp_path / "runtime").exists()

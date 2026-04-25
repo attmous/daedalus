@@ -42,7 +42,7 @@ WORKFLOW_ERROR_ANALYST_ROLE = "Workflow_Error_Analyst"
 STALLED_RECOVERY_AGE_THRESHOLD_SECONDS = 600
 STALLED_RECOVERY_DETECTION_THRESHOLD = 2
 DISPATCHED_ACTION_TIMEOUT_SECONDS = 1800
-SCHEMA_MIGRATIONS_TABLE = "relay_schema_migrations"
+SCHEMA_MIGRATIONS_TABLE = "daedalus_schema_migrations"
 
 
 def _now_iso() -> str:
@@ -266,6 +266,7 @@ def _migrate_schema_identity(conn) -> None:
     Operations performed when relay-era artifacts are detected:
     - ALTER TABLE relay_runtime RENAME TO daedalus_runtime
     - UPDATE daedalus_runtime SET runtime_id='daedalus' WHERE runtime_id='relay'
+    - ALTER TABLE relay_schema_migrations RENAME TO daedalus_schema_migrations
 
     Must be called before CREATE TABLE IF NOT EXISTS daedalus_runtime so
     the rename happens cleanly without producing two tables.
@@ -282,6 +283,14 @@ def _migrate_schema_identity(conn) -> None:
     if cur.fetchone() is not None:
         conn.execute(
             "UPDATE daedalus_runtime SET runtime_id='daedalus' WHERE runtime_id='relay'"
+        )
+
+    cur = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='relay_schema_migrations'"
+    )
+    if cur.fetchone() is not None:
+        conn.execute(
+            "ALTER TABLE relay_schema_migrations RENAME TO daedalus_schema_migrations"
         )
 
 
@@ -489,7 +498,7 @@ def init_daedalus_db(*, workflow_root: Path, project_key: str) -> dict[str, Any]
               UNIQUE (projection_type, target_path)
             );
 
-            CREATE TABLE IF NOT EXISTS relay_schema_migrations (
+            CREATE TABLE IF NOT EXISTS daedalus_schema_migrations (
               migration_version INTEGER PRIMARY KEY,
               from_version INTEGER NOT NULL,
               to_version INTEGER NOT NULL,
@@ -833,7 +842,7 @@ def bootstrap_runtime(
         "event_type": "daedalus_runtime_started",
         "event_version": 1,
         "created_at": now_iso,
-        "producer": "Relay_Runtime",
+        "producer": "Daedalus_Runtime",
         "project_key": project_key,
         "lane_id": None,
         "issue_number": None,
@@ -3326,7 +3335,7 @@ def refresh_runtime_lease(*, workflow_root: Path, instance_id: str, now_iso: str
             "event_type": "daedalus_runtime_heartbeat",
             "event_version": 1,
             "created_at": now_iso,
-            "producer": "Relay_Runtime",
+            "producer": "Daedalus_Runtime",
             "project_key": "yoyopod",
             "lane_id": None,
             "issue_number": None,

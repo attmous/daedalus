@@ -10,6 +10,27 @@ from pathlib import Path
 from typing import Iterable
 
 
+# Mirrors workflows.code_review.paths._has_project_runtime_layout. Inlined
+# here so migration.py has no project-package dependency (it's loaded via
+# spec_from_file_location at runtime startup before sys.path includes the
+# workflows package).
+_PROJECT_RUNTIME_LAYOUT_MARKERS = ("runtime", "config", "workspace", "docs")
+
+
+def _runtime_base_dir(workflow_root: Path) -> Path:
+    """Resolve the directory under which state/ and memory/ live.
+
+    Mirrors workflows.code_review.paths.runtime_base_dir: when the workflow
+    root has any of the project-runtime layout markers (runtime/, config/,
+    workspace/, docs/), state and memory are stored under
+    ``<workflow_root>/runtime/``; otherwise they're at the top level.
+    """
+    root = workflow_root.resolve()
+    if any((root / name).exists() for name in _PROJECT_RUNTIME_LAYOUT_MARKERS):
+        return root / "runtime"
+    return root
+
+
 def _rename_if_only_old_exists(old: Path, new: Path) -> str | None:
     """Rename old → new only if old exists and new does not.
 
@@ -77,13 +98,20 @@ def migrate_filesystem_state(workflow_root: Path) -> list[str]:
     workflow root has no relay-era data to migrate).
     """
     base = Path(workflow_root)
+    # Both old (relay) and new (daedalus) paths live under the same base.
+    # For project-runtime layouts (runtime/ subdir present), that's
+    # <workflow_root>/runtime/; for legacy top-level layouts, it's
+    # <workflow_root> itself. Matches paths.runtime_paths() resolution
+    # so the migrator never strands data at a layout the runtime won't
+    # subsequently look at.
+    base_dir = _runtime_base_dir(base)
     descriptions: list[str] = []
 
     # SQLite DB triplet: main file + WAL + SHM. SQLite WAL mode requires
     # the sidecar filenames to match the main DB filename, so we move all
     # three together as a unit.
-    old_state_dir = base / "state" / "relay"
-    new_state_dir = base / "state" / "daedalus"
+    old_state_dir = base_dir / "state" / "relay"
+    new_state_dir = base_dir / "state" / "daedalus"
     descriptions.extend(
         _rename_db_triplet(
             old_dir=old_state_dir,
@@ -95,10 +123,10 @@ def migrate_filesystem_state(workflow_root: Path) -> list[str]:
 
     # Event log and alert state files (single-file moves)
     memory_pairs: Iterable[tuple[Path, Path]] = (
-        (base / "memory" / "relay-events.jsonl", base / "memory" / "daedalus-events.jsonl"),
+        (base_dir / "memory" / "relay-events.jsonl", base_dir / "memory" / "daedalus-events.jsonl"),
         (
-            base / "memory" / "hermes-relay-alert-state.json",
-            base / "memory" / "daedalus-alert-state.json",
+            base_dir / "memory" / "hermes-relay-alert-state.json",
+            base_dir / "memory" / "daedalus-alert-state.json",
         ),
     )
     for old, new in memory_pairs:
