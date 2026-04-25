@@ -179,6 +179,33 @@ def _migrate_relay_schema_v1_to_v2(*, conn: sqlite3.Connection, now_iso: str) ->
 
 
 
+def _migrate_schema_identity(conn) -> None:
+    """Rename relay-era schema artifacts to daedalus equivalents.
+
+    Idempotent: no-op on a fresh DB, no-op on an already-migrated DB.
+
+    Operations performed when relay-era artifacts are detected:
+    - ALTER TABLE relay_runtime RENAME TO daedalus_runtime
+    - UPDATE daedalus_runtime SET runtime_id='daedalus' WHERE runtime_id='relay'
+
+    Must be called before CREATE TABLE IF NOT EXISTS daedalus_runtime so
+    the rename happens cleanly without producing two tables.
+    """
+    cur = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='relay_runtime'"
+    )
+    if cur.fetchone() is not None:
+        conn.execute("ALTER TABLE relay_runtime RENAME TO daedalus_runtime")
+
+    cur = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='daedalus_runtime'"
+    )
+    if cur.fetchone() is not None:
+        conn.execute(
+            "UPDATE daedalus_runtime SET runtime_id='daedalus' WHERE runtime_id='relay'"
+        )
+
+
 def init_relay_db(*, db_path: Path, project_key: str) -> dict[str, Any]:
     conn = _connect(db_path)
     try:
