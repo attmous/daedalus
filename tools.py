@@ -38,13 +38,13 @@ SERVICE_PROFILES = {
     "shadow": {
         "service_name": DEFAULT_SHADOW_SERVICE_NAME,
         "instance_id": DEFAULT_SHADOW_SERVICE_INSTANCE_ID,
-        "description": "YoYoPod Relay shadow runtime",
+        "description": "Daedalus shadow runtime",
         "runtime_command": "run-shadow",
     },
     "active": {
         "service_name": DEFAULT_ACTIVE_SERVICE_NAME,
         "instance_id": DEFAULT_ACTIVE_SERVICE_INSTANCE_ID,
-        "description": "YoYoPod Relay active runtime",
+        "description": "Daedalus active runtime",
         "runtime_command": "run-active",
     },
 }
@@ -243,7 +243,7 @@ def install_supervised_service(
     plugin_runtime_path = _expected_plugin_runtime_path(workflow_root)
     if not plugin_runtime_path.exists():
         raise DaedalusCommandError(
-            f"relay plugin runtime not found at {plugin_runtime_path}; install/copy the plugin payload into the workflow root before installing the service"
+            f"Daedalus plugin runtime not found at {plugin_runtime_path}; install/copy the plugin payload into the workflow root before installing the service"
         )
     resolved_service_name = _resolve_service_name(service_name=service_name, service_mode=service_mode)
     resolved_instance_id = _resolve_service_instance_id(instance_id=instance_id, service_mode=service_mode)
@@ -363,9 +363,9 @@ def _evaluate_service_supervision(*, runtime_status: dict[str, Any], service_inf
         "healthy": healthy,
         "reasons": reasons,
         "summary": (
-            f"{expected_service_mode} Relay service supervision healthy"
+            f"{expected_service_mode} Daedalus service supervision healthy"
             if healthy
-            else f"{expected_service_mode} Relay service supervision unhealthy"
+            else f"{expected_service_mode} Daedalus service supervision unhealthy"
         ),
     }
 
@@ -393,7 +393,7 @@ def build_shadow_report(*, workflow_root: Path, recent_actions_limit: int = 5) -
     daedalus = _load_daedalus_module(workflow_root)
     runtime_status = daedalus.get_runtime_status(workflow_root=workflow_root)
     if runtime_status.get("runtime_status") == "missing":
-        raise DaedalusCommandError("Relay runtime is not initialized; run `relay start` first")
+        raise DaedalusCommandError("Daedalus runtime is not initialized; run `daedalus start` first")
 
     legacy_status = _build_project_status(workflow_root)
     now_iso = daedalus._now_iso()
@@ -431,7 +431,7 @@ def build_shadow_report(*, workflow_root: Path, recent_actions_limit: int = 5) -
         owner_summary["service_healthy"] = service_health.get("healthy")
         if not service_health.get("healthy"):
             warnings.append(
-                f"{expected_service_mode} relay service unhealthy: " + ", ".join(service_health.get("reasons") or [])
+                f"{expected_service_mode} Daedalus service unhealthy: " + ", ".join(service_health.get("reasons") or [])
             )
     else:
         owner_summary["service_healthy"] = None
@@ -747,9 +747,9 @@ def build_doctor_report(*, workflow_root: Path, recent_actions_limit: int = 5) -
             status="pass" if relay_decision.get("compatible") else "warn",
             severity="warning" if not relay_decision.get("compatible") else "info",
             summary=(
-                "Relay shadow decision matches legacy semantics"
+                "Daedalus shadow decision matches legacy semantics"
                 if relay_decision.get("compatible")
-                else "Relay shadow decision disagrees with legacy next action"
+                else "Daedalus shadow decision disagrees with legacy next action"
             ),
             details={
                 "legacy_next_action": shadow_report.get("legacy", {}).get("next_action_type"),
@@ -893,13 +893,13 @@ def configure_subcommands(parser: argparse.ArgumentParser) -> argparse.ArgumentP
     sub = parser.add_subparsers(dest="daedalus_command")
     sub.required = True
 
-    init_cmd = sub.add_parser("init", help="Initialize Relay DB and filesystem paths.")
+    init_cmd = sub.add_parser("init", help="Initialize Daedalus DB and filesystem paths.")
     init_cmd.add_argument("--workflow-root", default=str(DEFAULT_WORKFLOW_ROOT))
     init_cmd.add_argument("--project-key", default=DEFAULT_PROJECT_KEY)
     init_cmd.add_argument("--json", action="store_true")
     init_cmd.set_defaults(func=run_cli_command)
 
-    start_cmd = sub.add_parser("start", help="Bootstrap Relay runtime and acquire runtime lease.")
+    start_cmd = sub.add_parser("start", help="Bootstrap Daedalus runtime and acquire runtime lease.")
     start_cmd.add_argument("--workflow-root", default=str(DEFAULT_WORKFLOW_ROOT))
     start_cmd.add_argument("--project-key", default=DEFAULT_PROJECT_KEY)
     start_cmd.add_argument("--instance-id", default=DEFAULT_INSTANCE_ID)
@@ -907,24 +907,24 @@ def configure_subcommands(parser: argparse.ArgumentParser) -> argparse.ArgumentP
     start_cmd.add_argument("--json", action="store_true")
     start_cmd.set_defaults(func=run_cli_command)
 
-    status_cmd = sub.add_parser("status", help="Show Relay runtime status.")
+    status_cmd = sub.add_parser("status", help="Show Daedalus runtime status.")
     status_cmd.add_argument("--workflow-root", default=str(DEFAULT_WORKFLOW_ROOT))
     status_cmd.add_argument("--json", action="store_true")
     status_cmd.set_defaults(func=run_cli_command)
 
-    report_cmd = sub.add_parser("shadow-report", help="Summarize the live legacy lane, Relay shadow decision, compatibility, and recent shadow actions.")
+    report_cmd = sub.add_parser("shadow-report", help="Summarize the live legacy lane, Daedalus shadow decision, compatibility, and recent shadow actions.")
     report_cmd.add_argument("--workflow-root", default=str(DEFAULT_WORKFLOW_ROOT))
     report_cmd.add_argument("--recent-actions-limit", type=int, default=5)
     report_cmd.add_argument("--json", action="store_true")
     report_cmd.set_defaults(func=run_cli_command)
 
-    doctor_cmd = sub.add_parser("doctor", help="Diagnose Relay runtime freshness, lease ownership, shadow parity, and active-lane consistency.")
+    doctor_cmd = sub.add_parser("doctor", help="Diagnose Daedalus runtime freshness, lease ownership, shadow parity, and active-lane consistency.")
     doctor_cmd.add_argument("--workflow-root", default=str(DEFAULT_WORKFLOW_ROOT))
     doctor_cmd.add_argument("--recent-actions-limit", type=int, default=5)
     doctor_cmd.add_argument("--json", action="store_true")
     doctor_cmd.set_defaults(func=run_cli_command)
 
-    service_install_cmd = sub.add_parser("service-install", help="Install the supervised YoYoPod Relay systemd user service.")
+    service_install_cmd = sub.add_parser("service-install", help="Install the supervised Daedalus systemd user service.")
     service_install_cmd.add_argument("--workflow-root", default=str(DEFAULT_WORKFLOW_ROOT))
     service_install_cmd.add_argument("--project-key", default=DEFAULT_PROJECT_KEY)
     service_install_cmd.add_argument("--instance-id")
@@ -934,61 +934,61 @@ def configure_subcommands(parser: argparse.ArgumentParser) -> argparse.ArgumentP
     service_install_cmd.add_argument("--json", action="store_true")
     service_install_cmd.set_defaults(func=run_cli_command)
 
-    service_uninstall_cmd = sub.add_parser("service-uninstall", help="Remove the supervised YoYoPod Relay systemd user service.")
+    service_uninstall_cmd = sub.add_parser("service-uninstall", help="Remove the supervised Daedalus systemd user service.")
     service_uninstall_cmd.add_argument("--service-mode", choices=sorted(SERVICE_PROFILES), default="shadow")
     service_uninstall_cmd.add_argument("--service-name")
     service_uninstall_cmd.add_argument("--json", action="store_true")
     service_uninstall_cmd.set_defaults(func=run_cli_command)
 
-    service_start_cmd = sub.add_parser("service-start", help="Start the supervised YoYoPod Relay systemd user service.")
+    service_start_cmd = sub.add_parser("service-start", help="Start the supervised Daedalus systemd user service.")
     service_start_cmd.add_argument("--service-mode", choices=sorted(SERVICE_PROFILES), default="shadow")
     service_start_cmd.add_argument("--service-name")
     service_start_cmd.add_argument("--json", action="store_true")
     service_start_cmd.set_defaults(func=run_cli_command)
 
-    service_stop_cmd = sub.add_parser("service-stop", help="Stop the supervised YoYoPod Relay systemd user service.")
+    service_stop_cmd = sub.add_parser("service-stop", help="Stop the supervised Daedalus systemd user service.")
     service_stop_cmd.add_argument("--service-mode", choices=sorted(SERVICE_PROFILES), default="shadow")
     service_stop_cmd.add_argument("--service-name")
     service_stop_cmd.add_argument("--json", action="store_true")
     service_stop_cmd.set_defaults(func=run_cli_command)
 
-    service_restart_cmd = sub.add_parser("service-restart", help="Restart the supervised YoYoPod Relay systemd user service.")
+    service_restart_cmd = sub.add_parser("service-restart", help="Restart the supervised Daedalus systemd user service.")
     service_restart_cmd.add_argument("--service-mode", choices=sorted(SERVICE_PROFILES), default="shadow")
     service_restart_cmd.add_argument("--service-name")
     service_restart_cmd.add_argument("--json", action="store_true")
     service_restart_cmd.set_defaults(func=run_cli_command)
 
-    service_enable_cmd = sub.add_parser("service-enable", help="Enable the supervised YoYoPod Relay systemd user service.")
+    service_enable_cmd = sub.add_parser("service-enable", help="Enable the supervised Daedalus systemd user service.")
     service_enable_cmd.add_argument("--service-mode", choices=sorted(SERVICE_PROFILES), default="shadow")
     service_enable_cmd.add_argument("--service-name")
     service_enable_cmd.add_argument("--json", action="store_true")
     service_enable_cmd.set_defaults(func=run_cli_command)
 
-    service_disable_cmd = sub.add_parser("service-disable", help="Disable the supervised YoYoPod Relay systemd user service.")
+    service_disable_cmd = sub.add_parser("service-disable", help="Disable the supervised Daedalus systemd user service.")
     service_disable_cmd.add_argument("--service-mode", choices=sorted(SERVICE_PROFILES), default="shadow")
     service_disable_cmd.add_argument("--service-name")
     service_disable_cmd.add_argument("--json", action="store_true")
     service_disable_cmd.set_defaults(func=run_cli_command)
 
-    service_status_cmd = sub.add_parser("service-status", help="Show supervised YoYoPod Relay systemd user service status.")
+    service_status_cmd = sub.add_parser("service-status", help="Show supervised Daedalus systemd user service status.")
     service_status_cmd.add_argument("--service-mode", choices=sorted(SERVICE_PROFILES), default="shadow")
     service_status_cmd.add_argument("--service-name")
     service_status_cmd.add_argument("--json", action="store_true")
     service_status_cmd.set_defaults(func=run_cli_command)
 
-    service_logs_cmd = sub.add_parser("service-logs", help="Show recent logs for the supervised YoYoPod Relay systemd user service.")
+    service_logs_cmd = sub.add_parser("service-logs", help="Show recent logs for the supervised Daedalus systemd user service.")
     service_logs_cmd.add_argument("--service-mode", choices=sorted(SERVICE_PROFILES), default="shadow")
     service_logs_cmd.add_argument("--service-name")
     service_logs_cmd.add_argument("--lines", type=int, default=50)
     service_logs_cmd.add_argument("--json", action="store_true")
     service_logs_cmd.set_defaults(func=run_cli_command)
 
-    ingest_cmd = sub.add_parser("ingest-live", help="Ingest current legacy YoYoPod workflow status into Relay shadow state.")
+    ingest_cmd = sub.add_parser("ingest-live", help="Ingest current legacy YoYoPod workflow status into Daedalus shadow state.")
     ingest_cmd.add_argument("--workflow-root", default=str(DEFAULT_WORKFLOW_ROOT))
     ingest_cmd.add_argument("--json", action="store_true")
     ingest_cmd.set_defaults(func=run_cli_command)
 
-    heartbeat_cmd = sub.add_parser("heartbeat", help="Refresh Relay runtime lease and heartbeat timestamp.")
+    heartbeat_cmd = sub.add_parser("heartbeat", help="Refresh Daedalus runtime lease and heartbeat timestamp.")
     heartbeat_cmd.add_argument("--workflow-root", default=str(DEFAULT_WORKFLOW_ROOT))
     heartbeat_cmd.add_argument("--instance-id", default=DEFAULT_INSTANCE_ID)
     heartbeat_cmd.add_argument("--ttl-seconds", type=int, default=60)
@@ -1010,12 +1010,12 @@ def configure_subcommands(parser: argparse.ArgumentParser) -> argparse.ArgumentP
     run_cmd.add_argument("--json", action="store_true")
     run_cmd.set_defaults(func=run_cli_command)
 
-    active_gate_status_cmd = sub.add_parser("active-gate-status", help="Show Relay active-execution gate state.")
+    active_gate_status_cmd = sub.add_parser("active-gate-status", help="Show Daedalus active-execution gate state.")
     active_gate_status_cmd.add_argument("--workflow-root", default=str(DEFAULT_WORKFLOW_ROOT))
     active_gate_status_cmd.add_argument("--json", action="store_true")
     active_gate_status_cmd.set_defaults(func=run_cli_command)
 
-    set_active_execution_cmd = sub.add_parser("set-active-execution", help="Enable or disable Relay active execution.")
+    set_active_execution_cmd = sub.add_parser("set-active-execution", help="Enable or disable Daedalus active execution.")
     set_active_execution_cmd.add_argument("--workflow-root", default=str(DEFAULT_WORKFLOW_ROOT))
     set_active_execution_cmd.add_argument("--enabled", required=True, choices=["true", "false"])
     set_active_execution_cmd.add_argument("--json", action="store_true")
@@ -1058,7 +1058,7 @@ def configure_subcommands(parser: argparse.ArgumentParser) -> argparse.ArgumentP
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = DaedalusArgumentParser(prog="relay", description="YoYoPod Relay operator control surface.")
+    parser = DaedalusArgumentParser(prog="daedalus", description="Daedalus operator control surface.")
     return configure_subcommands(parser)
 
 
@@ -1305,7 +1305,7 @@ def render_result(command: str, result: dict[str, Any], *, json_output: bool) ->
         return "\n".join(lines)
     if command == "doctor":
         lines = [
-            "relay-doctor",
+            "daedalus-doctor",
             f"overall: {result.get('overall_status')}",
         ]
         for check in result.get("checks") or []:
