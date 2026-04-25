@@ -93,7 +93,7 @@ def test_init_daedalus_db_migrates_execution_control_to_clean_schema(runtime_mod
     assert "execution_controls" in tables
     assert "ownership_controls" not in tables
     assert columns == ["control_id", "active_execution_enabled", "updated_at", "metadata_json"]
-    assert runtime_row[0] == 2
+    assert runtime_row[0] == 3
     assert "recovery_attempt_count" in lane_action_columns
     assert row[0] == "primary"
     assert row[1] == 1

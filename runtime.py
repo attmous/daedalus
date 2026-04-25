@@ -33,7 +33,7 @@ def _load_migration_module():
     return module
 
 
-DAEDALUS_SCHEMA_VERSION = 2
+DAEDALUS_SCHEMA_VERSION = 3
 RUNTIME_LEASE_KEY = "primary-orchestrator"
 RUNTIME_LEASE_SCOPE = "runtime"
 EXECUTION_CONTROL_ID = "primary"
@@ -195,6 +195,68 @@ def _migrate_relay_schema_v1_to_v2(*, conn: sqlite3.Connection, now_iso: str) ->
     )
 
 
+# Columns added to lane_actors during the v2→v3 migration. These match the
+# canonical 21-column shape that production code (INSERT at the legacy-status
+# ingest path, SELECT * usage in derive_shadow_actions_for_lane consumers)
+# has expected for some time. Older v2 DBs may have been created from the
+# stale 15-column CREATE TABLE — this migration brings them current.
+#
+# The 6 obsolete legacy columns (actor_backend, backend_process_id,
+# backend_endpoint, backend_command, backend_extra_json, status) are NOT
+# dropped — SQLite cannot drop columns without a full table rewrite, and
+# they're harmless dead columns that no current code path reads.
+_LANE_ACTORS_V3_COLUMNS = (
+    ("actor_name", "TEXT"),
+    ("backend_type", "TEXT"),
+    ("backend_thread_id", "TEXT"),
+    ("backend_record_id", "TEXT"),
+    ("runtime_status", "TEXT"),
+    ("session_action_recommendation", "TEXT"),
+    ("last_used_at", "TEXT"),
+    ("can_continue", "INTEGER"),
+    ("can_nudge", "INTEGER"),
+    ("restart_count", "INTEGER"),
+    ("failure_count", "INTEGER"),
+    ("metadata_json", "TEXT"),
+)
+
+
+def _migrate_relay_schema_v2_to_v3(*, conn: sqlite3.Connection, now_iso: str) -> None:
+    """Backfill lane_actors columns to the canonical 21-column shape.
+
+    Idempotent: each ALTER TABLE ADD COLUMN is gated on a PRAGMA
+    table_info check, so live DBs that already have the columns
+    (most production DBs do) are no-ops.
+    """
+    _create_schema_migrations_table(conn)
+    added: list[str] = []
+    for col_name, col_type in _LANE_ACTORS_V3_COLUMNS:
+        if not _column_exists(conn, "lane_actors", col_name):
+            conn.execute(f"ALTER TABLE lane_actors ADD COLUMN {col_name} {col_type}")
+            added.append(col_name)
+    conn.execute(
+        f"""
+        INSERT OR REPLACE INTO {SCHEMA_MIGRATIONS_TABLE} (
+          migration_version, from_version, to_version, applied_at, details_json
+        ) VALUES (?, ?, ?, ?, ?)
+        """,
+        (
+            3,
+            2,
+            3,
+            now_iso,
+            json.dumps(
+                {
+                    "from_version": 2,
+                    "to_version": 3,
+                    "changes": [f"lane_actors.{name}" for name in added] or ["no-op (columns already present)"],
+                },
+                sort_keys=True,
+            ),
+        ),
+    )
+
+
 
 def _migrate_schema_identity(conn) -> None:
     """Rename relay-era schema artifacts to daedalus equivalents.
@@ -316,16 +378,22 @@ def init_daedalus_db(*, workflow_root: Path, project_key: str) -> dict[str, Any]
               actor_id TEXT PRIMARY KEY,
               lane_id TEXT NOT NULL,
               actor_role TEXT NOT NULL,
-              actor_backend TEXT NOT NULL,
+              actor_name TEXT,
+              backend_type TEXT,
               backend_identity TEXT,
               backend_session_id TEXT,
-              backend_process_id TEXT,
-              backend_endpoint TEXT,
-              backend_command TEXT,
-              backend_extra_json TEXT,
+              backend_thread_id TEXT,
+              backend_record_id TEXT,
               model_name TEXT,
-              status TEXT NOT NULL,
+              runtime_status TEXT,
+              session_action_recommendation TEXT,
               last_seen_at TEXT,
+              last_used_at TEXT,
+              can_continue INTEGER,
+              can_nudge INTEGER,
+              restart_count INTEGER,
+              failure_count INTEGER,
+              metadata_json TEXT,
               created_at TEXT NOT NULL,
               updated_at TEXT NOT NULL,
               FOREIGN KEY (lane_id) REFERENCES lanes(lane_id)
@@ -482,7 +550,10 @@ def init_daedalus_db(*, workflow_root: Path, project_key: str) -> dict[str, Any]
                 (project_key, now_iso),
             )
             if current_schema_version < DAEDALUS_SCHEMA_VERSION:
-                _migrate_relay_schema_v1_to_v2(conn=conn, now_iso=now_iso)
+                if current_schema_version < 2:
+                    _migrate_relay_schema_v1_to_v2(conn=conn, now_iso=now_iso)
+                if current_schema_version < 3:
+                    _migrate_relay_schema_v2_to_v3(conn=conn, now_iso=now_iso)
                 conn.execute(
                     """
                     UPDATE daedalus_runtime
