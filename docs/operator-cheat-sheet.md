@@ -1,22 +1,22 @@
-# Hermes Relay Operator Cheat Sheet
+# Daedalus Operator Cheat Sheet
 
 ## 1. 10-second mental model
 
 - **Workflow CLI** = the policy brain, exposed via
-  `~/.hermes/plugins/hermes-relay/workflows/__main__.py --workflow-root ~/.hermes/workflows/yoyopod`
+  `~/.hermes/plugins/daedalus/workflows/__main__.py --workflow-root ~/.hermes/workflows/yoyopod`
   (historically: "the wrapper" at `scripts/yoyopod_workflow.py`, now retired)
-- **Relay runtime** = durable orchestrator around that brain
-- **systemd active service** = keeps Relay alive 24/7
+- **Daedalus runtime** = durable orchestrator around that brain
+- **systemd active service** = keeps Daedalus alive 24/7
 - **Codex** = internal coder
 - **Claude** = internal unpublished-branch gate
 - **Codex Cloud** = external PR reviewer
-- **SQLite** = canonical Relay runtime truth now
+- **SQLite** = canonical Daedalus runtime truth now
 - **JSONL** = append-only event/audit history
 - **lane-state + lane-memo** = lane-local handoff artifacts
 
 If status looks weird, always ask:
 1. What does the workflow CLI's `status --json` think?
-2. What does Relay think?
+2. What does Daedalus think?
 3. Is the active service alive?
 4. Is GitHub truth drifting away from persisted ledger truth?
 
@@ -26,32 +26,32 @@ If status looks weird, always ask:
 
 ### Workflow CLI (plugin-owned; replaces retired `scripts/yoyopod_workflow.py`)
 ```bash
-python3 ~/\.hermes/workflows/yoyopod/.hermes/plugins/hermes-relay/workflows/__main__.py --workflow-root ~/.hermes/workflows/yoyopod status --json
-python3 ~/\.hermes/workflows/yoyopod/.hermes/plugins/hermes-relay/workflows/__main__.py --workflow-root ~/.hermes/workflows/yoyopod tick --json
-python3 ~/\.hermes/workflows/yoyopod/.hermes/plugins/hermes-relay/workflows/__main__.py --workflow-root ~/.hermes/workflows/yoyopod dispatch-implementation-turn --json
-python3 ~/\.hermes/workflows/yoyopod/.hermes/plugins/hermes-relay/workflows/__main__.py --workflow-root ~/.hermes/workflows/yoyopod dispatch-claude-review --json
+python3 ~/\.hermes/workflows/yoyopod/.hermes/plugins/daedalus/workflows/__main__.py --workflow-root ~/.hermes/workflows/yoyopod status --json
+python3 ~/\.hermes/workflows/yoyopod/.hermes/plugins/daedalus/workflows/__main__.py --workflow-root ~/.hermes/workflows/yoyopod tick --json
+python3 ~/\.hermes/workflows/yoyopod/.hermes/plugins/daedalus/workflows/__main__.py --workflow-root ~/.hermes/workflows/yoyopod dispatch-implementation-turn --json
+python3 ~/\.hermes/workflows/yoyopod/.hermes/plugins/daedalus/workflows/__main__.py --workflow-root ~/.hermes/workflows/yoyopod dispatch-claude-review --json
 ```
 
-### Relay runtime direct
+### Daedalus runtime direct
 ```bash
-python3 ~/\.hermes/workflows/yoyopod/.hermes/plugins/hermes-relay/runtime.py status --workflow-root ~/\.hermes/workflows/yoyopod --json
-python3 ~/\.hermes/workflows/yoyopod/.hermes/plugins/hermes-relay/runtime.py shadow-report --workflow-root ~/\.hermes/workflows/yoyopod --json
-python3 ~/\.hermes/workflows/yoyopod/.hermes/plugins/hermes-relay/runtime.py doctor --workflow-root ~/\.hermes/workflows/yoyopod --json
-python3 ~/\.hermes/workflows/yoyopod/.hermes/plugins/hermes-relay/runtime.py request-active-actions --workflow-root ~/\.hermes/workflows/yoyopod --lane-id lane:220 --json
+python3 ~/\.hermes/workflows/yoyopod/.hermes/plugins/daedalus/runtime.py status --workflow-root ~/\.hermes/workflows/yoyopod --json
+python3 ~/\.hermes/workflows/yoyopod/.hermes/plugins/daedalus/runtime.py shadow-report --workflow-root ~/\.hermes/workflows/yoyopod --json
+python3 ~/\.hermes/workflows/yoyopod/.hermes/plugins/daedalus/runtime.py doctor --workflow-root ~/\.hermes/workflows/yoyopod --json
+python3 ~/\.hermes/workflows/yoyopod/.hermes/plugins/daedalus/runtime.py request-active-actions --workflow-root ~/\.hermes/workflows/yoyopod --lane-id lane:220 --json
 ```
 
-### Relay slash command inside Hermes
+### Daedalus slash command inside Hermes
 ```text
-/relay status
-/relay shadow-report
-/relay doctor
-/relay active-gate-status
+/daedalus status
+/daedalus shadow-report
+/daedalus doctor
+/daedalus active-gate-status
 ```
 
 ### Active service
 ```bash
-systemctl --user status yoyopod-relay-active.service --no-pager
-journalctl --user -u yoyopod-relay-active.service -n 200 --no-pager
+systemctl --user status daedalus-active@yoyopod.service --no-pager
+journalctl --user -u daedalus-active@yoyopod.service -n 200 --no-pager
 ```
 
 ---
@@ -66,8 +66,8 @@ Use this order when debugging:
 2. **Wrapper read model**
    - `status --json`
    - especially `nextAction`, `health`, `derivedReviewLoopState`
-3. **Relay runtime state**
-   - `relay.db`
+3. **Daedalus runtime state**
+   - `daedalus.db`
    - `shadow-report`
    - `doctor`
 4. **Lane handoff files**
@@ -87,18 +87,18 @@ Use this order when debugging:
 - `~/.hermes/workspaces/YoyoPod_Core`
 
 ### Workflow CLI (plugin-owned; replaces retired `scripts/yoyopod_workflow.py`)
-- `~/.hermes/workflows/yoyopod/.hermes/plugins/hermes-relay/workflows/__main__.py`
+- `~/.hermes/workflows/yoyopod/.hermes/plugins/daedalus/workflows/__main__.py`
   (always pass `--workflow-root ~/.hermes/workflows/yoyopod`)
 
-### Relay plugin
-- `~/.hermes/workflows/yoyopod/.hermes/plugins/hermes-relay/__init__.py`
-- `~/.hermes/workflows/yoyopod/.hermes/plugins/hermes-relay/tools.py`
-- `~/.hermes/workflows/yoyopod/.hermes/plugins/hermes-relay/runtime.py`
-- `~/.hermes/workflows/yoyopod/.hermes/plugins/hermes-relay/alerts.py`
+### Daedalus plugin
+- `~/.hermes/workflows/yoyopod/.hermes/plugins/daedalus/__init__.py`
+- `~/.hermes/workflows/yoyopod/.hermes/plugins/daedalus/tools.py`
+- `~/.hermes/workflows/yoyopod/.hermes/plugins/daedalus/runtime.py`
+- `~/.hermes/workflows/yoyopod/.hermes/plugins/daedalus/alerts.py`
 
-### Relay canonical state
-- `~/.hermes/workflows/yoyopod/state/relay/relay.db`
-- `~/.hermes/workflows/yoyopod/memory/relay-events.jsonl`
+### Daedalus canonical state
+- `~/.hermes/workflows/yoyopod/state/daedalus/daedalus.db`
+- `~/.hermes/workflows/yoyopod/memory/daedalus-events.jsonl`
 
 ### Wrapper projections
 - `~/.hermes/workflows/yoyopod/memory/yoyopod-workflow-status.json`
@@ -110,7 +110,7 @@ Use this order when debugging:
 - `/tmp/yoyopod-issue-<N>/.lane-memo.md`
 
 ### Service unit
-- `~/.config/systemd/user/yoyopod-relay-active.service`
+- `~/.config/systemd/user/daedalus-active@yoyopod.service`
 
 ---
 
@@ -175,7 +175,7 @@ Configured actor labels:
 
 ---
 
-## 8. What the wrapper owns vs what Relay owns
+## 8. What the wrapper owns vs what Daedalus owns
 
 ### Wrapper owns
 - semantic workflow policy
@@ -186,7 +186,7 @@ Configured actor labels:
 - publish / merge / promote logic
 - repair-handoff gating logic
 
-### Relay owns
+### Daedalus owns
 - canonical runtime DB
 - leases / heartbeats
 - action queue rows
@@ -198,7 +198,7 @@ Configured actor labels:
 
 Short version:
 - **Wrapper decides what should happen**
-- **Relay decides how to orchestrate it durably**
+- **Daedalus decides how to orchestrate it durably**
 
 ---
 
@@ -206,11 +206,11 @@ Short version:
 
 ### 1. Orchestrator -> coder
 - wrapper: `dispatch-implementation-turn`
-- Relay action: `dispatch_implementation_turn`
+- Daedalus action: `dispatch_implementation_turn`
 
 ### 2. Coder -> Claude local gate
 - wrapper semantic action: `run_claude_review`
-- Relay action: `request_internal_review`
+- Daedalus action: `request_internal_review`
 
 ### 3. Claude -> coder repair handoff
 - local unpublished findings go back into the Codex lane session
@@ -233,7 +233,7 @@ Short version:
 
 ---
 
-## 10. Relay action types
+## 10. Daedalus action types
 
 ### Coder actions
 - `dispatch_implementation_turn`
@@ -254,12 +254,12 @@ Wrapper semantic names:
 - `publish_ready_pr`
 - `merge_and_promote`
 
-Relay execution names:
+Daedalus execution names:
 - `request_internal_review`
 - `publish_pr`
 - `merge_pr`
 
-That’s expected. Relay speaks execution language.
+That’s expected. Daedalus speaks execution language.
 
 ---
 
@@ -267,7 +267,7 @@ That’s expected. Relay speaks execution language.
 
 ### What is happening right now?
 ```bash
-python3 ~/\.hermes/workflows/yoyopod/.hermes/plugins/hermes-relay/workflows/__main__.py --workflow-root ~/.hermes/workflows/yoyopod status --json
+python3 ~/\.hermes/workflows/yoyopod/.hermes/plugins/daedalus/workflows/__main__.py --workflow-root ~/.hermes/workflows/yoyopod status --json
 ```
 Check:
 - `health`
@@ -277,9 +277,9 @@ Check:
 - `derivedReviewLoopState`
 - `derivedMergeBlocked`
 
-### Is Relay healthy?
+### Is Daedalus healthy?
 ```bash
-python3 ~/\.hermes/workflows/yoyopod/.hermes/plugins/hermes-relay/runtime.py doctor --workflow-root ~/\.hermes/workflows/yoyopod --json
+python3 ~/\.hermes/workflows/yoyopod/.hermes/plugins/daedalus/runtime.py doctor --workflow-root ~/\.hermes/workflows/yoyopod --json
 ```
 Check:
 - runtime freshness
@@ -290,13 +290,13 @@ Check:
 
 ### Is the service actually alive?
 ```bash
-systemctl --user status yoyopod-relay-active.service --no-pager
-journalctl --user -u yoyopod-relay-active.service -n 200 --no-pager
+systemctl --user status daedalus-active@yoyopod.service --no-pager
+journalctl --user -u daedalus-active@yoyopod.service -n 200 --no-pager
 ```
 
-### What active actions does Relay think exist?
+### What active actions does Daedalus think exist?
 ```bash
-python3 ~/\.hermes/workflows/yoyopod/.hermes/plugins/hermes-relay/runtime.py request-active-actions \
+python3 ~/\.hermes/workflows/yoyopod/.hermes/plugins/daedalus/runtime.py request-active-actions \
   --workflow-root ~/\.hermes/workflows/yoyopod \
   --lane-id lane:220 --json
 ```
@@ -305,12 +305,12 @@ python3 ~/\.hermes/workflows/yoyopod/.hermes/plugins/hermes-relay/runtime.py req
 
 ## 12. Common failure signatures
 
-### A. Wrapper says `run_claude_review`, Relay returns `[]`
+### A. Wrapper says `run_claude_review`, Daedalus returns `[]`
 Likely cause:
 - failed active `request_internal_review` row for same head wedged the old idempotency key
 
 Check:
-- `relay.db` -> `lane_actions`
+- `daedalus.db` -> `lane_actions`
 
 Current fix already in place:
 - failed internal-review actions can now requeue with incremented `retry_count`
@@ -340,7 +340,7 @@ Ask:
 - is the coder session stale?
 - did a repair handoff already go out?
 - is the local head ahead of PR head?
-- are you looking at wrapper truth or Relay truth?
+- are you looking at wrapper truth or Daedalus truth?
 
 ---
 
@@ -394,4 +394,4 @@ From `config/yoyopod-workflow.json`:
 
 ## 15. The one-sentence operator rulebook
 
-**When confused, trust GitHub + live derived status first, Relay DB second, stale ledger prose last.**
+**When confused, trust GitHub + live derived status first, Daedalus DB second, stale ledger prose last.**

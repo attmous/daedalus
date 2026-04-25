@@ -1,24 +1,24 @@
 ---
 name: yoyopod-daedalus-alerts-monitoring
-description: Run the YoYoPod Hermes Relay outage alert cron job, handle script/plugin breakage, and apply the job's strict send-and-dedupe contract.
+description: Run the YoYoPod Daedalus outage alert cron job, handle script/plugin breakage, and apply the job's strict send-and-dedupe contract.
 ---
-# YoYoPod Relay alerts monitoring
+# YoYoPod Daedalus alerts monitoring
 
-Use this skill for the scheduled job that monitors YoYoPod Relay for runtime outages and sends deduplicated Telegram alerts.
+Use this skill for the scheduled job that monitors YoYoPod Daedalus for runtime outages and sends deduplicated Telegram alerts.
 
 ## Goal
 Run one decision tick, send exactly one Telegram message only when the decision demands it, and persist the new state only after delivery succeeds.
 
 ## Inputs
 - Workflow root: `/home/radxa/.hermes/workflows/yoyopod`
-- State file: `/home/radxa/.hermes/workflows/yoyopod/memory/hermes-relay-alert-state.json`
-- Decision script: `/home/radxa/.hermes/workflows/yoyopod/scripts/hermes_relay_alerts.py`
+- State file: `/home/radxa/.hermes/workflows/yoyopod/memory/daedalus-alert-state.json`
+- Decision script: `/home/radxa/.hermes/workflows/yoyopod/scripts/daedalus_alerts.py`
 - Telegram target: `telegram:YoYoPod Hermes Alerts (group)`
 
 ## Procedure
 1. Run:
    ```bash
-   python3 /home/radxa/.hermes/workflows/yoyopod/scripts/hermes_relay_alerts.py --json
+   python3 /home/radxa/.hermes/workflows/yoyopod/scripts/daedalus_alerts.py --json
    ```
 2. Parse the JSON result and read:
    - `decision.should_alert`
@@ -42,17 +42,17 @@ Run one decision tick, send exactly one Telegram message only when the decision 
 - Do not modify workflow code or cron jobs from this alert job.
 
 ## Failure handling
-If the decision script fails because the relay plugin path is missing or broken, inspect the live relay state directly instead of guessing.
+If the decision script fails because the Daedalus plugin path is missing or broken, inspect the live Daedalus state directly instead of guessing.
 
 Suggested checks:
 ```bash
 python3 - <<'PY'
 import sqlite3, json
-path='/home/radxa/.hermes/workflows/yoyopod/state/relay/relay.db'
+path='/home/radxa/.hermes/workflows/yoyopod/state/daedalus/daedalus.db'
 conn=sqlite3.connect(path)
 conn.row_factory=sqlite3.Row
 cur=conn.cursor()
-cur.execute('SELECT * FROM relay_runtime')
+cur.execute('SELECT * FROM daedalus_runtime')
 print(json.dumps([dict(r) for r in cur.fetchall()], indent=2))
 cur.execute('SELECT * FROM leases ORDER BY lease_scope, lease_key')
 print(json.dumps([dict(r) for r in cur.fetchall()], indent=2))
@@ -61,7 +61,7 @@ PY
 ```
 
 Interpretation:
-- `relay_runtime.runtime_status == "running"` plus a valid `primary-orchestrator` lease generally means no outage alert is warranted.
+- `daedalus_runtime.runtime_status == "running"` plus a valid `primary-orchestrator` lease generally means no outage alert is warranted.
 - If state is healthy and the script is broken, return `NO_REPLY` rather than inventing an alert.
 - If Telegram delivery returns `Platform 'telegram' is not configured`, treat that as a runtime credential issue, not a sent alert. Retry only in a proper Hermes gateway runtime; do not advance notifier state on that failure.
 - In cron/API environments where the direct `send_message` tool is absent, use the Hermes CLI messaging surface instead:

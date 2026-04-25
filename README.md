@@ -1,9 +1,9 @@
-# hermes-relay
+# daedalus
 
-![Hermes Relay wordmark](assets/daedalus-wordmark.svg)
+![Daedalus wordmark](assets/daedalus-wordmark.svg)
 
-Hermes Relay is the runtime and operator surface for workflow-oriented orchestration.
-It gives you relay bootstrap, shadow observation, active execution gating, alert logic, and day-2 operator commands.
+Daedalus is the runtime and operator surface for workflow-oriented orchestration.
+It gives you Daedalus bootstrap, shadow observation, active execution gating, alert logic, and day-2 operator commands.
 
 ## Brand assets
 
@@ -12,7 +12,7 @@ It gives you relay bootstrap, shadow observation, active execution gating, alert
 
 ## Why this repo exists
 
-- Source of truth for the `hermes-relay` plugin payload
+- Source of truth for the `daedalus` plugin payload
 - Meant to be copied into a Hermes plugins directory
 - Optimized for local editing, testing, and install-time validation
 
@@ -21,7 +21,7 @@ It gives you relay bootstrap, shadow observation, active execution gating, alert
 - `__init__.py` — plugin registration
 - `schemas.py` — CLI/slash parser wiring
 - `tools.py` — operator surface and systemd helpers
-- `runtime.py` — canonical relay runtime implementation
+- `runtime.py` — canonical Daedalus runtime implementation
 - `alerts.py` — outage alert decision logic
 - `plugin.yaml` — plugin manifest
 - `scripts/install.py` — Python installer for the plugin payload
@@ -46,7 +46,7 @@ Install into a non-default Hermes home:
 Install into an explicit destination:
 
 ```bash
-./scripts/install.sh --destination /path/to/plugins/hermes-relay
+./scripts/install.sh --destination /path/to/plugins/daedalus
 ```
 
 The installer copies the plugin payload only.
@@ -56,11 +56,11 @@ The installer copies the plugin payload only.
 1. Run the tests.
 2. Install the plugin into a scratch Hermes home or explicit destination.
 3. Launch Hermes with project plugins enabled.
-4. Exercise the `/relay` commands or call `runtime.py` directly.
+4. Exercise the `/daedalus` commands or call `runtime.py` directly.
 
 ```bash
 python3 -m pytest
-./scripts/install.sh --destination /tmp/hermes-relay
+./scripts/install.sh --destination /tmp/daedalus
 export HERMES_ENABLE_PROJECT_PLUGINS=true
 cd <project-root>
 hermes
@@ -71,16 +71,16 @@ hermes
 Inside Hermes:
 
 ```text
-/relay status
-/relay shadow-report
-/relay doctor
-/relay active-gate-status
-/relay iterate-active --json
+/daedalus status
+/daedalus shadow-report
+/daedalus doctor
+/daedalus active-gate-status
+/daedalus iterate-active --json
 ```
 
 ## Direct runtime commands
 
-Use these when you want to debug the relay without the Hermes shell in the middle:
+Use these when you want to debug Daedalus without the Hermes shell in the middle:
 
 ```bash
 python3 runtime.py init --workflow-root <workflow-root> --project-key yoyopod --json

@@ -14,8 +14,8 @@ Use this when a Hermes plugin registers `ctx.register_cli_command(...)` but `her
 
 Hermes has two unrelated extension paths:
 
-- `ctx.register_command(...)` → in-session slash commands like `/relay`
-- `ctx.register_cli_command(...)` → terminal subcommands like `hermes relay ...`
+- `ctx.register_command(...)` → in-session slash commands like `/daedalus`
+- `ctx.register_cli_command(...)` → terminal subcommands like `hermes daedalus ...`
 
 Do not confuse these with the wrapper-CLI subclass hooks from the `Extending the CLI` doc. Those are for custom TUIs, not for adding `hermes <subcommand>` entries.
 
@@ -148,9 +148,9 @@ Recommended end-state:
 - compatibility wrappers under `scripts/` may remain temporarily for manual users and old tests
 - plugin operator code should load plugin-local modules directly, not bounce through `scripts/...`
 
-Concrete Relay finding:
-- the clean YoYoPod Relay service unit should execute plugin runtime directly rather than `scripts/hermes_relay.py`
-- plugin alert logic should call plugin-local command execution, not try to import stale files like `relay_control.py`
+Concrete Daedalus finding:
+- the clean YoYoPod Daedalus service unit should execute plugin runtime directly rather than `scripts/daedalus.py`
+- plugin alert logic should call plugin-local command execution, not try to import stale files like `daedalus_control.py`
 
 Migration order that worked:
 1. move implementation into plugin modules (`runtime.py`, `alerts.py`)

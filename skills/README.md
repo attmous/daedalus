@@ -1,8 +1,8 @@
-# Hermes Relay skills
+# Daedalus skills
 
-All YoYoPod + Hermes Relay skills are consolidated here. When the plugin is
+All YoYoPod + Daedalus skills are consolidated here. When the plugin is
 installed (``./scripts/install.sh``), this directory is copied to
-``~/.hermes/plugins/hermes-relay/skills/``. With
+``~/.hermes/plugins/daedalus/skills/``. With
 ``HERMES_ENABLE_PROJECT_PLUGINS=true`` set, Hermes discovers these skills
 automatically.
 
@@ -15,7 +15,7 @@ description.
 ```
 skills/
 ├── README.md                                               # this file
-├── operator/                                               # plugin operator surface (/relay)
+├── operator/                                               # plugin operator surface (/daedalus)
 ├── yoyopod-lane-automation/                                # primary operator workflow
 ├── yoyopod-workflow-watchdog-tick/                         # cron watchdog tick
 ├── yoyopod-closeout-notifier/                              # telegram closeout notifier
@@ -36,8 +36,8 @@ skills/
 - ``yoyopod-workflow-watchdog-tick`` — run exactly one workflow-watchdog tick and return the mandated compact response shape.
 - ``yoyopod-closeout-notifier`` — monitor newly-closed GitHub issues and send one Telegram update per closure.
 - ``yoyopod-daedalus-alerts-monitoring`` — run the outage alert cron job with strict send-and-dedupe contract.
-- ``yoyopod-daedalus-outage-alerts`` — alert shape, dedupe keys, and delivery semantics for Relay outage Telegram messages.
-- ``operator`` — Hermes Relay operator control surface: ``/relay`` slash-command reference.
+- ``yoyopod-daedalus-outage-alerts`` — alert shape, dedupe keys, and delivery semantics for Daedalus outage Telegram messages.
+- ``operator`` — Daedalus operator control surface: ``/daedalus`` slash-command reference.
 
 **Architecture / design reference** (read when changing the plugin shape):
 

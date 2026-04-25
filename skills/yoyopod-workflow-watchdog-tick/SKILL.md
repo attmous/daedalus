@@ -1,11 +1,11 @@
 ---
 name: yoyopod-workflow-watchdog-tick
-description: Run exactly one Hermes-owned YoyoPod workflow watchdog tick via the hermes-relay plugin CLI, handle timeouts, and produce the required final response shape.
+description: Run exactly one Hermes-owned YoyoPod workflow watchdog tick via the daedalus plugin CLI, handle timeouts, and produce the required final response shape.
 ---
 # YoyoPod workflow watchdog tick
 
 Use this skill when executing a scheduled Hermes-owned YoyoPod watchdog tick
-against the hermes-relay plugin CLI (``workflows/__main__.py --workflow-root /home/radxa/.hermes/workflows/yoyopod``).
+against the daedalus plugin CLI (``workflows/__main__.py --workflow-root /home/radxa/.hermes/workflows/yoyopod``).
 
 ## Goal
 Run one tick, then report only the mandated outcome.
@@ -13,7 +13,7 @@ Run one tick, then report only the mandated outcome.
 ## Procedure
 1. Run:
    ```bash
-   python3 /home/radxa/.hermes/plugins/hermes-relay/workflows/__main__.py --workflow-root /home/radxa/.hermes/workflows/yoyopod tick --json
+   python3 /home/radxa/.hermes/plugins/daedalus/workflows/__main__.py --workflow-root /home/radxa/.hermes/workflows/yoyopod tick --json
    ```
 2. If the command returns JSON, inspect `action.type`.
 3. If `action.type == "noop"`, the final response must be exactly:

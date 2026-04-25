@@ -1,13 +1,13 @@
-# Hermes Relay Architecture
+# Daedalus Architecture
 
 ## Executive summary
 
-Hermes Relay is a **workflow-oriented orchestration layer** for agentic software delivery. It does **not** replace the workflow brain. It wraps that brain in durable runtime mechanics: leases, canonical state, action queues, retries, failures, service supervision, and operator tooling.
+Daedalus is a **workflow-oriented orchestration layer** for agentic software delivery. It does **not** replace the workflow brain. It wraps that brain in durable runtime mechanics: leases, canonical state, action queues, retries, failures, service supervision, and operator tooling.
 
 In the current YoYoPod deployment:
 - the **workflow wrapper** is still the semantic policy engine
-- the **Relay runtime** is the durable orchestrator
-- the **active systemd service** keeps Relay running continuously
+- the **Daedalus runtime** is the durable orchestrator
+- the **active systemd service** keeps Daedalus running continuously
 - the **coder / reviewer actors** are explicit roles, not ad-hoc prompt invocations
 
 The design goal is simple:
@@ -28,7 +28,7 @@ Classic agent automation breaks down for the same reasons every time:
 
 That works for toy demos. It fails for long-running SDLC lanes.
 
-Hermes Relay exists to solve that by introducing:
+Daedalus exists to solve that by introducing:
 - a durable runtime
 - explicit actions and actors
 - canonical current state
@@ -47,8 +47,8 @@ The workflow wrapper decides:
 - next action
 - review/publish/merge policy
 
-### 2.2 Relay is the orchestration runtime
-Relay owns:
+### 2.2 Daedalus is the orchestration runtime
+Daedalus owns:
 - lease / heartbeat
 - durable runtime tables
 - shadow vs active action rows
@@ -83,7 +83,7 @@ Every meaningful handoff should survive:
 - `__init__.py` — plugin registration
 - `schemas.py` — CLI/slash parser schema
 - `tools.py` — operator surface and service helpers
-- `runtime.py` — durable Relay engine
+- `runtime.py` — durable Daedalus engine
 - `alerts.py` — outage alert logic
 - `plugin.yaml` — plugin manifest
 - `skills/operator/SKILL.md` — operator usage guidance
@@ -124,7 +124,7 @@ Isolates outage alert decision logic from orchestration logic.
 ## 4. Runtime model
 
 ## 4.1 Canonical runtime state
-Relay persists canonical state in SQLite under a workflow-local state path.
+Daedalus persists canonical state in SQLite under a workflow-local state path.
 
 Important runtime entities include:
 - `lanes`
@@ -133,9 +133,9 @@ Important runtime entities include:
 - `lane_actions`
 - `failures`
 - `leases`
-- `relay_runtime`
+- `daedalus_runtime`
 
-This lets Relay answer questions like:
+This lets Daedalus answer questions like:
 - what lane is active?
 - who owns the lane actor session?
 - which review is pending or complete?
@@ -143,7 +143,7 @@ This lets Relay answer questions like:
 - is this runtime still the lease holder?
 
 ## 4.2 Event log
-Relay appends semantic events into JSONL for replay/postmortem/operator archaeology.
+Daedalus appends semantic events into JSONL for replay/postmortem/operator archaeology.
 
 Typical events:
 - shadow action requested
@@ -168,7 +168,7 @@ This protects against:
 ## 5. Execution modes
 
 ## 5.1 Shadow mode
-Relay:
+Daedalus:
 - ingests workflow truth
 - derives what it would do
 - persists shadow actions
@@ -178,7 +178,7 @@ Relay:
 Use shadow mode to validate parity safely.
 
 ## 5.2 Active mode
-Relay:
+Daedalus:
 - ingests workflow truth
 - derives active actions
 - executes allowed side effects
@@ -190,10 +190,10 @@ Use active mode for real orchestration.
 
 ## 6. Background service model
 
-In YoYoPod, Relay is supervised as a user-scoped systemd service.
+In YoYoPod, Daedalus is supervised as a user-scoped systemd service.
 
 Current active unit points directly at the plugin runtime:
-- `python3 .hermes/plugins/hermes-relay/runtime.py run-active ...`
+- `python3 .hermes/plugins/daedalus/runtime.py run-active ...`
 
 This gives:
 - restart on failure
@@ -207,7 +207,7 @@ That matters because an orchestrator pretending to be a chat session is bullshit
 
 ## 7. Workflow integration model
 
-Hermes Relay is intentionally **workflow-aware**, not generic magic.
+Daedalus is intentionally **workflow-aware**, not generic magic.
 
 It consumes workflow truth from the wrapper and then maps it into a durable execution model.
 
@@ -218,7 +218,7 @@ Examples:
 - `merge_and_promote`
 - `dispatch_codex_turn`
 
-### Relay execution actions
+### Daedalus execution actions
 Examples:
 - `request_internal_review`
 - `publish_pr`
@@ -228,7 +228,7 @@ Examples:
 
 That translation boundary is deliberate.
 The wrapper speaks **workflow semantics**.
-Relay speaks **execution semantics**.
+Daedalus speaks **execution semantics**.
 
 ---
 
@@ -296,7 +296,7 @@ If the published PR is clean and mergeable:
 ## 10. Handoff design
 
 ### Handoff A: Orchestrator -> coder
-Wrapper or Relay dispatches implementation work.
+Wrapper or Daedalus dispatches implementation work.
 
 Artifacts:
 - worktree
@@ -329,9 +329,9 @@ This is the heart of the design: **explicit role handoffs, not vibes.**
 
 ## 11. Failure model
 
-Relay models failures as first-class runtime state.
+Daedalus models failures as first-class runtime state.
 
-When an active action fails, Relay can persist:
+When an active action fails, Daedalus can persist:
 - failed action row
 - failure summary
 - recovery state
@@ -358,7 +358,7 @@ That second fix is the difference between a durable orchestrator and a deadlocke
 
 ## 12. Operator surfaces
 
-Relay intentionally exposes operator tooling instead of forcing direct DB archaeology.
+Daedalus intentionally exposes operator tooling instead of forcing direct DB archaeology.
 
 Typical surfaces:
 - `status`
@@ -371,7 +371,7 @@ These should answer:
 - who owns orchestration?
 - is the runtime healthy?
 - is it fresh or stale?
-- does Relay agree with wrapper semantics?
+- does Daedalus agree with wrapper semantics?
 - are there unresolved failures?
 - is a service crash or lease problem hiding under the hood?
 
@@ -381,7 +381,7 @@ These should answer:
 
 The current deployment uses a layered model:
 - wrapper remains semantic owner
-- Relay active service is recurring dispatcher
+- Daedalus active service is recurring dispatcher
 - wrapper `tick` remains manual fallback
 - milestone notifier remains as a Hermes cron support job
 - outage alerts remain a support surface, not the orchestrator
@@ -407,10 +407,10 @@ That means:
 - humans can observe or intervene without becoming the scheduler
 - the system can run 24/7 without degrading into prompt spaghetti
 
-Hermes Relay is the control-plane skeleton for that future.
+Daedalus is the control-plane skeleton for that future.
 
 ---
 
 ## 15. Architecture in one sentence
 
-**Hermes Relay is a durable orchestration runtime that wraps an SDLC workflow brain with leases, canonical state, action queues, role handoffs, retries, and operator tooling so agentic lanes can run continuously without turning into invisible cron-driven chaos.**
+**Daedalus is a durable orchestration runtime that wraps an SDLC workflow brain with leases, canonical state, action queues, role handoffs, retries, and operator tooling so agentic lanes can run continuously without turning into invisible cron-driven chaos.**

@@ -1,6 +1,6 @@
 # `yoyopod-core` Model 1 implementation spec
 
-> **Goal:** Move the `yoyopod-core` workflow brain into the `hermes-relay` plugin repo with a hard internal boundary between generic relay engine code, project adapter code, and project runtime assets.
+> **Goal:** Move the `yoyopod-core` workflow brain into the `daedalus` plugin repo with a hard internal boundary between generic Daedalus engine code, project adapter code, and project runtime assets.
 
 ## 1. Scope
 
@@ -23,7 +23,7 @@ This spec covers the next restructuring phase only.
 
 ## 2. Design goals
 
-1. **Keep Relay core generic**
+1. **Keep Daedalus core generic**
 2. **Move `yoyopod-core` workflow logic into plugin code**
 3. **Give project-local data a stable home inside the repo**
 4. **Make future Model 2 extraction straightforward**
@@ -32,7 +32,7 @@ This spec covers the next restructuring phase only.
 ## 3. Target layout
 
 ```text
-hermes-relay/
+daedalus/
 ├── plugin.yaml
 ├── __init__.py
 ├── schemas.py
@@ -92,7 +92,7 @@ Use `yoyopod_core` for:
 
 ## 5. Responsibility split
 
-## 5.1 Relay core
+## 5.1 Daedalus core
 
 ### `runtime.py`
 Owns only generic orchestration concerns:
@@ -112,12 +112,12 @@ Owns:
 
 - operator CLI / slash-command surface
 - service install/start/stop/status helpers
-- doctor/shadow/operator summaries built from relay + adapter outputs
+- doctor/shadow/operator summaries built from Daedalus + adapter outputs
 
 ### `alerts.py`
 Owns:
 
-- relay outage detection and alert state persistence
+- Daedalus outage detection and alert state persistence
 - generic alert rendering around runtime/doctor state
 
 ## 5.2 `yoyopod-core` adapter
@@ -214,33 +214,33 @@ Owns the real cloned product repo / worktree base.
 This is where code for the actual product lives.
 
 ### `projects/yoyopod_core/docs/`
-Owns project-specific local docs/runbooks that belong to the hosted project inside this repo rather than to generic relay docs.
+Owns project-specific local docs/runbooks that belong to the hosted project inside this repo rather than to generic Daedalus docs.
 
 ## 6. Import and dependency rules
 
 ## Allowed
 
-- Relay core may import adapter entrypoints deliberately
-- Adapter modules may import relay-shared helpers only when generic
+- Daedalus core may import adapter entrypoints deliberately
+- Adapter modules may import Daedalus-shared helpers only when generic
 - Adapter modules may import other adapter modules
 
 ## Not allowed
 
-- Relay core must not import project runtime data paths as hardcoded global assumptions
-- Relay core must not encode `yoyopod-core` workflow states directly
-- Adapter modules must not write directly into generic relay tables except through relay-owned functions or defined interfaces
+- Daedalus core must not import project runtime data paths as hardcoded global assumptions
+- Daedalus core must not encode `yoyopod-core` workflow states directly
+- Adapter modules must not write directly into generic Daedalus tables except through Daedalus-owned functions or defined interfaces
 - `workflow.py` must not become a dump of every helper again
 
 ## 7. Execution model
 
 Conceptually:
 
-1. Relay runtime runs one loop
-2. Relay asks the `yoyopod-core` adapter for current project truth
+1. Daedalus runtime runs one loop
+2. Daedalus asks the `yoyopod-core` adapter for current project truth
 3. Adapter builds project status / derives next action
-4. Relay persists action state and decides whether execution is allowed
-5. Relay calls adapter action execution code for project-specific side effects
-6. Relay records results/failures/retries generically
+4. Daedalus persists action state and decides whether execution is allowed
+5. Daedalus calls adapter action execution code for project-specific side effects
+6. Daedalus records results/failures/retries generically
 
 ## 8. Migration plan
 
@@ -270,9 +270,9 @@ Conceptually:
 - move session/worktree logic into `sessions.py`
 - move prompt builders into `prompts.py`
 
-### Phase 5 — wire relay to adapter directly
+### Phase 5 — wire Daedalus to adapter directly
 
-- update relay runtime/tools to import adapter entrypoints
+- update Daedalus runtime/tools to import adapter entrypoints
 - reduce subprocess/file-path dependence on the old wrapper location
 
 ### Phase 6 — compatibility shim
@@ -286,7 +286,7 @@ The shim must stay thin and dumb.
 During the move, the following operator behaviors must continue to work or be deliberately shimmed:
 
 - status reporting
-- relay doctor/shadow status
+- Daedalus doctor/shadow status
 - dispatch implementation turn
 - dispatch internal review
 - publish/merge flows
@@ -313,10 +313,10 @@ If any seed files are needed inside those directories, ignore contents surgicall
 
 ### Integration-level
 
-- relay runtime can call adapter successfully
-- relay doctor/shadow-report still work with the new adapter path
+- Daedalus runtime can call adapter successfully
+- Daedalus doctor/shadow-report still work with the new adapter path
 - active-gate behavior unchanged
-- existing relay hardening tests remain green
+- existing Daedalus hardening tests remain green
 
 ### Manual/operator checks
 

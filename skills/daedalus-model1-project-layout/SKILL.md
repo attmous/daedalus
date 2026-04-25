@@ -1,22 +1,22 @@
 ---
 name: daedalus-model1-project-layout
-description: Structure Hermes Relay as a single plugin with generic relay core plus project-specific adapter code under adapters/<project>, project-local runtime assets under projects/<project>, and a central path module for legacy-to-Model-1 migration.
+description: Structure Daedalus as a single plugin with generic Daedalus core plus project-specific adapter code under adapters/<project>, project-local runtime assets under projects/<project>, and a central path module for legacy-to-Model-1 migration.
 version: 1.0.0
 author: Hermes Agent
 license: MIT
 metadata:
   hermes:
-    tags: [architecture, plugins, hermes-relay, yoyopod, repo-layout]
+    tags: [architecture, plugins, daedalus, yoyopod, repo-layout]
 ---
 
-# Hermes Relay Model 1 Project Layout
+# Daedalus Model 1 Project Layout
 
-Use this when reorganizing Hermes Relay before a full two-plugin split.
+Use this when reorganizing Daedalus before a full two-plugin split.
 
 ## Goal
 
 Keep **one plugin repo** for now, but make the boundary explicit:
-- top-level files = generic Relay engine/operator surface
+- top-level files = generic Daedalus engine/operator surface
 - `adapters/<project>/` = importable project-specific adapter code
 - `projects/<project>/` = project-local config, runtime, workspace, docs
 - mutable runtime state and cloned product repo live under the project subtree, but separate from adapter code
@@ -24,7 +24,7 @@ Keep **one plugin repo** for now, but make the boundary explicit:
 ## Recommended layout
 
 ```text
-hermes-relay/
+daedalus/
 ├── plugin.yaml
 ├── __init__.py
 ├── schemas.py
@@ -62,7 +62,7 @@ hermes-relay/
 
 ### 1. One plugin, honest boundary
 This is Model 1: one plugin repo now, cleaner split later.
-- Relay core stays generic at repo top level.
+- Daedalus core stays generic at repo top level.
 - Project-specific workflow logic sits under `adapters/yoyopod_core/`.
 - Project-local data lives under `projects/yoyopod_core/`.
 - Future Model 2 extraction becomes moving `adapters/yoyopod_core/` behind a formal adapter boundary rather than rewriting everything.
@@ -84,7 +84,7 @@ It should own:
 - runtime db/event-log path resolution
 - alert-state path resolution
 - project-data-root discovery
-- plugin-entrypoint path lookup (the canonical workflow CLI at `<workflow_root>/.hermes/plugins/hermes-relay/workflows/__main__.py --workflow-root /home/radxa/.hermes/workflows/yoyopod`; the earlier `scripts/yoyopod_workflow.py` wrapper has been retired)
+- plugin-entrypoint path lookup (the canonical workflow CLI at `<workflow_root>/.hermes/plugins/daedalus/workflows/__main__.py --workflow-root /home/radxa/.hermes/workflows/yoyopod`; the earlier `scripts/yoyopod_workflow.py` wrapper has been retired)
 - runtime-layout fallback rules: if `runtime/` exists under the workflow root, store mutable state under `runtime/{memory,state,logs}`; otherwise fall back to the legacy top-level `memory/` and `state/` layout
 
 Recommended default workflow-root resolution order learned from the migration slice:
@@ -115,7 +115,7 @@ A safe first slice is:
 - add `paths.py`
 - route runtime/tools/alerts through central path helpers
 - make `adapters/yoyopod_core/status.py` delegate `build_status()` to the legacy wrapper
-- update Relay call sites to go through the adapter bridge (`tools.py` shadow/doctor paths and `runtime.py` ingest-live path) instead of reaching into the wrapper directly
+- update Daedalus call sites to go through the adapter bridge (`tools.py` shadow/doctor paths and `runtime.py` ingest-live path) instead of reaching into the wrapper directly
 
 That creates a real boundary immediately without forcing a flag-day rewrite.
 
@@ -170,13 +170,13 @@ Practical rule:
 
 ### 9. Tools should consume adapter status, not wrapper status
 Once `status.py` exists, `tools.py` should stop doing:
-- `relay._load_legacy_workflow_module(...).build_status()`
+- `daedalus._load_legacy_workflow_module(...).build_status()`
 
 and instead call a small bridge like:
 - `_build_project_status(workflow_root)`
 - which delegates to `workflows.status.build_status(...)`
 
-This keeps the boundary honest. Relay/tools can still tolerate wrapper-backed data during migration, but they should not reach into the wrapper directly anymore.
+This keeps the boundary honest. Daedalus/tools can still tolerate wrapper-backed data during migration, but they should not reach into the wrapper directly anymore.
 
 ### 10. Wrapper `build_status()` should become a compatibility shim
 A good intermediate cut is:
@@ -325,7 +325,7 @@ Good extractions there were:
   - `coder_agent_name_for_model(...)`
   - `actor_labels_payload(...)`
 
-This cluster belongs in the adapter even when some functions touch subprocesses or filesystem state, because the behavior is still YoYoPod-specific session/worktree policy rather than generic Relay core logic.
+This cluster belongs in the adapter even when some functions touch subprocesses or filesystem state, because the behavior is still YoYoPod-specific session/worktree policy rather than generic Daedalus core logic.
 
 Recommended extraction sequence for this cluster:
 1. add failing focused tests first (`tests/test_yoyopod_core_session_runtime.py`, `tests/test_yoyopod_core_sessions.py`)
@@ -658,7 +658,7 @@ Test rule for these slices:
 - smoke-test live `status --json` after each shim cut before moving on
 ## Boundary rules
 
-### Top-level Relay core may own
+### Top-level Daedalus core may own
 - runtime loop
 - leases / heartbeats
 - queue/action persistence
@@ -687,7 +687,7 @@ Test rule for these slices:
 ### `projects/yoyopod_core/workspace/` may contain
 - cloned `yoyopod-core` repo
 - worktrees if desired
-- repo-local code/docs/tests belonging to the product, not Relay
+- repo-local code/docs/tests belonging to the product, not Daedalus
 
 ## Strong opinions
 
@@ -704,4 +704,4 @@ Use this layout when:
 - you do not want to design a full plugin-to-plugin API yet
 - you want an intermediate architecture step before extracting YoYoPod into its own plugin
 
-Move to Model 2 later once the boundary between Relay core and YoYoPod app is stable.
+Move to Model 2 later once the boundary between Daedalus core and YoYoPod app is stable.

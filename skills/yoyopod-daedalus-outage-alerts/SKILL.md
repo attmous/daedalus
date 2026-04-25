@@ -1,28 +1,28 @@
 ---
 name: yoyopod-daedalus-outage-alerts
-description: Monitor YoYoPod Relay runtime outages, deduplicate Telegram alerts, and only advance alert state after confirmed delivery.
+description: Monitor YoYoPod Daedalus runtime outages, deduplicate Telegram alerts, and only advance alert state after confirmed delivery.
 version: 1.0.0
 author: Hermes Agent
 license: MIT
 metadata:
   hermes:
-    tags: [yoyopod, relay, alerts, telegram, cron]
+    tags: [yoyopod, daedalus, alerts, telegram, cron]
 ---
 
-# YoyoPod Relay outage alerts
+# YoyoPod Daedalus outage alerts
 
-Use this skill for the Hermes-owned cron job that monitors YoYoPod Relay runtime outages and sends deduplicated Telegram alerts or recovery notices.
+Use this skill for the Hermes-owned cron job that monitors YoYoPod Daedalus runtime outages and sends deduplicated Telegram alerts or recovery notices.
 
 ## Inputs
 - Workflow root: `/home/radxa/.hermes/workflows/yoyopod`
-- Alert script: `/home/radxa/.hermes/workflows/yoyopod/scripts/hermes_relay_alerts.py`
-- State file: `/home/radxa/.hermes/workflows/yoyopod/memory/hermes-relay-alert-state.json`
+- Alert script: `/home/radxa/.hermes/workflows/yoyopod/scripts/daedalus_alerts.py`
+- State file: `/home/radxa/.hermes/workflows/yoyopod/memory/daedalus-alert-state.json`
 - Telegram target: `telegram:YoYoPod Hermes Alerts (group)`
 
 ## Normal flow
 1. Run:
    ```bash
-   python3 /home/radxa/.hermes/workflows/yoyopod/scripts/hermes_relay_alerts.py --json
+   python3 /home/radxa/.hermes/workflows/yoyopod/scripts/daedalus_alerts.py --json
    ```
 2. Parse the JSON result.
 3. Read:
@@ -37,7 +37,7 @@ Use this skill for the Hermes-owned cron job that monitors YoYoPod Relay runtime
 7. If neither flag is true, return the required no-op response.
 
 ## State update rule
-Never advance `/home/radxa/.hermes/workflows/yoyopod/memory/hermes-relay-alert-state.json` unless the Telegram message was actually delivered.
+Never advance `/home/radxa/.hermes/workflows/yoyopod/memory/daedalus-alert-state.json` unless the Telegram message was actually delivered.
 - A skipped duplicate counts as not sent.
 - A failed send counts as not sent.
 - Do not invent fallback state transitions.
@@ -54,19 +54,19 @@ Critical paging semantics are stricter than they look:
 ## Real-world failure mode
 The alert script can fail because it tries to load a missing plugin file:
 
-`/home/radxa/.hermes/workflows/yoyopod/.hermes/plugins/hermes-relay/relay_control.py`
+`/home/radxa/.hermes/workflows/yoyopod/.hermes/plugins/daedalus/daedalus_control.py`
 
 Observed failure mode:
-- `python3 /home/radxa/.hermes/workflows/yoyopod/scripts/hermes_relay_alerts.py --json`
+- `python3 /home/radxa/.hermes/workflows/yoyopod/scripts/daedalus_alerts.py --json`
 - exits with `FileNotFoundError` for that path
 
-When that happens, do not assume the workflow is down. Verify the live Relay runtime directly from the host.
+When that happens, do not assume the workflow is down. Verify the live Daedalus runtime directly from the host.
 
 Fallback inspection path:
-1. Use the Relay runtime script directly, bypassing the missing alert wrapper import:
-   - `python3 /home/radxa/.hermes/workflows/yoyopod/scripts/hermes_relay.py status --workflow-root /home/radxa/.hermes/workflows/yoyopod --json`
-   - `python3 /home/radxa/.hermes/workflows/yoyopod/scripts/hermes_relay.py ownership-status --workflow-root /home/radxa/.hermes/workflows/yoyopod --json`
-   These are the reliable source for current runtime health and ownership when the alert wrapper cannot import `relay_control.py`.
+1. Use the Daedalus runtime script directly, bypassing the missing alert wrapper import:
+   - `python3 /home/radxa/.hermes/workflows/yoyopod/scripts/daedalus.py status --workflow-root /home/radxa/.hermes/workflows/yoyopod --json`
+   - `python3 /home/radxa/.hermes/workflows/yoyopod/scripts/daedalus.py ownership-status --workflow-root /home/radxa/.hermes/workflows/yoyopod --json`
+   These are the reliable source for current runtime health and ownership when the alert wrapper cannot import `daedalus_control.py`.
 2. If the decision script says to alert or resolve, still honor the dedupe/state-write rules exactly; the fallback only replaces status collection, not alert semantics.
 3. If the Telegram target name ever needs resolving, use the messaging directory first (`send_message(action='list')`) and then send exactly one message to the resolved target.
 4. Cross-check the wrapper state files only as secondary evidence:

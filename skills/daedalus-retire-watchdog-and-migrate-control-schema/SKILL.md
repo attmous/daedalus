@@ -1,14 +1,14 @@
 ---
 name: daedalus-retire-watchdog-and-migrate-control-schema
-description: Remove legacy watchdog/cutover concepts from Hermes Relay, switch to relay-only active execution control, and migrate the live SQLite control table cleanly.
+description: Remove legacy watchdog/cutover concepts from Daedalus, switch to Daedalus-only active execution control, and migrate the live SQLite control table cleanly.
 ---
 
-Use this when working on the Hermes Relay repo at `~/WS/hermes-relay` and the goal is to fully retire legacy watchdog/cutover ownership logic.
+Use this when working on the Daedalus repo at `~/WS/daedalus` and the goal is to fully retire legacy watchdog/cutover ownership logic.
 
 When this applies
 - The repo still mentions `watchdog`, `cutover`, `legacy-watchdog`, `desired_owner`, or `require_watchdog_paused`.
-- The live Relay DB still has the old `ownership_controls` schema.
-- You want the codebase and live system to use relay-only active execution control.
+- The live Daedalus DB still has the old `ownership_controls` schema.
+- You want the codebase and live system to use Daedalus-only active execution control.
 
 Steps
 1. Search the repo first.
@@ -21,7 +21,7 @@ Steps
 
 2. Simplify runtime control semantics in `runtime.py`.
    - Remove watchdog/legacy-owner constants and logic.
-   - Keep Relay as the only primary owner.
+   - Keep Daedalus as the only primary owner.
    - Replace ownership-switch semantics with a simple execution gate:
      - `active_execution_enabled`
      - `primary_owner = relay`
@@ -38,7 +38,7 @@ Steps
      - `updated_at`
      - `metadata_json`
    - Important: keep `control_id = "primary"` so existing data migrates in place instead of creating a second row.
-   - Implement a real migration in `init_relay_db()`:
+   - Implement a real migration in `init_daedalus_db()`:
      - if `execution_controls` already exists with the expected schema, use it and drop leftover `ownership_controls` if present
      - if only `ownership_controls` exists, copy `control_id`, `active_execution_enabled`, `updated_at`, and `metadata_json` into `execution_controls`, then drop `ownership_controls`
      - if neither exists, create `execution_controls`
@@ -46,8 +46,8 @@ Steps
 
 4. Update operator surface in `tools.py`.
    - Replace cutover commands with:
-     - `/relay active-gate-status`
-     - `/relay set-active-execution --enabled true|false`
+     - `/daedalus active-gate-status`
+     - `/daedalus set-active-execution --enabled true|false`
    - Update summaries/rendering to stop mentioning watchdog/cutover/desired owner.
 
 5. Update `alerts.py`.
@@ -68,7 +68,7 @@ Steps
    - Update tests for the renamed command surface and alert snapshot key.
 
 8. Verify in this order.
-   - `pytest -q` in `~/WS/hermes-relay`
+   - `pytest -q` in `~/WS/daedalus`
    - Run live gate check:
      - `python3 runtime.py active-gate-status --workflow-root ~/.hermes/workflows/yoyopod --json`
    - Inspect live DB schema and tables:

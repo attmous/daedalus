@@ -1,17 +1,17 @@
 ---
 name: daedalus-hardening-slices
-description: Follow-up workflow for Hermes Relay reliability hardening.
+description: Follow-up workflow for Daedalus reliability hardening.
 ---
 
-# Hermes Relay hardening slices
+# Daedalus hardening slices
 
-Use this when continuing Hermes Relay reliability work around stalled dispatches, recovery semantics, schema discipline, or alert state persistence.
+Use this when continuing Daedalus reliability work around stalled dispatches, recovery semantics, schema discipline, or alert state persistence.
 
 ## Workflow
 
 1. **Inspect live state before editing anything**
    - Check repo status.
-   - Inspect the live relay runtime, doctor, and alerts output for the active workflow root.
+   - Inspect the live Daedalus runtime, doctor, and alerts output for the active workflow root.
    - Confirm whether a parallel agent or prior change already handled part of the hardening slice.
 
 2. **Locate the real implementation points**
