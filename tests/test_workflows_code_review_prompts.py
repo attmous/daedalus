@@ -15,7 +15,7 @@ def load_module(module_name: str, relative_path: str):
 
 
 def test_render_implementation_dispatch_prompt_uses_compact_turn_for_continue_session():
-    prompts_module = load_module("hermes_relay_workflows_code_review_prompts_test", "workflows/code_review/prompts.py")
+    prompts_module = load_module("daedalus_workflows_code_review_prompts_test", "workflows/code_review/prompts.py")
 
     result = prompts_module.render_implementation_dispatch_prompt(
         issue={"number": 224, "title": "Issue 224", "url": "https://example.com/issues/224"},
@@ -34,7 +34,7 @@ def test_render_implementation_dispatch_prompt_uses_compact_turn_for_continue_se
 
 
 def test_render_implementation_dispatch_prompt_includes_issue_summary_for_restart_session():
-    prompts_module = load_module("hermes_relay_workflows_code_review_prompts_test", "workflows/code_review/prompts.py")
+    prompts_module = load_module("daedalus_workflows_code_review_prompts_test", "workflows/code_review/prompts.py")
 
     result = prompts_module.render_implementation_dispatch_prompt(
         issue={"number": 224, "title": "Issue 224", "url": "https://example.com/issues/224"},
@@ -54,7 +54,7 @@ def test_render_implementation_dispatch_prompt_includes_issue_summary_for_restar
 
 
 def test_render_claude_repair_handoff_prompt_includes_review_summary_and_fix_lists():
-    prompts_module = load_module("hermes_relay_workflows_code_review_prompts_test", "workflows/code_review/prompts.py")
+    prompts_module = load_module("daedalus_workflows_code_review_prompts_test", "workflows/code_review/prompts.py")
 
     result = prompts_module.render_claude_repair_handoff_prompt(
         issue={"number": 224, "title": "Issue 224"},
@@ -74,7 +74,7 @@ def test_render_claude_repair_handoff_prompt_includes_review_summary_and_fix_lis
 
 
 def test_render_codex_cloud_repair_handoff_prompt_includes_pr_url_and_guardrails():
-    prompts_module = load_module("hermes_relay_workflows_code_review_prompts_test", "workflows/code_review/prompts.py")
+    prompts_module = load_module("daedalus_workflows_code_review_prompts_test", "workflows/code_review/prompts.py")
 
     result = prompts_module.render_codex_cloud_repair_handoff_prompt(
         issue={"number": 224, "title": "Issue 224"},
@@ -94,7 +94,7 @@ def test_render_codex_cloud_repair_handoff_prompt_includes_pr_url_and_guardrails
 
 
 def test_summarize_validation_and_render_lane_memo_capture_checks_progress_and_fix_lists():
-    prompts_module = load_module("hermes_relay_workflows_code_review_prompts_test", "workflows/code_review/prompts.py")
+    prompts_module = load_module("daedalus_workflows_code_review_prompts_test", "workflows/code_review/prompts.py")
 
     validation = prompts_module.summarize_validation(
         {

@@ -25,7 +25,7 @@ DEFAULT_STATE_PATH = yoyopod_runtime_paths(DEFAULT_WORKFLOW_ROOT)["alert_state_p
 
 def _load_tools_module():
     module_path = PLUGIN_DIR / "tools.py"
-    spec = importlib.util.spec_from_file_location("yoyopod_relay_plugin_tools_for_alerts", module_path)
+    spec = importlib.util.spec_from_file_location("daedalus_tools_for_alerts", module_path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"unable to load relay plugin tools from {module_path}")
     module = importlib.util.module_from_spec(spec)

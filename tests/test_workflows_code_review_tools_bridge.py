@@ -16,8 +16,8 @@ def load_module(module_name: str, relative_path: str):
 
 
 def test_build_shadow_report_uses_adapter_status_bridge(monkeypatch, tmp_path):
-    tools_module = load_module("hermes_relay_tools_bridge_test", "tools.py")
-    runtime_module = load_module("hermes_relay_runtime_for_tools_bridge_test", "runtime.py")
+    tools_module = load_module("daedalus_tools_bridge_test", "tools.py")
+    runtime_module = load_module("daedalus_runtime_for_tools_bridge_test", "runtime.py")
     workflow_root = tmp_path / "workflow"
     runtime_paths = runtime_module._runtime_paths(workflow_root)
     runtime_module.init_daedalus_db(workflow_root=workflow_root, project_key="yoyopod")

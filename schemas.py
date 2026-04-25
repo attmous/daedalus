@@ -6,7 +6,7 @@ try:
     from .tools import configure_subcommands
 except ImportError:
     module_path = Path(__file__).resolve().parent / "tools.py"
-    spec = spec_from_file_location("hermes_relay_tools_for_schemas", module_path)
+    spec = spec_from_file_location("daedalus_tools_for_schemas", module_path)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"unable to load tools from {module_path}")
     module = module_from_spec(spec)

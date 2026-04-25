@@ -10,7 +10,7 @@ try:
 except ImportError:
     def _load_local_module(module_name: str):
         module_path = PLUGIN_DIR / f"{module_name}.py"
-        spec = spec_from_file_location(f"hermes_relay_{module_name}", module_path)
+        spec = spec_from_file_location(f"daedalus_{module_name}", module_path)
         if spec is None or spec.loader is None:
             raise RuntimeError(f"unable to load {module_name} from {module_path}")
         module = module_from_spec(spec)

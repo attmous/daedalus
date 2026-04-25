@@ -251,7 +251,7 @@ def _build_adapter_module_loaders(workspace_root: Path) -> dict[str, Any]:
         module_path = plugin_root / "workflows" / "code_review" / f"{name}.py"
         if not module_path.exists():
             raise FileNotFoundError(module_path)
-        spec = _importlib_util.spec_from_file_location(f"hermes_relay_code_review_{name}", module_path)
+        spec = _importlib_util.spec_from_file_location(f"daedalus_code_review_{name}", module_path)
         if spec is None or spec.loader is None:
             raise RuntimeError(f"unable to load code_review {name} module from {module_path}")
         module = _importlib_util.module_from_spec(spec)

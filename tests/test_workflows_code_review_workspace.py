@@ -33,7 +33,7 @@ def _minimal_config(tmp_path: Path) -> dict:
 
 
 def test_make_workspace_exposes_config_constants_and_primitives(tmp_path):
-    workspace_module = load_module("hermes_relay_workflows_code_review_workspace_test", "workflows/code_review/workspace.py")
+    workspace_module = load_module("daedalus_workflows_code_review_workspace_test", "workflows/code_review/workspace.py")
     config = _minimal_config(tmp_path)
     ws = workspace_module.make_workspace(workspace_root=tmp_path, config=config)
     # Constants
@@ -57,7 +57,7 @@ def test_make_workspace_exposes_config_constants_and_primitives(tmp_path):
 
 
 def test_workspace_engine_owner_selects_hermes_cron_jobs_path(tmp_path):
-    workspace_module = load_module("hermes_relay_workflows_code_review_workspace_test", "workflows/code_review/workspace.py")
+    workspace_module = load_module("daedalus_workflows_code_review_workspace_test", "workflows/code_review/workspace.py")
     config = _minimal_config(tmp_path)
     config["hermesCronJobsPath"] = str(tmp_path / "hermes-jobs.json")
     ws = workspace_module.make_workspace(workspace_root=tmp_path, config=config)
@@ -69,7 +69,7 @@ def test_workspace_engine_owner_selects_hermes_cron_jobs_path(tmp_path):
 
 
 def test_workspace_audit_appends_jsonl(tmp_path):
-    workspace_module = load_module("hermes_relay_workflows_code_review_workspace_test", "workflows/code_review/workspace.py")
+    workspace_module = load_module("daedalus_workflows_code_review_workspace_test", "workflows/code_review/workspace.py")
     config = _minimal_config(tmp_path)
     ws = workspace_module.make_workspace(workspace_root=tmp_path, config=config)
     ws.audit("test-action", "hello world", value=42)
@@ -84,7 +84,7 @@ def test_workspace_audit_appends_jsonl(tmp_path):
 
 
 def test_workspace_load_and_save_ledger_roundtrip(tmp_path):
-    workspace_module = load_module("hermes_relay_workflows_code_review_workspace_test", "workflows/code_review/workspace.py")
+    workspace_module = load_module("daedalus_workflows_code_review_workspace_test", "workflows/code_review/workspace.py")
     config = _minimal_config(tmp_path)
     ws = workspace_module.make_workspace(workspace_root=tmp_path, config=config)
     ws.save_ledger({"workflowState": "implementing_local"})
@@ -92,14 +92,14 @@ def test_workspace_load_and_save_ledger_roundtrip(tmp_path):
 
 
 def test_iso_to_epoch_interprets_utc(tmp_path):
-    workspace_module = load_module("hermes_relay_workflows_code_review_workspace_test", "workflows/code_review/workspace.py")
+    workspace_module = load_module("daedalus_workflows_code_review_workspace_test", "workflows/code_review/workspace.py")
     ws = workspace_module.make_workspace(workspace_root=tmp_path, config=_minimal_config(tmp_path))
     # 2024-01-01T00:00:00Z == 1704067200
     assert ws._iso_to_epoch("2024-01-01T00:00:00Z") == 1704067200
 
 
 def test_load_workspace_from_config_reads_file(tmp_path):
-    workspace_module = load_module("hermes_relay_workflows_code_review_workspace_test", "workflows/code_review/workspace.py")
+    workspace_module = load_module("daedalus_workflows_code_review_workspace_test", "workflows/code_review/workspace.py")
     workspace_root = tmp_path / "workflow"
     config_dir = workspace_root / "config"
     config_dir.mkdir(parents=True)
@@ -112,7 +112,7 @@ def test_load_workspace_from_config_reads_file(tmp_path):
 
 
 def test_workspace_exposes_adapter_module_loaders(tmp_path):
-    workspace_module = load_module("hermes_relay_workflows_code_review_workspace_test", "workflows/code_review/workspace.py")
+    workspace_module = load_module("daedalus_workflows_code_review_workspace_test", "workflows/code_review/workspace.py")
     ws = workspace_module.make_workspace(workspace_root=tmp_path, config=_minimal_config(tmp_path))
     # Generic loader + one-liner facade helpers are all available.
     assert callable(ws._load_adapter_module)
@@ -131,7 +131,7 @@ def test_workspace_exposes_adapter_module_loaders(tmp_path):
 
 
 def test_workspace_adapter_loader_raises_when_plugin_missing(tmp_path):
-    workspace_module = load_module("hermes_relay_workflows_code_review_workspace_test", "workflows/code_review/workspace.py")
+    workspace_module = load_module("daedalus_workflows_code_review_workspace_test", "workflows/code_review/workspace.py")
     ws = workspace_module.make_workspace(workspace_root=tmp_path, config=_minimal_config(tmp_path))
     # No plugin dir under tmp_path/.hermes/plugins/hermes-relay; loading any adapter module raises.
     import pytest
@@ -146,7 +146,7 @@ def test_workspace_exposes_full_wrapper_facade(tmp_path):
     This test pins the contract: when the wrapper is eventually deleted, the
     adapter orchestrator + cli will look up these names on ``ws`` directly.
     """
-    workspace_module = load_module("hermes_relay_workflows_code_review_workspace_test", "workflows/code_review/workspace.py")
+    workspace_module = load_module("daedalus_workflows_code_review_workspace_test", "workflows/code_review/workspace.py")
     ws = workspace_module.make_workspace(workspace_root=tmp_path, config=_minimal_config(tmp_path))
 
     # Orchestrator + reconcile + doctor
@@ -222,7 +222,7 @@ def test_workspace_exposes_full_wrapper_facade(tmp_path):
 
 
 def test_workspace_managed_job_names_dedupes(tmp_path):
-    workspace_module = load_module("hermes_relay_workflows_code_review_workspace_test", "workflows/code_review/workspace.py")
+    workspace_module = load_module("daedalus_workflows_code_review_workspace_test", "workflows/code_review/workspace.py")
     config = _minimal_config(tmp_path)
     config["coreJobNames"] = ["a", "b", "a"]
     config["hermesJobNames"] = ["b", "c"]
@@ -231,13 +231,13 @@ def test_workspace_managed_job_names_dedupes(tmp_path):
 
 
 def test_workspace_summarize_job_returns_none_for_none(tmp_path):
-    workspace_module = load_module("hermes_relay_workflows_code_review_workspace_test", "workflows/code_review/workspace.py")
+    workspace_module = load_module("daedalus_workflows_code_review_workspace_test", "workflows/code_review/workspace.py")
     ws = workspace_module.make_workspace(workspace_root=tmp_path, config=_minimal_config(tmp_path))
     assert ws._summarize_job(None) is None
 
 
 def test_workspace_job_delivery_defaults(tmp_path):
-    workspace_module = load_module("hermes_relay_workflows_code_review_workspace_test", "workflows/code_review/workspace.py")
+    workspace_module = load_module("daedalus_workflows_code_review_workspace_test", "workflows/code_review/workspace.py")
     ws = workspace_module.make_workspace(workspace_root=tmp_path, config=_minimal_config(tmp_path))
     assert ws._job_delivery({}) == {"mode": "none"}
     assert ws._job_delivery({"deliver": "telegram"}) == {"mode": "telegram"}
@@ -245,7 +245,7 @@ def test_workspace_job_delivery_defaults(tmp_path):
 
 
 def test_workspace_lane_operator_attention_reasons(tmp_path):
-    workspace_module = load_module("hermes_relay_workflows_code_review_workspace_test", "workflows/code_review/workspace.py")
+    workspace_module = load_module("daedalus_workflows_code_review_workspace_test", "workflows/code_review/workspace.py")
     config = _minimal_config(tmp_path)
     config["sessionPolicy"] = {
         "codexModel": "gpt-5.3-codex-spark/high",

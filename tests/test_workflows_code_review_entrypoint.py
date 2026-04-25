@@ -38,7 +38,7 @@ def _minimal_config(tmp_path: Path) -> dict:
 
 
 def test_resolve_workflow_root_explicit_flag_wins(tmp_path, monkeypatch):
-    main_module = load_module("hermes_relay_workflows_code_review_main_test", "workflows/code_review/__main__.py")
+    main_module = load_module("daedalus_workflows_code_review_main_test", "workflows/code_review/__main__.py")
     monkeypatch.delenv("YOYOPOD_WORKFLOW_ROOT", raising=False)
     root, remaining = main_module.resolve_workflow_root([
         "--workflow-root", str(tmp_path / "a"), "status",
@@ -48,7 +48,7 @@ def test_resolve_workflow_root_explicit_flag_wins(tmp_path, monkeypatch):
 
 
 def test_resolve_workflow_root_equals_form(tmp_path, monkeypatch):
-    main_module = load_module("hermes_relay_workflows_code_review_main_test", "workflows/code_review/__main__.py")
+    main_module = load_module("daedalus_workflows_code_review_main_test", "workflows/code_review/__main__.py")
     monkeypatch.delenv("YOYOPOD_WORKFLOW_ROOT", raising=False)
     root, remaining = main_module.resolve_workflow_root([
         f"--workflow-root={tmp_path / 'b'}", "tick", "--json",
@@ -58,7 +58,7 @@ def test_resolve_workflow_root_equals_form(tmp_path, monkeypatch):
 
 
 def test_resolve_workflow_root_env_fallback(tmp_path, monkeypatch):
-    main_module = load_module("hermes_relay_workflows_code_review_main_test", "workflows/code_review/__main__.py")
+    main_module = load_module("daedalus_workflows_code_review_main_test", "workflows/code_review/__main__.py")
     monkeypatch.setenv("YOYOPOD_WORKFLOW_ROOT", str(tmp_path / "env-root"))
     root, remaining = main_module.resolve_workflow_root(["status"])
     assert root == (tmp_path / "env-root").resolve()
@@ -66,7 +66,7 @@ def test_resolve_workflow_root_env_fallback(tmp_path, monkeypatch):
 
 
 def test_resolve_workflow_root_requires_value(tmp_path, monkeypatch):
-    main_module = load_module("hermes_relay_workflows_code_review_main_test", "workflows/code_review/__main__.py")
+    main_module = load_module("daedalus_workflows_code_review_main_test", "workflows/code_review/__main__.py")
     monkeypatch.delenv("YOYOPOD_WORKFLOW_ROOT", raising=False)
     import pytest
 
@@ -146,7 +146,7 @@ def test_main_calls_cli_main_with_workspace(tmp_path, monkeypatch):
     config = _minimal_config(tmp_path)
     _write_workflow_yaml(config_dir, config)
 
-    main_module = load_module("hermes_relay_workflows_code_review_main_test", "workflows/code_review/__main__.py")
+    main_module = load_module("daedalus_workflows_code_review_main_test", "workflows/code_review/__main__.py")
 
     # Patch workflows.code_review.cli_main so we don't actually dispatch a real
     # command — we just want to verify the workspace was built and argv was forwarded.
@@ -185,7 +185,7 @@ def test_main_subprocess_calledprocesserror_returns_nonzero(tmp_path, monkeypatc
     config_dir.mkdir(parents=True)
     _write_workflow_yaml(config_dir, _minimal_config(tmp_path))
 
-    main_module = load_module("hermes_relay_workflows_code_review_main_test", "workflows/code_review/__main__.py")
+    main_module = load_module("daedalus_workflows_code_review_main_test", "workflows/code_review/__main__.py")
 
     import subprocess as _sp
     import sys as _sys

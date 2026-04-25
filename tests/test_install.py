@@ -6,7 +6,7 @@ INSTALL_MODULE_PATH = Path(__file__).resolve().parents[1] / "scripts" / "install
 
 
 def load_install_module():
-    spec = importlib.util.spec_from_file_location("hermes_relay_install", INSTALL_MODULE_PATH)
+    spec = importlib.util.spec_from_file_location("daedalus_install", INSTALL_MODULE_PATH)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

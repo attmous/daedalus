@@ -22,17 +22,17 @@ def load_module(module_name: str, relative_path: str):
 
 @pytest.fixture()
 def runtime_module():
-    return load_module("hermes_relay_runtime_test", "runtime.py")
+    return load_module("daedalus_runtime_test", "runtime.py")
 
 
 @pytest.fixture()
 def tools_module():
-    return load_module("hermes_relay_tools_test", "tools.py")
+    return load_module("daedalus_tools_test", "tools.py")
 
 
 @pytest.fixture()
 def alerts_module():
-    return load_module("hermes_relay_alerts_test", "alerts.py")
+    return load_module("daedalus_alerts_test", "alerts.py")
 
 
 def test_iso_to_epoch_uses_utc_timegm(runtime_module, monkeypatch):

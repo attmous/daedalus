@@ -16,7 +16,7 @@ def load_module(module_name: str, relative_path: str):
 
 
 def test_should_dispatch_claude_repair_handoff_when_local_review_is_actionable_and_routable():
-    reviews_module = load_module("hermes_relay_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
+    reviews_module = load_module("daedalus_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
 
     result = reviews_module.should_dispatch_claude_repair_handoff(
         lane_state={},
@@ -38,7 +38,7 @@ def test_should_dispatch_claude_repair_handoff_when_local_review_is_actionable_a
 
 
 def test_should_dispatch_claude_repair_handoff_rejects_duplicate_handoff_for_same_review():
-    reviews_module = load_module("hermes_relay_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
+    reviews_module = load_module("daedalus_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
 
     result = reviews_module.should_dispatch_claude_repair_handoff(
         lane_state={"sessionControl": {"lastClaudeRepairHandoff": {"sessionName": "lane-224", "headSha": "head123", "reviewedAt": "2026-04-22T01:00:00Z"}}},
@@ -60,7 +60,7 @@ def test_should_dispatch_claude_repair_handoff_rejects_duplicate_handoff_for_sam
 
 
 def test_should_dispatch_codex_cloud_repair_handoff_when_postpublish_review_is_actionable_and_routable():
-    reviews_module = load_module("hermes_relay_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
+    reviews_module = load_module("daedalus_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
 
     result = reviews_module.should_dispatch_codex_cloud_repair_handoff(
         lane_state={},
@@ -82,7 +82,7 @@ def test_should_dispatch_codex_cloud_repair_handoff_when_postpublish_review_is_a
 
 
 def test_pr_ready_for_review_and_has_local_candidate_are_simple_truth_checks():
-    reviews_module = load_module("hermes_relay_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
+    reviews_module = load_module("daedalus_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
 
     assert reviews_module.pr_ready_for_review({"number": 1, "isDraft": False}) is True
     assert reviews_module.pr_ready_for_review({"number": 1, "isDraft": True}) is False
@@ -94,7 +94,7 @@ def test_pr_ready_for_review_and_has_local_candidate_are_simple_truth_checks():
 
 
 def test_current_inter_review_agent_matches_local_head_requires_local_prepublish_and_same_head():
-    reviews_module = load_module("hermes_relay_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
+    reviews_module = load_module("daedalus_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
 
     assert reviews_module.current_inter_review_agent_matches_local_head(
         {"reviewScope": "local-prepublish", "reviewedHeadSha": "abc123"},
@@ -111,7 +111,7 @@ def test_current_inter_review_agent_matches_local_head_requires_local_prepublish
 
 
 def test_local_inter_review_agent_review_count_increments_only_for_new_completed_local_review_head():
-    reviews_module = load_module("hermes_relay_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
+    reviews_module = load_module("daedalus_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
 
     incremented = reviews_module.local_inter_review_agent_review_count(
         {"reviewScope": "local-prepublish", "status": "completed", "reviewedHeadSha": "new-head"},
@@ -127,7 +127,7 @@ def test_local_inter_review_agent_review_count_increments_only_for_new_completed
 
 
 def test_single_pass_local_claude_gate_satisfied_handles_pass_clean_and_pass_with_findings_threshold():
-    reviews_module = load_module("hermes_relay_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
+    reviews_module = load_module("daedalus_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
 
     pass_clean = reviews_module.single_pass_local_claude_gate_satisfied(
         {"reviewScope": "local-prepublish", "status": "completed", "reviewedHeadSha": "abc123", "verdict": "PASS_CLEAN"},
@@ -154,7 +154,7 @@ def test_single_pass_local_claude_gate_satisfied_handles_pass_clean_and_pass_wit
 
 
 def test_determine_review_loop_state_handles_pending_findings_and_rework():
-    reviews_module = load_module("hermes_relay_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
+    reviews_module = load_module("daedalus_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
 
     awaiting = reviews_module.determine_review_loop_state(
         {
@@ -182,7 +182,7 @@ def test_determine_review_loop_state_handles_pending_findings_and_rework():
 
 
 def test_inter_review_agent_preflight_allows_clean_local_prepublish_run_and_suggests_wake_when_job_far_out():
-    reviews_module = load_module("hermes_relay_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
+    reviews_module = load_module("daedalus_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
 
     result = reviews_module.inter_review_agent_preflight(
         active_lane={"number": 224},
@@ -213,7 +213,7 @@ def test_inter_review_agent_preflight_allows_clean_local_prepublish_run_and_sugg
 
 
 def test_inter_review_agent_preflight_blocks_running_current_head_and_nonready_states():
-    reviews_module = load_module("hermes_relay_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
+    reviews_module = load_module("daedalus_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
 
     result = reviews_module.inter_review_agent_preflight(
         active_lane=None,
@@ -252,7 +252,7 @@ def test_inter_review_agent_preflight_blocks_running_current_head_and_nonready_s
 
 
 def test_normalize_review_fills_defaults_and_preserves_known_fields():
-    reviews_module = load_module("hermes_relay_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
+    reviews_module = load_module("daedalus_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
 
     result = reviews_module.normalize_review(
         {"status": "completed", "requestedHeadSha": "abc123", "blockingFindings": ["fix it"], "openFindingCount": "2"},
@@ -273,7 +273,7 @@ def test_normalize_review_fills_defaults_and_preserves_known_fields():
 
 
 def test_inter_review_agent_seed_helpers_cover_pending_superseded_and_timed_out_states():
-    reviews_module = load_module("hermes_relay_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
+    reviews_module = load_module("daedalus_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
 
     pending = reviews_module.inter_review_agent_pending_seed(model="claude-sonnet-4-6")
     superseded = reviews_module.inter_review_agent_superseded(
@@ -299,7 +299,7 @@ def test_inter_review_agent_seed_helpers_cover_pending_superseded_and_timed_out_
 
 
 def test_normalize_local_inter_review_agent_seed_handles_running_current_timed_out_and_superseded_cases():
-    reviews_module = load_module("hermes_relay_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
+    reviews_module = load_module("daedalus_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
 
     current = reviews_module.normalize_local_inter_review_agent_seed(
         {"reviewScope": "local-prepublish", "status": "completed", "reviewedHeadSha": "abc123"},
@@ -353,7 +353,7 @@ def test_normalize_local_inter_review_agent_seed_handles_running_current_timed_o
 
 
 def test_review_bucket_and_codex_cloud_placeholder_cover_pending_findings_clean_and_blocking_cases():
-    reviews_module = load_module("hermes_relay_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
+    reviews_module = load_module("daedalus_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
 
     assert reviews_module.review_bucket({"verdict": "REWORK"}) == "blocking"
     assert reviews_module.review_bucket({"verdict": "PASS_WITH_FINDINGS"}) == "findings"
@@ -378,7 +378,7 @@ def test_review_bucket_and_codex_cloud_placeholder_cover_pending_findings_clean_
 
 
 def test_inter_review_agent_review_builders_shape_running_failed_and_completed_reviews():
-    reviews_module = load_module("hermes_relay_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
+    reviews_module = load_module("daedalus_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
 
     running = reviews_module.build_inter_review_agent_running_review(
         {"requestedAt": "older", "foo": "bar"},
@@ -427,7 +427,7 @@ def test_inter_review_agent_review_builders_shape_running_failed_and_completed_r
 
 
 def test_repair_handoff_payload_builders_shape_claude_and_codex_payloads():
-    reviews_module = load_module("hermes_relay_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
+    reviews_module = load_module("daedalus_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
 
     claude_payload = reviews_module.build_claude_repair_handoff_payload(
         session_action={"sessionName": "lane-224"},
@@ -459,7 +459,7 @@ def test_repair_handoff_payload_builders_shape_claude_and_codex_payloads():
 
 
 def test_record_repair_handoff_helpers_store_payload_under_session_control(tmp_path):
-    reviews_module = load_module("hermes_relay_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
+    reviews_module = load_module("daedalus_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
 
     seen = {}
     lane_state_path = tmp_path / ".lane-state.json"
@@ -494,7 +494,7 @@ def test_record_repair_handoff_helpers_store_payload_under_session_control(tmp_p
 
 
 def test_inter_review_agent_outcome_helpers_cover_target_head_payload_and_failure_classification():
-    reviews_module = load_module("hermes_relay_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
+    reviews_module = load_module("daedalus_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
 
     review = {"requestedHeadSha": "req-1", "targetHeadSha": "target-1", "reviewScope": "local-prepublish", "status": "running"}
     payload = reviews_module.extract_inter_review_agent_payload(
@@ -518,7 +518,7 @@ def test_inter_review_agent_outcome_helpers_cover_target_head_payload_and_failur
 
 
 def test_classify_lane_failure_covers_clean_session_review_and_preflight_paths():
-    reviews_module = load_module("hermes_relay_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
+    reviews_module = load_module("daedalus_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
 
     clean = reviews_module.classify_lane_failure(
         implementation={},
@@ -554,7 +554,7 @@ def test_classify_lane_failure_covers_clean_session_review_and_preflight_paths()
 
 
 def test_codex_cloud_review_shaping_helpers_cover_thread_mapping_findings_pending_and_clean():
-    reviews_module = load_module("hermes_relay_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
+    reviews_module = load_module("daedalus_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
 
     superseded_thread = reviews_module.build_codex_cloud_thread(
         node={"id": "thread-1", "path": "app.py", "line": 12, "isResolved": False, "isOutdated": False},
@@ -610,7 +610,7 @@ def test_codex_cloud_review_shaping_helpers_cover_thread_mapping_findings_pendin
 
 
 def test_synthesize_repair_brief_collects_required_codex_threads_and_local_findings():
-    reviews_module = load_module("hermes_relay_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
+    reviews_module = load_module("daedalus_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
 
     result = reviews_module.synthesize_repair_brief(
         {
@@ -641,7 +641,7 @@ def test_synthesize_repair_brief_collects_required_codex_threads_and_local_findi
 
 
 def test_codex_review_mutation_helpers_cover_pr_ready_thread_resolution_and_superseded_cleanup():
-    reviews_module = load_module("hermes_relay_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
+    reviews_module = load_module("daedalus_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
 
     calls = []
 
@@ -709,7 +709,7 @@ def test_codex_review_mutation_helpers_cover_pr_ready_thread_resolution_and_supe
 
 
 def test_fetch_codex_pr_body_signal_picks_latest_codex_reaction_and_maps_clean_vs_pending():
-    reviews_module = load_module("hermes_relay_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
+    reviews_module = load_module("daedalus_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
 
     def fake_run_json(command, cwd=None):
         assert command == [
@@ -746,7 +746,7 @@ def test_fetch_codex_pr_body_signal_picks_latest_codex_reaction_and_maps_clean_v
 
 
 def test_fetch_codex_cloud_review_uses_cache_and_builds_from_graphql_threads():
-    reviews_module = load_module("hermes_relay_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
+    reviews_module = load_module("daedalus_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
 
     cached = reviews_module.fetch_codex_cloud_review(
         297,
@@ -825,7 +825,7 @@ def test_fetch_codex_cloud_review_uses_cache_and_builds_from_graphql_threads():
 
 
 def test_codex_parsing_and_checks_helpers_cover_severity_summary_and_acceptability():
-    reviews_module = load_module("hermes_relay_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
+    reviews_module = load_module("daedalus_workflows_code_review_reviews_test", "workflows/code_review/reviews.py")
 
     critical = reviews_module.extract_severity("**<sub><sub>![P0 Badge](x)</sub></sub>** boom")
     major = reviews_module.extract_severity("**<sub><sub>![P2 Badge](x)</sub></sub>** boom")
@@ -858,7 +858,7 @@ def _repair_handoff_deps(captured: dict):
 
 
 def test_maybe_dispatch_repair_handoff_dispatches_claude_branch_when_routable(tmp_path):
-    reviews_module = load_module("hermes_relay_workflows_code_review_reviews_mdrh", "workflows/code_review/reviews.py")
+    reviews_module = load_module("daedalus_workflows_code_review_reviews_mdrh", "workflows/code_review/reviews.py")
     worktree = tmp_path / "worktree"
     worktree.mkdir()
     captured: dict = {}
@@ -912,7 +912,7 @@ def test_maybe_dispatch_repair_handoff_dispatches_claude_branch_when_routable(tm
 
 
 def test_maybe_dispatch_repair_handoff_dispatches_codex_cloud_branch_when_routable(tmp_path):
-    reviews_module = load_module("hermes_relay_workflows_code_review_reviews_mdrh", "workflows/code_review/reviews.py")
+    reviews_module = load_module("daedalus_workflows_code_review_reviews_mdrh", "workflows/code_review/reviews.py")
     worktree = tmp_path / "worktree"
     worktree.mkdir()
     captured: dict = {}
@@ -963,7 +963,7 @@ def test_maybe_dispatch_repair_handoff_dispatches_codex_cloud_branch_when_routab
 
 
 def test_maybe_dispatch_repair_handoff_returns_noop_when_no_dispatch_branch_is_routable(tmp_path):
-    reviews_module = load_module("hermes_relay_workflows_code_review_reviews_mdrh", "workflows/code_review/reviews.py")
+    reviews_module = load_module("daedalus_workflows_code_review_reviews_mdrh", "workflows/code_review/reviews.py")
     worktree = tmp_path / "worktree"
     worktree.mkdir()
     captured: dict = {}
@@ -1001,7 +1001,7 @@ def test_maybe_dispatch_repair_handoff_returns_noop_when_no_dispatch_branch_is_r
 
 
 def test_maybe_dispatch_repair_handoff_short_circuits_when_no_active_lane(tmp_path):
-    reviews_module = load_module("hermes_relay_workflows_code_review_reviews_mdrh", "workflows/code_review/reviews.py")
+    reviews_module = load_module("daedalus_workflows_code_review_reviews_mdrh", "workflows/code_review/reviews.py")
     captured: dict = {}
     run_acpx, audit = _repair_handoff_deps(captured)
     result, changed = reviews_module.maybe_dispatch_repair_handoff(
@@ -1017,7 +1017,7 @@ def test_maybe_dispatch_repair_handoff_short_circuits_when_no_active_lane(tmp_pa
 
 
 def test_render_inter_review_agent_prompt_includes_head_and_scope(tmp_path):
-    prompts_module = load_module("hermes_relay_workflows_code_review_prompts_irp", "workflows/code_review/prompts.py")
+    prompts_module = load_module("daedalus_workflows_code_review_prompts_irp", "workflows/code_review/prompts.py")
 
     prompt = prompts_module.render_inter_review_agent_prompt(
         issue={"number": 224, "title": "T", "url": "https://example.test/issue/224"},
@@ -1041,7 +1041,7 @@ class _FakeCalledProcessError(Exception):
 
 
 def test_run_inter_review_agent_review_returns_parsed_payload_on_success():
-    reviews_module = load_module("hermes_relay_workflows_code_review_reviews_riar", "workflows/code_review/reviews.py")
+    reviews_module = load_module("daedalus_workflows_code_review_reviews_riar", "workflows/code_review/reviews.py")
     ok_payload = (
         '{"verdict":"PASS_CLEAN","summary":"fine","blockingFindings":[],'
         '"majorConcerns":[],"minorSuggestions":[],"requiredNextAction":null}'
@@ -1074,7 +1074,7 @@ def test_run_inter_review_agent_review_returns_parsed_payload_on_success():
 
 
 def test_run_inter_review_agent_review_extracts_payload_from_stdout_on_cli_error():
-    reviews_module = load_module("hermes_relay_workflows_code_review_reviews_riar", "workflows/code_review/reviews.py")
+    reviews_module = load_module("daedalus_workflows_code_review_reviews_riar", "workflows/code_review/reviews.py")
     crashed_payload = (
         '{"verdict":"REWORK","summary":"broken","blockingFindings":["x"],'
         '"majorConcerns":[],"minorSuggestions":[],"requiredNextAction":"fix"}'
@@ -1099,7 +1099,7 @@ def test_run_inter_review_agent_review_extracts_payload_from_stdout_on_cli_error
 
 
 def test_run_inter_review_agent_review_raises_review_error_when_stdout_unparsable():
-    reviews_module = load_module("hermes_relay_workflows_code_review_reviews_riar", "workflows/code_review/reviews.py")
+    reviews_module = load_module("daedalus_workflows_code_review_reviews_riar", "workflows/code_review/reviews.py")
 
     class _Completed:
         stdout = "not json at all"
@@ -1135,7 +1135,7 @@ def _capture_audit_fn():
 
 
 def test_audit_inter_review_agent_transition_emits_requested_event_when_head_changes():
-    reviews_module = load_module("hermes_relay_workflows_code_review_reviews_airat", "workflows/code_review/reviews.py")
+    reviews_module = load_module("daedalus_workflows_code_review_reviews_airat", "workflows/code_review/reviews.py")
     events, audit_fn = _capture_audit_fn()
     reviews_module.audit_inter_review_agent_transition(
         previous_review={},
@@ -1153,7 +1153,7 @@ def test_audit_inter_review_agent_transition_emits_requested_event_when_head_cha
 
 
 def test_audit_inter_review_agent_transition_emits_completed_event_on_success():
-    reviews_module = load_module("hermes_relay_workflows_code_review_reviews_airat", "workflows/code_review/reviews.py")
+    reviews_module = load_module("daedalus_workflows_code_review_reviews_airat", "workflows/code_review/reviews.py")
     events, audit_fn = _capture_audit_fn()
     reviews_module.audit_inter_review_agent_transition(
         previous_review={"status": "running", "reviewedHeadSha": None, "requestedHeadSha": "head123"},
@@ -1173,7 +1173,7 @@ def test_audit_inter_review_agent_transition_emits_completed_event_on_success():
 
 
 def test_audit_inter_review_agent_transition_emits_failure_event_with_failure_class():
-    reviews_module = load_module("hermes_relay_workflows_code_review_reviews_airat", "workflows/code_review/reviews.py")
+    reviews_module = load_module("daedalus_workflows_code_review_reviews_airat", "workflows/code_review/reviews.py")
     events, audit_fn = _capture_audit_fn()
     reviews_module.audit_inter_review_agent_transition(
         previous_review={"status": "running"},
@@ -1193,7 +1193,7 @@ def test_audit_inter_review_agent_transition_emits_failure_event_with_failure_cl
 
 
 def test_build_reviews_block_routes_postpublish_defaults_when_pr_is_ready_for_review():
-    reviews_module = load_module("hermes_relay_workflows_code_review_reviews_brb", "workflows/code_review/reviews.py")
+    reviews_module = load_module("daedalus_workflows_code_review_reviews_brb", "workflows/code_review/reviews.py")
 
     reviews = reviews_module.build_reviews_block(
         existing_reviews={
@@ -1219,7 +1219,7 @@ def test_build_reviews_block_routes_postpublish_defaults_when_pr_is_ready_for_re
 
 
 def test_build_reviews_block_seeds_local_prepublish_for_draft_pr_state():
-    reviews_module = load_module("hermes_relay_workflows_code_review_reviews_brb", "workflows/code_review/reviews.py")
+    reviews_module = load_module("daedalus_workflows_code_review_reviews_brb", "workflows/code_review/reviews.py")
 
     def fake_seed(existing, local_head_sha, now_iso):
         return {
@@ -1249,7 +1249,7 @@ def test_build_reviews_block_seeds_local_prepublish_for_draft_pr_state():
 
 
 def test_audit_inter_review_agent_transition_is_noop_when_nothing_changed():
-    reviews_module = load_module("hermes_relay_workflows_code_review_reviews_airat", "workflows/code_review/reviews.py")
+    reviews_module = load_module("daedalus_workflows_code_review_reviews_airat", "workflows/code_review/reviews.py")
     events, audit_fn = _capture_audit_fn()
     same = {
         "status": "completed",

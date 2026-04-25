@@ -81,7 +81,7 @@ def _make_workspace(**overrides):
 
 
 def _run_main(workspace, argv):
-    cli = load_module("hermes_relay_workflows_code_review_cli_test", "workflows/code_review/cli.py")
+    cli = load_module("daedalus_workflows_code_review_cli_test", "workflows/code_review/cli.py")
     buf = io.StringIO()
     with redirect_stdout(buf):
         code = cli.main(workspace, argv=argv)
