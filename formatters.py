@@ -371,3 +371,61 @@ def format_active_gate_status(
         use_color=use_color,
         footer=footer,
     )
+
+
+# ─── /daedalus doctor ────────────────────────────────────────
+
+def format_doctor(
+    result: Mapping[str, Any],
+    *,
+    use_color: bool | None = None,
+) -> str:
+    overall = (result.get("overall_status") or "?").lower()
+    checks = result.get("checks") or []
+
+    rows: list[Row] = []
+    for check in checks:
+        status = (check.get("status") or "info").lower()
+        if status == "pass":
+            row_status = "pass"
+        elif status == "fail":
+            row_status = "fail"
+        elif status == "warn":
+            row_status = "warn"
+        else:
+            row_status = "info"
+        rows.append(Row(
+            label=check.get("code") or "check",
+            value=check.get("summary") or "",
+            status=row_status,
+        ))
+        # Inline failure details for active_execution_failures.
+        if check.get("code") == "active_execution_failures":
+            details = check.get("details") or {}
+            for failure in (details.get("failures") or []):
+                detail_text = (
+                    f"  {failure.get('failure_id')} "
+                    f"class={failure.get('failure_class')} "
+                    f"action={failure.get('recommended_action')} "
+                    f"confidence={failure.get('confidence')} "
+                    f"recovery={failure.get('recovery_state')} "
+                    f"age={failure.get('failure_age_seconds')}s"
+                )
+                rows.append(Row(label="", value=detail_text, status=None))
+
+    overall_value = overall.upper() if overall in {"pass", "fail", "warn"} else overall
+    summary_section = Section(
+        name=None,
+        rows=[Row(
+            label="overall",
+            value=overall_value,
+            status=("pass" if overall == "pass" else ("fail" if overall == "fail" else "warn")),
+        )],
+    )
+    checks_section = Section(name="checks", rows=rows)
+
+    return format_panel(
+        title="Daedalus doctor",
+        sections=[summary_section, checks_section],
+        use_color=use_color,
+    )

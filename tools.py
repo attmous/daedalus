@@ -1611,22 +1611,16 @@ def render_result(
                 )
         return "\n".join(lines)
     if command == "doctor":
-        lines = [
-            "daedalus-doctor",
-            f"overall: {result.get('overall_status')}",
-        ]
-        for check in result.get("checks") or []:
-            lines.append(
-                f"- {check.get('status').upper()} {check.get('code')}: {check.get('summary')}"
+        try:
+            from formatters import format_doctor as _fmt
+        except ImportError:
+            spec = importlib.util.spec_from_file_location(
+                "daedalus_formatters_for_doctor", PLUGIN_DIR / "formatters.py"
             )
-            if check.get("code") == "active_execution_failures":
-                for failure in ((check.get("details") or {}).get("failures") or []):
-                    lines.append(
-                        f"  failure={failure.get('failure_id')} class={failure.get('failure_class')} "
-                        f"recommended={failure.get('recommended_action')} confidence={failure.get('confidence')} "
-                        f"recovery={failure.get('recovery_state')} urgency={failure.get('urgency')} age={failure.get('failure_age_seconds')}s"
-                    )
-        return "\n".join(lines)
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            _fmt = mod.format_doctor
+        return _fmt(result)
     if command == "service-install":
         return f"service installed mode={result.get('service_mode')} unit={result.get('unit_path')} ok={result.get('installed')}"
     if command == "service-uninstall":
