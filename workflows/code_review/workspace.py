@@ -320,6 +320,86 @@ def _make_audit_fn(
     return audit
 
 
+def _make_comment_publisher(
+    *,
+    workflow_root,
+    repo_slug,
+    workflow_yaml,
+    get_active_issue_number,
+    get_workflow_state,
+    get_is_operator_attention,
+    run_fn=None,
+):
+    """Build the ``publisher`` callable consumed by ``_make_audit_fn``.
+
+    Returns ``None`` when github-comments is disabled — the caller
+    (``build_workspace``) wires that None into ``_make_audit_fn`` so
+    nothing happens at the audit hook.
+    """
+    # Lazy import to avoid hard-coupling workspace.py to comments_publisher
+    # before the rest of the workspace bootstrap is happy.
+    try:
+        from . import observability as _obs
+        from . import comments_publisher as _pub
+    except ImportError:
+        _here = Path(__file__).resolve().parent
+        import importlib.util as _ilu
+
+        def _load(name):
+            spec = _ilu.spec_from_file_location(
+                f"daedalus_workflow_code_review_{name}", _here / f"{name}.py"
+            )
+            mod = _ilu.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            return mod
+        _obs = _load("observability")
+        _pub = _load("comments_publisher")
+
+    workflow_root = Path(workflow_root)
+    override_dir = workflow_root / "runtime" / "state" / "daedalus"
+    state_dir = workflow_root / "runtime" / "state" / "lane-comments"
+
+    effective = _obs.resolve_effective_config(
+        workflow_yaml=workflow_yaml or {},
+        override_dir=override_dir,
+        workflow_name="code-review",
+    )
+    if not effective["github-comments"].get("enabled"):
+        return None
+
+    def publisher(*, action, summary, extra):
+        # Re-resolve the config every call so a /daedalus set-observability
+        # toggle takes effect immediately, without restarting the service.
+        eff = _obs.resolve_effective_config(
+            workflow_yaml=workflow_yaml or {},
+            override_dir=override_dir,
+            workflow_name="code-review",
+        )
+        if not eff["github-comments"].get("enabled"):
+            return
+        issue_number = get_active_issue_number()
+        if issue_number is None:
+            return
+        audit_event = {
+            "at": _now_iso(),
+            "action": action,
+            "summary": summary,
+            **(extra or {}),
+        }
+        _pub.publish_event(
+            repo_slug=repo_slug,
+            issue_number=issue_number,
+            workflow_state=get_workflow_state(),
+            is_operator_attention=get_is_operator_attention(),
+            audit_event=audit_event,
+            effective_config=eff,
+            state_dir=state_dir,
+            **({"run_fn": run_fn} if run_fn is not None else {}),
+        )
+
+    return publisher
+
+
 def make_workspace(*, workspace_root: Path, config: dict[str, Any]) -> SimpleNamespace:
     """Build the workspace accessor used by adapter CLI / orchestrator code.
 
