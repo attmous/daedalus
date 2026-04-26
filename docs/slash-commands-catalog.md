@@ -18,6 +18,109 @@ grouped by purpose, with a one-line description.
 | `/daedalus shadow-report` | Shadow-mode action proposal vs legacy comparison |
 | `/daedalus active-gate-status` | Active-execution gate state and blockers |
 
+### Inspection output format
+
+All inspection commands default to a structured human-readable panel.
+Pass `--format json` (or the legacy `--json` alias) for machine-readable JSON.
+ANSI color is auto-detected via `sys.stdout.isatty()` and respects the
+`NO_COLOR` environment variable.
+
+#### Example: `/daedalus status`
+
+```
+Daedalus runtime — yoyopod
+  state    running (active mode)
+  owner    daedalus-active-yoyopod
+  schema   v3
+  paths
+    db          ~/.hermes/workflows/yoyopod/runtime/state/daedalus/daedalus.db
+    events      ~/.hermes/workflows/yoyopod/runtime/memory/daedalus-events.jsonl
+  heartbeat
+    last        22:43:01 UTC (17s ago)
+  lanes
+    total       14
+```
+
+#### Example: `/daedalus active-gate-status`
+
+```
+Active execution gate
+  ✓ ownership posture  primary_owner = daedalus
+  ✓ active execution   enabled
+  ✓ runtime mode       running in active
+  ✓ legacy watchdog    retired (engine_owner = hermes)
+
+→ gate is open: actions can dispatch
+```
+
+When blocked:
+
+```
+Active execution gate
+  ✓ ownership posture  primary_owner = daedalus
+  ✗ active execution   DISABLED  set via /daedalus set-active-execution --enabled true
+  ✓ runtime mode       running in active
+  ✓ legacy watchdog    retired (engine_owner = hermes)
+
+→ gate is BLOCKED: no actions will dispatch
+```
+
+#### Example: `/daedalus doctor`
+
+```
+Daedalus doctor
+  ✓ overall  PASS
+  checks
+    ✓ missing_lease       Runtime lease present
+    ✓ shadow_compatible   Shadow decision matches legacy
+    ✓ active_execution_failures  No active execution failures
+```
+
+#### Example: `/daedalus shadow-report`
+
+```
+Daedalus shadow-report
+  runtime
+    state           running (active mode)
+    owner           daedalus-active-yoyopod
+    heartbeat       22:43:01 UTC (17s ago)
+    lease expires   22:44:00 UTC (in 42s)
+  ownership
+    primary owner       daedalus
+    relay primary       yes
+    ✓ active execution  yes
+    ✓ gate allowed      yes
+  service
+    mode        active
+    installed   yes
+    enabled     yes
+    active      yes
+  active lane
+    issue     #329
+    lane id   lane-329
+    state     under_review / pass / pending
+  next action
+    legacy        publish_pr   head-clean
+    relay         publish_pr   head-clean
+    ✓ compatible  yes
+```
+
+#### Example: `/daedalus service-status`
+
+```
+Daedalus service
+  service  daedalus-active@yoyopod.service
+  mode     active
+  install state
+    ✓ installed   yes
+    ✓ enabled     yes
+    ✓ active      yes
+  runtime
+    pid   12345
+  paths
+    unit  ~/.config/systemd/user/daedalus-active@.service
+```
+
 ### Operational control
 
 | Command | What it does |
@@ -61,6 +164,15 @@ grouped by purpose, with a one-line description.
 | `/daedalus migrate-filesystem` | Rename relay-era state files to daedalus paths |
 | `/daedalus migrate-systemd` | Replace relay-era unit files with daedalus templates |
 
+### Observability
+
+| Command | What it does |
+|---|---|
+| `/daedalus watch` | Live operator TUI (lanes + alerts + recent events) |
+| `/daedalus watch --once` | Render one frame and exit (works in pipes) |
+| `/daedalus set-observability --workflow <name> --github-comments on\|off\|unset` | Set/clear runtime override for a workflow's GitHub-comment publishing |
+| `/daedalus get-observability --workflow <name>` | Show effective observability config + which layer (default/yaml/override) won |
+
 ## `/workflow` — per-workflow operations
 
 | Command | What it does |
@@ -88,10 +200,11 @@ grouped by purpose, with a one-line description.
 
 ## Most useful day-to-day, in order
 
-1. `/workflow code-review status` — current lane + next action
-2. `/daedalus doctor` — overall health
-3. `/workflow code-review show-active-lane` — what GitHub thinks
-4. `/daedalus service-logs` — last 50 journal entries from the active service
+1. `/daedalus watch` — live overview of every active lane in one frame
+2. `/workflow code-review status` — current lane + next action
+3. `/daedalus doctor` — overall health
+4. `/workflow code-review show-active-lane` — what GitHub thinks
+5. `/daedalus service-logs` — last 50 journal entries from the active service
 5. `/workflow code-review tick` — manually fire a tick when impatient
 
 ## Notes
