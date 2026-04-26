@@ -898,6 +898,8 @@ bad write never breaks the publisher."
 
 ### Task 1.5: Comment publisher — `workflows/code_review/comments_publisher.py`
 
+> **Plan amendment 2026-04-26:** dedupe gate moved from rendered-text to row-equality (the rendered body changes on every render due to `Last update: now()`, making text dedupe unreliable). Test name kept; result reason kept (`rendered-unchanged`).
+
 **Files:**
 - Create: `workflows/code_review/comments_publisher.py`
 - Test: `tests/test_workflow_code_review_comments_publisher.py` (new)
@@ -1218,17 +1220,22 @@ def publish_event(
 
     state = _comments_module.load_state(state_dir, issue_number)
     new_row = _comments_module.render_row(audit_event)
-    new_rows = _comments_module.append_row(state.get("rows") or [], new_row)
+    existing_rows = state.get("rows") or []
+
+    # Row-based dedupe: re-firing an event that produces the same row as
+    # the current top row is a no-op tick — skip the API call. This is
+    # more reliable than rendered-text dedupe because the rendered body
+    # includes a `Last update: now()` timestamp that always changes.
+    if existing_rows and new_row == existing_rows[0]:
+        return {"published": False, "reason": "rendered-unchanged"}
+
+    new_rows = _comments_module.append_row(existing_rows, new_row)
     rendered = _comments_module.render_comment(
         issue_number=issue_number,
         workflow_state=workflow_state,
         rows=new_rows,
         is_operator_attention=is_operator_attention,
     )
-
-    # Dedupe: if this exact body was the last successful render, skip.
-    if rendered == state.get("last_rendered_text"):
-        return {"published": False, "reason": "rendered-unchanged"}
 
     comment_id = state.get("comment_id")
 
