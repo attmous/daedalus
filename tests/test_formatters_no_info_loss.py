@@ -119,3 +119,61 @@ def test_service_status_no_info_loss():
     out = fmt.format_service_status(result, use_color=False)
     missing = _values_in_text(result, out)
     assert not missing, f"Missing in service-status output: {missing}"
+
+
+def test_shadow_report_no_info_loss():
+    """Includes owner_summary + heartbeat.expires_at — fields the legacy
+    terse output exposed and that the panel must continue to surface."""
+    fmt = _fmt()
+    result = {
+        "runtime": {
+            "runtime_status": "running", "current_mode": "active",
+            "active_orchestrator_instance_id": "daedalus-active-yoyopod",
+            "latest_heartbeat_at": "2026-04-26T22:43:01Z",
+        },
+        "heartbeat": {
+            "heartbeat_age_seconds": 17,
+            "expires_at": "2026-04-26T22:44:00Z",
+        },
+        "service": {
+            "service_mode": "active",
+            "installed": True, "enabled": True, "active": True,
+        },
+        "owner_summary": {
+            "primary_owner": "daedalus",
+            "relay_primary": True,
+            "active_execution_enabled": True,
+            "gate_allowed": True,
+        },
+        "active_lane": {
+            "issue_number": 329,
+            "lane_id": "lane-329",
+            "workflow_state": "under_review",
+            "review_state": "pass",
+            "merge_state": "pending",
+        },
+        "legacy": {"next_action_type": "publish_pr", "reason": "head-clean"},
+        "relay": {"derived_action_type": "publish_pr", "reason": "head-clean", "compatible": True},
+        "warnings": [],
+        "recent_shadow_actions": [],
+        "recent_failures": [],
+    }
+    out = fmt.format_shadow_report(result, use_color=False, now_iso="2026-04-26T22:43:18Z")
+    missing = _values_in_text(result, out)
+    assert not missing, f"Missing in shadow-report output: {missing}"
+
+
+def test_get_observability_no_info_loss():
+    fmt = _fmt()
+    result = {
+        "workflow": "code-review",
+        "github_comments": {
+            "enabled": True,
+            "mode": "edit-in-place",
+            "include_events": ["dispatch-implementation-turn", "merge-and-promote"],
+        },
+        "source": "yaml",
+    }
+    out = fmt.format_get_observability(result, use_color=False)
+    missing = _values_in_text(result, out)
+    assert not missing, f"Missing in get-observability output: {missing}"

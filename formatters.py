@@ -453,11 +453,29 @@ def format_shadow_report(
     sections: list[Section] = []
 
     # Runtime
-    sections.append(Section(name="runtime", rows=[
+    runtime_rows = [
         Row(label="state",     value=f"{runtime.get('runtime_status') or '?'} ({runtime.get('current_mode') or '?'} mode)"),
         Row(label="owner",     value=runtime.get("active_orchestrator_instance_id") or EMPTY_VALUE),
         Row(label="heartbeat", value=format_timestamp(runtime.get("latest_heartbeat_at") or "", now_iso=now_iso)),
-    ]))
+    ]
+    # Surface lease expiry — operators care when the runtime lease lapses.
+    expires_at = heartbeat.get("expires_at")
+    if expires_at:
+        runtime_rows.append(Row(label="lease expires", value=format_timestamp(expires_at, now_iso=now_iso)))
+    sections.append(Section(name="runtime", rows=runtime_rows))
+
+    # Owner / gate summary (when present) — equivalent to legacy "owner summary:" line.
+    if owner_summary:
+        sections.append(Section(name="ownership", rows=[
+            Row(label="primary owner",   value=str(owner_summary.get("primary_owner") or EMPTY_VALUE)),
+            Row(label="relay primary",   value=render_bool(owner_summary.get("relay_primary"))),
+            Row(label="active execution",
+                value=render_bool(owner_summary.get("active_execution_enabled")),
+                status=("pass" if owner_summary.get("active_execution_enabled") else "warn")),
+            Row(label="gate allowed",
+                value=render_bool(owner_summary.get("gate_allowed")),
+                status=("pass" if owner_summary.get("gate_allowed") else "warn")),
+        ]))
 
     # Service (when present)
     if service:
