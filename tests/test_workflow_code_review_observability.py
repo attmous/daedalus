@@ -28,8 +28,16 @@ def test_default_when_yaml_block_absent_and_no_override(tmp_path):
     cfg = obs.resolve_effective_config(workflow_yaml={}, override_dir=tmp_path, workflow_name="code-review")
     assert cfg["github-comments"]["enabled"] is False
     assert cfg["github-comments"]["mode"] == "edit-in-place"
-    assert cfg["github-comments"]["include-events"] == []
-    assert cfg["github-comments"]["suppress-transient-failures"] is True
+    # Default include-events is the spec §5 whitelist (the lifecycle transitions
+    # interesting to a human reader). Includes the operator-attention pair and
+    # the four major lane transitions.
+    default_include = cfg["github-comments"]["include-events"]
+    assert "dispatch-implementation-turn" in default_include
+    assert "merge-and-promote" in default_include
+    assert "operator-attention-transition" in default_include
+    assert "operator-attention-recovered" in default_include
+    # Sanity: not the firehose
+    assert "reconcile" not in default_include
     assert cfg["source"]["github-comments"] == "default"
 
 
@@ -41,7 +49,6 @@ def test_yaml_block_picked_up_when_no_override(tmp_path):
                 "enabled": True,
                 "mode": "edit-in-place",
                 "include-events": ["merge-and-promote"],
-                "suppress-transient-failures": False,
             }
         }
     }
@@ -50,7 +57,6 @@ def test_yaml_block_picked_up_when_no_override(tmp_path):
     )
     assert cfg["github-comments"]["enabled"] is True
     assert cfg["github-comments"]["include-events"] == ["merge-and-promote"]
-    assert cfg["github-comments"]["suppress-transient-failures"] is False
     assert cfg["source"]["github-comments"] == "yaml"
 
 

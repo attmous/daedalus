@@ -79,10 +79,25 @@ def test_schema_accepts_observability_full_block():
             "enabled": True,
             "mode": "edit-in-place",
             "include-events": ["dispatch-implementation-turn", "merge-and-promote"],
-            "suppress-transient-failures": True,
         }
     }
     jsonschema.validate(config, schema)
+
+
+def test_schema_rejects_unknown_github_comments_field():
+    """Schema is strict (additionalProperties: false) — typos like
+    suppress-transient-failures, append-mode, etc. fail loudly rather than
+    being silently ignored."""
+    schema = _load_schema()
+    config = _minimal_valid_config()
+    config["observability"] = {
+        "github-comments": {"enabled": True, "suppress-transient-failures": True}
+    }
+    try:
+        jsonschema.validate(config, schema)
+    except jsonschema.ValidationError:
+        return
+    raise AssertionError("expected ValidationError for unknown field")
 
 
 def test_schema_rejects_invalid_mode():

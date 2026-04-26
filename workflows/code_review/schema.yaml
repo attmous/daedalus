@@ -168,7 +168,6 @@ properties:
           include-events:
             type: array
             items: {type: string}
-          suppress-transient-failures: {type: boolean}
 
 definitions:
   acpx-codex-runtime:

@@ -60,7 +60,7 @@ def test_publisher_disabled_when_event_not_included(tmp_path):
         workflow_state="under_review",
         is_operator_attention=False,
         audit_event={"at": "2026-04-26T22:00:00Z", "action": "reconcile", "summary": "x"},
-        effective_config={"github-comments": {"enabled": True, "include-events": ["merge-and-promote"], "suppress-transient-failures": True}},
+        effective_config={"github-comments": {"enabled": True, "include-events": ["merge-and-promote"]}},
         state_dir=tmp_path,
         run_fn=fake_run,
     )
@@ -104,7 +104,7 @@ def test_first_event_creates_comment_via_gh(tmp_path):
             "model": "gpt-5.3-codex-spark",
             "sessionName": "lane-329",
         },
-        effective_config={"github-comments": {"enabled": True, "include-events": [], "suppress-transient-failures": True}},
+        effective_config={"github-comments": {"enabled": True, "include-events": []}},
         state_dir=tmp_path,
         run_fn=fake_run,
     )
@@ -147,7 +147,7 @@ def test_subsequent_event_edits_existing_comment(tmp_path):
             "summary": "Merged",
             "mergedPrNumber": 382,
         },
-        effective_config={"github-comments": {"enabled": True, "include-events": [], "suppress-transient-failures": True}},
+        effective_config={"github-comments": {"enabled": True, "include-events": []}},
         state_dir=tmp_path,
         run_fn=fake_run,
     )
@@ -181,7 +181,7 @@ def test_skip_publish_when_rendered_body_unchanged(tmp_path):
         workflow_state="under_review",
         is_operator_attention=False,
         audit_event=pre_event,
-        effective_config={"github-comments": {"enabled": True, "include-events": [], "suppress-transient-failures": True}},
+        effective_config={"github-comments": {"enabled": True, "include-events": []}},
         state_dir=tmp_path,
         run_fn=fake_run_first,
     )
@@ -193,7 +193,7 @@ def test_skip_publish_when_rendered_body_unchanged(tmp_path):
         workflow_state="under_review",
         is_operator_attention=False,
         audit_event=pre_event,
-        effective_config={"github-comments": {"enabled": True, "include-events": [], "suppress-transient-failures": True}},
+        effective_config={"github-comments": {"enabled": True, "include-events": []}},
         state_dir=tmp_path,
         run_fn=fake_run_second,
     )
@@ -214,7 +214,7 @@ def test_gh_failure_does_not_raise_returns_failure_result(tmp_path):
         workflow_state="under_review",
         is_operator_attention=False,
         audit_event={"at": "2026-04-26T22:30:00Z", "action": "merge-and-promote", "summary": "x", "mergedPrNumber": 382},
-        effective_config={"github-comments": {"enabled": True, "include-events": [], "suppress-transient-failures": True}},
+        effective_config={"github-comments": {"enabled": True, "include-events": []}},
         state_dir=tmp_path,
         run_fn=fake_run,
     )

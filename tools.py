@@ -1148,12 +1148,19 @@ def cmd_get_observability(args, parser) -> str:
     )
     gh = eff["github-comments"]
     source = eff["source"]["github-comments"]
+    include_events = gh.get("include-events")
+    if not include_events:
+        # Empty list = explicit firehose ("everything"); flag the risk visibly
+        # so an operator who sees this output understands every audit action
+        # will become a comment update.
+        include_events_display = "[] (FIREHOSE — every audit action)"
+    else:
+        include_events_display = ", ".join(include_events)
     lines = [
         f"workflow: {workflow_name}",
         f"github-comments.enabled: {gh.get('enabled')} (source: {source})",
         f"github-comments.mode: {gh.get('mode')}",
-        f"github-comments.include-events: {gh.get('include-events') or '(all)'}",
-        f"github-comments.suppress-transient-failures: {gh.get('suppress-transient-failures')}",
+        f"github-comments.include-events: {include_events_display}",
     ]
     return "\n".join(lines)
 

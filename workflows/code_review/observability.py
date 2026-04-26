@@ -19,11 +19,24 @@ from typing import Any, Mapping
 
 OVERRIDE_FILENAME = "observability-overrides.json"
 
+# The default include-events whitelist matches design spec §5 — these are the
+# six lifecycle transitions that are interesting to a human reader of the
+# ticket. An empty list (explicitly set in workflow.yaml or override) means
+# "firehose, render every audit action" — useful for debugging only.
+_DEFAULT_INCLUDE_EVENTS = [
+    "dispatch-implementation-turn",
+    "internal-review-completed",
+    "publish-ready-pr",
+    "push-pr-update",
+    "merge-and-promote",
+    "operator-attention-transition",
+    "operator-attention-recovered",
+]
+
 _DEFAULT_GITHUB_COMMENTS = {
     "enabled": False,
     "mode": "edit-in-place",
-    "include-events": [],          # empty list = include every audit event
-    "suppress-transient-failures": True,
+    "include-events": list(_DEFAULT_INCLUDE_EVENTS),
 }
 
 

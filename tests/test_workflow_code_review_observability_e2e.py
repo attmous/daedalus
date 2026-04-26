@@ -49,8 +49,7 @@ def test_end_to_end_audit_creates_then_edits_bot_comment(tmp_path):
                 "github-comments": {
                     "enabled": True,
                     "include-events": [],   # empty = include all
-                    "suppress-transient-failures": True,
-                }
+                    }
             }
         },
         get_active_issue_number=lambda: 329,
