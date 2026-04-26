@@ -78,6 +78,14 @@ class Runtime(Protocol):
         session_name: str,
     ) -> None: ...
 
+    def run_command(
+        self,
+        *,
+        worktree: Path,
+        command_argv: list[str],
+        env: dict[str, str] | None = None,
+    ) -> str: ...
+
 
 _RUNTIME_KINDS: dict[str, type] = {}
 
@@ -112,6 +120,7 @@ def build_runtimes(runtimes_cfg: dict, *, run=None, run_json=None) -> dict[str, 
     # Deferred until first call so the empty-dict test path stays fast.
     from workflows.code_review.runtimes import acpx_codex  # noqa: F401
     from workflows.code_review.runtimes import claude_cli  # noqa: F401
+    from workflows.code_review.runtimes import hermes_agent  # noqa: F401
 
     out: dict[str, Runtime] = {}
     for profile_name, profile_cfg in runtimes_cfg.items():

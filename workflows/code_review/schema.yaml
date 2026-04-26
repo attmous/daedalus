@@ -40,6 +40,7 @@ properties:
       oneOf:
         - $ref: "#/definitions/acpx-codex-runtime"
         - $ref: "#/definitions/claude-cli-runtime"
+        - $ref: "#/definitions/hermes-agent-runtime"
 
   agents:
     type: object
@@ -58,6 +59,11 @@ properties:
           model: {type: string}
           runtime: {type: string}
           freeze-coder-while-running: {type: boolean}
+          command:
+            type: array
+            items: {type: string}
+            minItems: 1
+          prompt: {type: string}
       external-reviewer:
         type: object
         required: [enabled, name]
@@ -72,6 +78,11 @@ properties:
         properties:
           enabled: {type: boolean}
           name: {type: string}
+          command:
+            type: array
+            items: {type: string}
+            minItems: 1
+          prompt: {type: string}
 
   gates:
     type: object
@@ -192,25 +203,52 @@ properties:
 definitions:
   acpx-codex-runtime:
     type: object
+    additionalProperties: false
     required: [kind, session-idle-freshness-seconds, session-idle-grace-seconds, session-nudge-cooldown-seconds]
     properties:
       kind: {const: acpx-codex}
       session-idle-freshness-seconds: {type: integer, minimum: 1}
       session-idle-grace-seconds: {type: integer, minimum: 1}
       session-nudge-cooldown-seconds: {type: integer, minimum: 1}
+      command:
+        type: array
+        items: {type: string}
+        minItems: 1
 
   claude-cli-runtime:
     type: object
+    additionalProperties: false
     required: [kind, max-turns-per-invocation, timeout-seconds]
     properties:
       kind: {const: claude-cli}
       max-turns-per-invocation: {type: integer, minimum: 1}
       timeout-seconds: {type: integer, minimum: 1}
+      command:
+        type: array
+        items: {type: string}
+        minItems: 1
+
+  hermes-agent-runtime:
+    type: object
+    additionalProperties: false
+    required: [kind]
+    properties:
+      kind: {const: hermes-agent}
+      command:
+        type: array
+        items: {type: string}
+        minItems: 1
 
   coder-tier:
     type: object
+    additionalProperties: false
     required: [name, model, runtime]
     properties:
       name: {type: string}
       model: {type: string}
       runtime: {type: string}
+      command:
+        type: array
+        items: {type: string}
+        minItems: 1
+      prompt: {type: string}
