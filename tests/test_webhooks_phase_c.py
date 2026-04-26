@@ -61,3 +61,97 @@ def test_compose_audit_subscribers_empty_list_is_noop():
     from workflows.code_review.webhooks import compose_audit_subscribers
     pub = compose_audit_subscribers([])
     pub(action="X", summary="Y", extra={})  # no-op, no error
+
+
+def test_http_json_webhook_registered():
+    from workflows.code_review.webhooks import _WEBHOOK_KINDS
+    from workflows.code_review.webhooks import http_json  # noqa: F401
+    assert "http-json" in _WEBHOOK_KINDS
+
+
+def test_http_json_webhook_posts_payload_to_url():
+    from workflows.code_review.webhooks import build_webhooks
+
+    cfg = [{"name": "wh1", "kind": "http-json", "url": "https://example.com/hook"}]
+    webhooks = build_webhooks(cfg, run_fn=None)
+    assert len(webhooks) == 1
+
+    with patch("urllib.request.urlopen") as mock_urlopen:
+        mock_urlopen.return_value.__enter__ = lambda self: self
+        mock_urlopen.return_value.__exit__ = lambda self, *a: None
+        mock_urlopen.return_value.status = 200
+        webhooks[0].deliver({"action": "X", "summary": "Y"})
+
+    assert mock_urlopen.called
+    req = mock_urlopen.call_args[0][0]
+    assert req.full_url == "https://example.com/hook"
+    assert req.get_method() == "POST"
+    body = req.data.decode("utf-8")
+    import json
+    parsed = json.loads(body)
+    assert parsed["action"] == "X"
+    assert parsed["summary"] == "Y"
+    assert req.headers.get("Content-type") == "application/json"
+
+
+def test_http_json_webhook_includes_custom_headers():
+    from workflows.code_review.webhooks import build_webhooks
+
+    cfg = [{
+        "name": "wh1", "kind": "http-json",
+        "url": "https://example.com/hook",
+        "headers": {"X-Custom": "v1", "Authorization": "Bearer xyz"},
+    }]
+    webhooks = build_webhooks(cfg, run_fn=None)
+
+    with patch("urllib.request.urlopen") as mock_urlopen:
+        mock_urlopen.return_value.__enter__ = lambda self: self
+        mock_urlopen.return_value.__exit__ = lambda self, *a: None
+        mock_urlopen.return_value.status = 200
+        webhooks[0].deliver({"action": "X", "summary": "Y"})
+
+    req = mock_urlopen.call_args[0][0]
+    # urllib normalizes header keys via title-case
+    assert req.headers.get("X-custom") == "v1"
+    assert req.headers.get("Authorization") == "Bearer xyz"
+
+
+def test_http_json_webhook_retries_on_failure():
+    from workflows.code_review.webhooks import build_webhooks
+
+    cfg = [{
+        "name": "wh1", "kind": "http-json",
+        "url": "https://example.com/hook",
+        "retry-count": 2,
+    }]
+    webhooks = build_webhooks(cfg, run_fn=None)
+
+    with patch("urllib.request.urlopen", side_effect=OSError("net down")) as mock_urlopen:
+        # Should not raise; retry-count: 2 means 1 initial + 2 retries = 3 calls.
+        webhooks[0].deliver({"action": "X", "summary": "Y"})
+        assert mock_urlopen.call_count == 3
+
+
+def test_http_json_webhook_no_retry_on_success():
+    from workflows.code_review.webhooks import build_webhooks
+
+    cfg = [{
+        "name": "wh1", "kind": "http-json",
+        "url": "https://example.com/hook",
+        "retry-count": 5,
+    }]
+    webhooks = build_webhooks(cfg, run_fn=None)
+
+    with patch("urllib.request.urlopen") as mock_urlopen:
+        mock_urlopen.return_value.__enter__ = lambda self: self
+        mock_urlopen.return_value.__exit__ = lambda self, *a: None
+        mock_urlopen.return_value.status = 200
+        webhooks[0].deliver({"action": "X", "summary": "Y"})
+        assert mock_urlopen.call_count == 1
+
+
+def test_http_json_webhook_matches_default_all_events():
+    from workflows.code_review.webhooks import build_webhooks
+    cfg = [{"name": "wh1", "kind": "http-json", "url": "https://x"}]
+    wh = build_webhooks(cfg, run_fn=None)[0]
+    assert wh.matches({"action": "anything"}) is True
