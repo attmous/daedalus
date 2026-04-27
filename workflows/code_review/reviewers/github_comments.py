@@ -19,9 +19,9 @@ from workflows.code_review.reviewers import (
 
 
 _DEFAULT_LOGINS = ("chatgpt-codex-connector", "chatgpt-codex-connector[bot]")
-_DEFAULT_CLEAN_REACTIONS = ("+1", "rocket", "heart", "hooray")
+_DEFAULT_CLEAN_REACTIONS = ("+1",)
 _DEFAULT_PENDING_REACTIONS = ("eyes",)
-_DEFAULT_CACHE_SECONDS = 300
+_DEFAULT_CACHE_SECONDS = 1800
 
 
 @register("github-comments")
@@ -43,7 +43,8 @@ class GithubCommentsReviewer:
         self._logins = set(cfg.get("logins") or _DEFAULT_LOGINS)
         self._clean_reactions = set(cfg.get("clean-reactions") or _DEFAULT_CLEAN_REACTIONS)
         self._pending_reactions = set(cfg.get("pending-reactions") or _DEFAULT_PENDING_REACTIONS)
-        self._cache_seconds = int(cfg.get("cache-seconds") or _DEFAULT_CACHE_SECONDS)
+        _cs = cfg.get("cache-seconds")
+        self._cache_seconds = int(_cs) if _cs is not None else _DEFAULT_CACHE_SECONDS
         self._repo_slug = cfg.get("repo-slug") or ws_context.repo_slug
 
     def fetch_review(

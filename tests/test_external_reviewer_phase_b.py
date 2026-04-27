@@ -206,3 +206,26 @@ def test_default_logins_includes_both_codex_connector_forms():
     from workflows.code_review.reviewers.github_comments import _DEFAULT_LOGINS
     assert "chatgpt-codex-connector" in _DEFAULT_LOGINS
     assert "chatgpt-codex-connector[bot]" in _DEFAULT_LOGINS
+
+
+def test_default_clean_reactions_only_includes_thumbs_up():
+    """Regression: legacy default was just '+1'; expanded defaults can prematurely pass merge gate."""
+    from workflows.code_review.reviewers.github_comments import _DEFAULT_CLEAN_REACTIONS
+    assert tuple(_DEFAULT_CLEAN_REACTIONS) == ("+1",)
+
+
+def test_default_cache_seconds_matches_legacy_1800():
+    """Regression: legacy CODEX_CLOUD_CACHE_SECONDS was 1800."""
+    from workflows.code_review.reviewers.github_comments import _DEFAULT_CACHE_SECONDS
+    assert _DEFAULT_CACHE_SECONDS == 1800
+
+
+def test_cache_seconds_zero_is_preserved():
+    """cache-seconds: 0 must not be treated as falsy and replaced with the default."""
+    from workflows.code_review.reviewers.github_comments import GithubCommentsReviewer
+
+    rv = GithubCommentsReviewer(
+        {"enabled": True, "name": "X", "cache-seconds": 0},
+        ws_context=_ws_context(),
+    )
+    assert rv._cache_seconds == 0
