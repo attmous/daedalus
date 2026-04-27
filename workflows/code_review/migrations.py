@@ -97,7 +97,10 @@ LEDGER_KEY_RENAMES: dict[str, str] = {
     "codexCloudRepairHandoff": "externalReviewRepairHandoff",
     "codexCloudAutoResolved": "externalReviewAutoResolved",
     "interReviewAgentModel": "internalReviewerModel",
-    "lastClaudeVerdict": "lastInternalVerdict",
+    # Note: lastClaudeVerdict lives nested under ledger["review"] (lane-state),
+    # not top-level — its rename is handled by reviews.py read sites and
+    # status.py write sites directly. A nested-aware migration belongs in a
+    # future phase if/when lane-state field renames are tackled.
 }
 
 # Top-level keys that are dropped entirely (no rename target).
