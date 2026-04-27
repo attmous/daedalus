@@ -269,3 +269,36 @@ def test_filtered_subscriber_does_not_deliver_unmatched_events():
     wh = build_webhooks(cfg, run_fn=None)[0]
     assert wh.matches({"action": "merge_and_promote"}) is True
     assert wh.matches({"action": "run_claude_review"}) is False
+
+
+def test_build_webhooks_rejects_file_url():
+    from workflows.code_review.webhooks import build_webhooks
+
+    cfg = [{"name": "wh", "kind": "http-json", "url": "file:///etc/passwd"}]
+    with pytest.raises(ValueError, match="unsupported URL scheme"):
+        build_webhooks(cfg, run_fn=None)
+
+
+def test_build_webhooks_rejects_gopher_url():
+    from workflows.code_review.webhooks import build_webhooks
+
+    cfg = [{"name": "wh", "kind": "slack-incoming", "url": "gopher://internal/"}]
+    with pytest.raises(ValueError, match="unsupported URL scheme"):
+        build_webhooks(cfg, run_fn=None)
+
+
+def test_build_webhooks_accepts_http_and_https():
+    from workflows.code_review.webhooks import build_webhooks
+
+    for url in ("https://example.com/hook", "http://example.com/hook"):
+        cfg = [{"name": "wh", "kind": "http-json", "url": url}]
+        assert len(build_webhooks(cfg, run_fn=None)) == 1
+
+
+def test_build_webhooks_disabled_kind_skips_scheme_check():
+    """Disabled webhooks don't deliver — scheme check shouldn't apply."""
+    from workflows.code_review.webhooks import build_webhooks
+
+    cfg = [{"name": "wh", "kind": "disabled", "url": "file:///irrelevant"}]
+    # Should not raise
+    assert len(build_webhooks(cfg, run_fn=None)) == 1

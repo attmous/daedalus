@@ -100,3 +100,23 @@ def test_existing_yoyopod_workflow_yaml_still_validates():
         pytest.skip("yoyopod workspace not present on this host")
     cfg = yaml.safe_load(yoyopod.read_text())
     Draft7Validator(_schema()).validate(cfg)
+
+
+def test_schema_rejects_excessive_timeout():
+    cfg = _base_config()
+    cfg["webhooks"] = [{
+        "name": "wh", "kind": "http-json", "url": "https://x",
+        "timeout-seconds": 60,
+    }]
+    with pytest.raises(ValidationError):
+        Draft7Validator(_schema()).validate(cfg)
+
+
+def test_schema_rejects_excessive_retry_count():
+    cfg = _base_config()
+    cfg["webhooks"] = [{
+        "name": "wh", "kind": "http-json", "url": "https://x",
+        "retry-count": 100,
+    }]
+    with pytest.raises(ValidationError):
+        Draft7Validator(_schema()).validate(cfg)

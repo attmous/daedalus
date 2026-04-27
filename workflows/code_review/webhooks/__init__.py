@@ -38,6 +38,11 @@ def register(kind: str):
     """Decorator: registers a class as the implementation for a webhook kind."""
 
     def _register(cls):
+        if kind in _WEBHOOK_KINDS:
+            raise ValueError(
+                f"duplicate webhook kind={kind!r}; "
+                f"already registered as {_WEBHOOK_KINDS[kind].__name__}"
+            )
         _WEBHOOK_KINDS[kind] = cls
         return cls
 
@@ -82,6 +87,19 @@ def build_webhooks(
                 f"unknown webhook kind={kind!r}; "
                 f"registered kinds: {sorted(_WEBHOOK_KINDS)}"
             )
+        # SSRF guard: only allow http(s) URLs. urllib.request.urlopen will
+        # otherwise happily open file://, gopher://, ftp:// etc. and leak
+        # audit-event content (issue numbers, head SHAs, branch names) to
+        # arbitrary local resources.
+        url = sub_cfg.get("url")
+        if url and kind != "disabled":
+            from urllib.parse import urlparse
+            scheme = urlparse(url).scheme.lower()
+            if scheme not in ("http", "https"):
+                raise ValueError(
+                    f"webhook {sub_cfg.get('name')!r}: unsupported URL scheme "
+                    f"{scheme!r} (only http/https allowed; got {url!r})"
+                )
         cls = _WEBHOOK_KINDS[kind]
         out.append(cls(sub_cfg, ws_context=ctx))
     return out

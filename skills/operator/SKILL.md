@@ -225,6 +225,8 @@ webhooks:
 
 **Delivery semantics:** fire-and-forget, inline retry (default `retry-count: 1` ⇒ initial + 1 retry). Per-subscriber exceptions are swallowed — webhooks cannot break workflow execution. No persistent queue: if the engine crashes mid-delivery the event lives in `audit-log` JSONL but is not redelivered.
 
+**Security:** webhook URLs MUST use `http://` or `https://`. Other schemes (file, gopher, ftp) are rejected at workspace setup. Audit events contain issue numbers, head SHAs, and branch names; choose webhook destinations carefully. `timeout-seconds` is capped at 30; `retry-count` at 5 — webhook delivery runs inline in the audit hook.
+
 **Audit-event payload (what `http-json` POSTs):**
 ```json
 {
