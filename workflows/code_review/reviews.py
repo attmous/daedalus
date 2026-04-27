@@ -1388,7 +1388,6 @@ def maybe_dispatch_repair_handoff(
             write_json_fn=write_json_fn,
         )
         ledger["internalReviewRepairHandoff"] = repair_payload
-        ledger.pop("claudeRepairHandoff", None)
         audit_fn(
             "claude-repair-handoff-dispatched",
             "Sent Claude pre-publish repair brief back into the active Codex session",
@@ -1450,7 +1449,6 @@ def maybe_dispatch_repair_handoff(
             write_json_fn=write_json_fn,
         )
         ledger["externalReviewRepairHandoff"] = repair_payload
-        ledger.pop("codexCloudRepairHandoff", None)
         audit_fn(
             "codex-cloud-repair-handoff-dispatched",
             "Sent Codex Cloud repair brief back into the active Codex session",
