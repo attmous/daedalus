@@ -519,7 +519,7 @@ def build_external_review_thread(
         "line": node.get("line"),
         "severity": severity,
         "status": status,
-        "source": "codexCloud",
+        "source": "externalReview",
         "summary": summary,
         "url": comment.get("url"),
         "createdAt": comment.get("createdAt"),
@@ -1715,14 +1715,3 @@ def run_inter_review_agent_review(
         'minorSuggestions': list(payload.get('minorSuggestions') or []),
         'requiredNextAction': payload.get('requiredNextAction'),
     }
-
-
-# Phase D-2 aliases — drop next release
-codex_cloud_placeholder = external_review_placeholder
-build_codex_cloud_thread = build_external_review_thread
-summarize_codex_cloud_review = summarize_external_review
-fetch_codex_pr_body_signal = fetch_external_review_pr_body_signal
-fetch_codex_cloud_review = fetch_external_review
-build_codex_cloud_repair_handoff_payload = build_external_review_repair_handoff_payload
-record_codex_cloud_repair_handoff = record_external_review_repair_handoff
-should_dispatch_codex_cloud_repair_handoff = should_dispatch_external_review_repair_handoff
