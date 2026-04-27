@@ -25,7 +25,7 @@ def test_build_webhooks_empty_list_returns_empty():
 def test_build_webhooks_unknown_kind_raises():
     from workflows.code_review.webhooks import build_webhooks
     with pytest.raises(ValueError, match="unknown"):
-        build_webhooks([{"name": "x", "kind": "made-up"}], run_fn=None)
+        build_webhooks([{"name": "x", "kind": "made-up", "url": "https://example.com"}], run_fn=None)
 
 
 def test_compose_audit_subscribers_fans_out():
@@ -301,4 +301,28 @@ def test_build_webhooks_disabled_kind_skips_scheme_check():
 
     cfg = [{"name": "wh", "kind": "disabled", "url": "file:///irrelevant"}]
     # Should not raise
+    assert len(build_webhooks(cfg, run_fn=None)) == 1
+
+
+def test_build_webhooks_rejects_http_json_without_url():
+    from workflows.code_review.webhooks import build_webhooks
+
+    cfg = [{"name": "wh", "kind": "http-json"}]
+    with pytest.raises(ValueError, match="requires a 'url'"):
+        build_webhooks(cfg, run_fn=None)
+
+
+def test_build_webhooks_rejects_slack_incoming_without_url():
+    from workflows.code_review.webhooks import build_webhooks
+
+    cfg = [{"name": "wh", "kind": "slack-incoming"}]
+    with pytest.raises(ValueError, match="requires a 'url'"):
+        build_webhooks(cfg, run_fn=None)
+
+
+def test_build_webhooks_disabled_kind_allows_missing_url():
+    """Disabled is the explicit no-op kind; url isn't required."""
+    from workflows.code_review.webhooks import build_webhooks
+
+    cfg = [{"name": "wh", "kind": "disabled"}]
     assert len(build_webhooks(cfg, run_fn=None)) == 1

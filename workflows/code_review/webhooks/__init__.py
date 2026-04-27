@@ -82,6 +82,11 @@ def build_webhooks(
             kind = "disabled"
         else:
             kind = sub_cfg.get("kind") or ""
+        # Operator-error guard: non-disabled webhooks must declare a url.
+        if kind != "disabled" and not sub_cfg.get("url"):
+            raise ValueError(
+                f"webhook {sub_cfg.get('name')!r}: kind={kind!r} requires a 'url' field"
+            )
         if kind not in _WEBHOOK_KINDS:
             raise ValueError(
                 f"unknown webhook kind={kind!r}; "
