@@ -1,9 +1,24 @@
 #!/usr/bin/env python3
-"""Generate the animated banner GIF for the README.
+"""Generate the editorial-style animated banner GIF for the README.
 
-Theme: a thread (Theseus's clew) being drawn through the Labyrinth — nodes
-light up as the thread visits them, then the DAEDALUS wordmark fades in.
-Palette matches the wordmark SVG (#0B0F14 / #22D3EE).
+Composition (left → right):
+
+    DAEDALUS                                        [marble bust]
+    ──────                                          (eyes covered by
+    Agents that fly.                                 a painted cyan
+    Workflows that don't melt.                       brushstroke)
+    Hot-reload · leases · stalls · shadow → active
+                                          [labyrinth network]
+                                          [floating code overlays]
+
+Animations (~5 s loop):
+
+    0.0–1.5 s   constellation/labyrinth network draws in
+    0.7–2.5 s   three code snippets fade in, staggered
+    2.0–2.8 s   brushstroke paints across the bust's eyes
+    2.8–3.4 s   gold underline draws in beneath the title
+    3.4–4.5 s   hold
+    4.5–5.0 s   constellation fades back to ghost-trace, loop
 
 Re-run with::
 
@@ -14,240 +29,492 @@ Writes assets/daedalus-banner.gif.
 from __future__ import annotations
 
 import math
+import random
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont, ImageFilter
+from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
-OUT_PATH = Path(__file__).resolve().parents[1] / "assets" / "daedalus-banner.gif"
+ROOT = Path(__file__).resolve().parents[1]
+OUT_PATH = ROOT / "assets" / "daedalus-banner.gif"
+BUST_SRC = ROOT / "assets" / "source" / "plato-bust.jpg"
+FONT_DISPLAY = ROOT / "assets" / "fonts" / "PlayfairDisplay.ttf"
+FONT_DISPLAY_ITALIC = ROOT / "assets" / "fonts" / "PlayfairDisplay-Italic.ttf"
+FONT_MONO = "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf"
+FONT_SANS = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 
-W, H = 1000, 300
-BG = (11, 15, 20)            # #0B0F14
-PANEL = (17, 22, 29)          # #11161D
-CYAN = (34, 211, 238)         # #22D3EE
-CYAN_DIM = (34, 211, 238, 70)
-CYAN_GHOST = (34, 211, 238, 28)
-WHITE = (235, 245, 250)
-SUBTLE = (90, 110, 125)
+# Editorial 3:1 banner.
+W, H = 1200, 400
 
-# Labyrinth node coordinates — picked so the thread traces a maze-like path.
-NODES = [
-    (110, 215),   # 0 entry
-    (110, 110),   # 1
-    (210, 110),   # 2
-    (210, 195),   # 3
-    (310, 195),   # 4
-    (310, 95),    # 5
-    (410, 95),    # 6
-    (410, 215),   # 7
-    (510, 215),   # 8
-    (510, 110),   # 9 — center pivot
+# Palette — parchment + brand cyan + muted earth tones.
+PAPER = (232, 226, 213)        # cream parchment
+PAPER_SHADOW = (210, 202, 186)
+INK = (28, 32, 36)              # near-black for body text
+INK_SOFT = (76, 84, 92)
+CYAN = (16, 130, 142)           # darker, painterly version of #22D3EE
+CYAN_BRIGHT = (34, 180, 195)
+GOLD = (180, 148, 78)           # editorial accent under subtitle
+NETWORK_COLORS = [
+    (110, 70, 60),    # burgundy
+    (170, 130, 70),   # ochre
+    (60, 110, 110),   # teal-grey
+    (120, 130, 90),   # olive
+    (90, 80, 110),    # ink-purple
+    (160, 100, 80),   # terracotta
 ]
-LABEL_NODES = {
-    0: "shadow",
-    3: "preflight",
-    5: "dispatch",
-    7: "review",
-    9: "merge",
-}
 
-FRAMES = 42          # ~2.5s @ ~17fps
-DURATION_MS = 60      # ~17 fps
+FRAMES = 50
+DURATION_MS = 80  # 12.5 fps — easier on palette + filesize
 
+random.seed(7)  # deterministic constellation
+
+
+# ──────────────────────────── helpers ─────────────────────────────────────
 
 def ease(t: float) -> float:
     """Smooth in-out easing on [0, 1]."""
-    return 0.5 - 0.5 * math.cos(math.pi * max(0.0, min(1.0, t)))
+    t = max(0.0, min(1.0, t))
+    return 0.5 - 0.5 * math.cos(math.pi * t)
 
 
-def load_font(size: int) -> ImageFont.ImageFont:
-    candidates = [
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
-        "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
-    ]
-    for c in candidates:
-        if Path(c).exists():
-            return ImageFont.truetype(c, size)
+def font(path, size: int) -> ImageFont.ImageFont:
+    p = str(path)
+    if Path(p).exists():
+        return ImageFont.truetype(p, size)
     return ImageFont.load_default()
 
 
-FONT_TITLE = load_font(60)
-FONT_SUB = load_font(18)
-FONT_TAG = load_font(14)
+F_TITLE = font(FONT_DISPLAY, 100)
+F_SUB = font(FONT_DISPLAY, 38)
+F_SUB_IT = font(FONT_DISPLAY_ITALIC, 38)
+F_TAG = font(FONT_SANS, 15)
+F_CAPTION = font(FONT_SANS, 13)
+F_CODE = font(FONT_MONO, 14)
+F_CODE_SMALL = font(FONT_MONO, 12)
 
 
-def draw_grid(d: ImageDraw.ImageDraw) -> None:
-    """Faint dot grid suggesting the labyrinth floor."""
-    for y in range(40, H - 30, 28):
-        for x in range(40, W - 30, 28):
-            d.point((x, y), fill=(28, 36, 46))
+# ──────────────────────────── parchment ───────────────────────────────────
+
+def make_parchment(w: int, h: int) -> Image.Image:
+    """Cream paper background with subtle warm vignette + grain."""
+    base = Image.new("RGB", (w, h), PAPER)
+    px = base.load()
+    rng = random.Random(11)
+    # soft warm vignette darker at edges
+    cx, cy = w / 2, h / 2
+    maxd = math.hypot(cx, cy)
+    for y in range(h):
+        for x in range(0, w, 2):  # every other pixel — fast, looks fine
+            d = math.hypot(x - cx, y - cy) / maxd
+            warm = int(8 * d)
+            r = max(0, PAPER[0] - warm - rng.randint(0, 5))
+            g = max(0, PAPER[1] - warm - rng.randint(0, 5))
+            b = max(0, PAPER[2] - warm - rng.randint(0, 6))
+            px[x, y] = (r, g, b)
+            if x + 1 < w:
+                px[x + 1, y] = (r, g, b)
+    # add a few faint smudges
+    smudge = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    sd = ImageDraw.Draw(smudge)
+    for _ in range(40):
+        cx2 = rng.randint(0, w)
+        cy2 = rng.randint(0, h)
+        r2 = rng.randint(40, 140)
+        a = rng.randint(4, 12)
+        sd.ellipse((cx2 - r2, cy2 - r2, cx2 + r2, cy2 + r2),
+                   fill=(110, 90, 60, a))
+    smudge = smudge.filter(ImageFilter.GaussianBlur(radius=18))
+    base.paste(smudge, (0, 0), smudge)
+    return base
 
 
-def draw_panel_chrome(im: Image.Image) -> None:
-    """Outer rounded border like the wordmark SVG."""
-    d = ImageDraw.Draw(im)
-    d.rounded_rectangle((12, 12, W - 12, H - 12), radius=24,
-                        outline=(22, 29, 38), width=4)
-    d.rounded_rectangle((24, 24, W - 24, H - 24), radius=18,
-                        outline=(17, 22, 29), width=2)
+# ──────────────────────────── bust ────────────────────────────────────────
+
+def prepare_bust() -> Image.Image:
+    """Load the bust, desaturate slightly, key out the museum backdrop.
+
+    The Wikimedia photo has a saturated blue-grey backdrop. We chroma-key
+    against the background colour sampled from the corners and apply a
+    soft alpha ramp so edges don't look cut out.
+    """
+    src = Image.open(BUST_SRC).convert("RGBA")
+    w0, h0 = src.size
+    src = src.crop((int(w0 * 0.05), int(h0 * 0.02),
+                    int(w0 * 0.95), int(h0 * 0.78)))
+    target_h = 380
+    ratio = target_h / src.height
+    src = src.resize((int(src.width * ratio), target_h), Image.LANCZOS)
+
+    # Sample background colour from a 4-corner neighbourhood.
+    px = src.load()
+    samples = []
+    for sx, sy in [(5, 5), (src.width - 6, 5),
+                   (5, src.height - 6), (src.width - 6, src.height - 6)]:
+        r, g, b, _ = px[sx, sy]
+        samples.append((r, g, b))
+    bg_r = sum(s[0] for s in samples) // len(samples)
+    bg_g = sum(s[1] for s in samples) // len(samples)
+    bg_b = sum(s[2] for s in samples) // len(samples)
+
+    # Distance threshold: pixels within `near` of bg → fully transparent;
+    # within `far` → linearly faded; beyond → fully opaque.
+    near, far = 55, 95
+
+    for y in range(src.height):
+        for x in range(src.width):
+            r, g, b, _ = px[x, y]
+            d = math.sqrt(
+                (r - bg_r) ** 2 + (g - bg_g) ** 2 + (b - bg_b) ** 2
+            )
+            if d <= near:
+                a = 0
+            elif d >= far:
+                a = 255
+            else:
+                a = int((d - near) / (far - near) * 255)
+            # warm/lift the marble a touch so it harmonises with parchment
+            r2 = min(255, int(r * 1.02 + 4))
+            g2 = min(255, int(g * 1.01 + 2))
+            b2 = min(255, int(b * 0.97))
+            px[x, y] = (r2, g2, b2, a)
+
+    # Slight desaturation to pull the marble toward parchment-grey.
+    rgb = src.convert("RGB")
+    grey = ImageOps.grayscale(rgb).convert("RGB")
+    blended = Image.blend(rgb, grey, 0.30)
+    blended.putalpha(src.split()[3])
+
+    # Soften the alpha mask edge so we don't see a hard chroma-key line.
+    alpha = blended.split()[3].filter(ImageFilter.GaussianBlur(radius=1.2))
+    blended.putalpha(alpha)
+    return blended
 
 
-def thread_progress(frame: int) -> float:
-    """Return 0..1 progress along the polyline for this frame."""
-    # First 70% of frames draw the thread; last 30% hold + reveal text.
-    return ease(min(1.0, frame / (FRAMES * 0.55)))
+# ──────────────────────────── constellation ───────────────────────────────
+
+def build_constellation(seed_origin: tuple[int, int]) -> tuple[list, list]:
+    """Generate scattered nodes + edges around the bust area.
+
+    Returns (nodes, edges) where nodes is list of (x, y, radius, color)
+    and edges is list of (i, j) index pairs.
+    """
+    rng = random.Random(3)
+    cx, cy = seed_origin
+    nodes = []
+    # cluster near origin, with a few outliers drifting toward margins
+    for _ in range(34):
+        angle = rng.uniform(0, 2 * math.pi)
+        # distance distribution — most close, some far
+        dist = rng.choice([
+            rng.uniform(40, 130),
+            rng.uniform(140, 240),
+            rng.uniform(260, 380),
+        ])
+        x = int(cx + math.cos(angle) * dist)
+        y = int(cy + math.sin(angle) * dist * 0.7)  # vertically squashed
+        r = rng.choice([3, 4, 5, 6, 8])
+        c = rng.choice(NETWORK_COLORS)
+        nodes.append((x, y, r, c))
+    # build edges: connect each node to 1–3 nearest others
+    edges = set()
+    for i, (x1, y1, _, _) in enumerate(nodes):
+        dists = sorted(
+            [(j, math.hypot(x2 - x1, y2 - y1))
+             for j, (x2, y2, _, _) in enumerate(nodes) if j != i],
+            key=lambda p: p[1],
+        )
+        for j, _ in dists[: rng.randint(1, 3)]:
+            a, b = sorted((i, j))
+            edges.add((a, b))
+    return nodes, sorted(edges)
 
 
-def text_progress(frame: int) -> float:
-    """Wordmark/subtitle fade-in progress on [0, 1]."""
-    start = FRAMES * 0.35
-    end = FRAMES * 0.85
-    if frame < start:
-        return 0.0
-    if frame > end:
+# ──────────────────────────── code overlays ───────────────────────────────
+
+CODE_PY = [
+    ("def ", CYAN), ("reconcile_stalls", INK), ("(snapshot, running, now):", INK),
+]
+CODE_PY_2 = [
+    ("    for ", INK), ("entry ", INK), ("in ", CYAN), ("running.values():", INK),
+]
+CODE_PY_3 = [
+    ("        if ", INK), ("entry.runtime", INK), (".last_activity_ts() ", CYAN),
+    ("is None: ", INK), ("continue", CYAN),
+]
+
+CODE_YAML = [
+    ("stall:", CYAN),
+    ("  timeout_ms: ", INK), ("600000", CYAN_BRIGHT),
+    ("runtimes:", CYAN),
+    ("  coder:", INK),
+    ("    kind: ", INK), ("claude-cli", CYAN_BRIGHT),
+]
+
+CODE_EVENT = [
+    ('{"type": ', INK), ('"daedalus.stall_terminated"', CYAN_BRIGHT), (",", INK),
+    (' "lane_id": ', INK), ('"01HF…"', INK_SOFT), (",", INK),
+    (' "reason": ', INK), ('"stall_timeout"', CYAN_BRIGHT), ("}", INK),
+]
+
+
+def draw_code_block(d: ImageDraw.ImageDraw, lines: list, x: int, y: int,
+                    font: ImageFont.ImageFont, alpha: int) -> None:
+    """Draw a list-of-tokens style code block at (x, y), respecting alpha."""
+    line_h = font.size + 4
+    if isinstance(lines[0], list):
+        for i, line in enumerate(lines):
+            tx = x
+            for tok, color in line:
+                d.text((tx, y + i * line_h), tok, font=font,
+                       fill=(*color, alpha))
+                bbox = font.getbbox(tok)
+                tx += bbox[2] - bbox[0]
+    else:
+        tx = x
+        for tok, color in lines:
+            d.text((tx, y), tok, font=font, fill=(*color, alpha))
+            bbox = font.getbbox(tok)
+            tx += bbox[2] - bbox[0]
+
+
+# ──────────────────────────── margin icons ───────────────────────────────
+
+def draw_margin_icons(d: ImageDraw.ImageDraw, alpha: int) -> None:
+    """Tiny line-drawn vignettes in the right margin — like the reference."""
+    col = (*INK_SOFT, alpha)
+
+    # Magnifying glass — top-right
+    cx, cy, r = W - 50, 40, 10
+    d.ellipse((cx - r, cy - r, cx + r, cy + r), outline=col, width=2)
+    d.line((cx + 7, cy + 7, cx + 14, cy + 14), fill=col, width=2)
+
+    # Curly braces — middle-right
+    bx, by = W - 48, 180
+    d.text((bx, by), "{ }", font=F_TAG, fill=col)
+
+    # Doc icon
+    dx, dy = W - 56, 110
+    d.rectangle((dx, dy, dx + 16, dy + 20), outline=col, width=2)
+    d.line((dx + 4, dy + 6, dx + 12, dy + 6), fill=col, width=1)
+    d.line((dx + 4, dy + 11, dx + 12, dy + 11), fill=col, width=1)
+    d.line((dx + 4, dy + 16, dx + 9, dy + 16), fill=col, width=1)
+
+    # Mini bar-chart icon
+    cx2, cy2 = W - 56, 250
+    for i, h in enumerate([6, 12, 9, 14]):
+        d.rectangle((cx2 + i * 4, cy2 + 14 - h, cx2 + i * 4 + 3, cy2 + 14),
+                    outline=col, width=1)
+
+
+# ──────────────────────────── brushstroke ─────────────────────────────────
+
+def draw_brushstroke(im: Image.Image, x1: int, y1: int, x2: int, y2: int,
+                     progress: float) -> None:
+    """Paint a hand-painted-looking horizontal stroke from x1..x1+(x2-x1)*progress."""
+    if progress <= 0:
+        return
+    rng = random.Random(99)
+    end_x = int(x1 + (x2 - x1) * progress)
+    layer = Image.new("RGBA", im.size, (0, 0, 0, 0))
+    ld = ImageDraw.Draw(layer)
+    # Multiple overlapping passes with jitter — simulates a thick brush
+    height = abs(y2 - y1)
+    cy = (y1 + y2) // 2
+    for pass_i in range(7):
+        y_jit = rng.randint(-3, 3)
+        thick = height + rng.randint(-4, 4)
+        a = rng.randint(180, 230)
+        col = (CYAN[0] + rng.randint(-10, 10),
+               CYAN[1] + rng.randint(-15, 15),
+               CYAN[2] + rng.randint(-10, 10),
+               a)
+        ld.line(
+            [(x1 - 4, cy + y_jit), (end_x, cy + y_jit)],
+            fill=col, width=thick,
+        )
+    # Add irregular "bristle" tail at the leading edge
+    if progress < 1.0:
+        for _ in range(40):
+            tx = end_x + rng.randint(-12, 6)
+            ty = cy + rng.randint(-height // 2, height // 2)
+            r = rng.randint(1, 3)
+            ld.ellipse((tx - r, ty - r, tx + r, ty + r),
+                       fill=(*CYAN, rng.randint(80, 200)))
+    # Slight blur for the "wet paint" look
+    layer = layer.filter(ImageFilter.GaussianBlur(radius=0.8))
+    im.paste(layer, (0, 0), layer)
+
+
+# ──────────────────────────── timeline ────────────────────────────────────
+
+def constellation_progress(f: int) -> float:
+    return ease(f / (FRAMES * 0.30))
+
+
+def code_alpha(f: int, slot: int) -> int:
+    """slot: 0,1,2 — staggered fade-in."""
+    starts = [FRAMES * 0.18, FRAMES * 0.30, FRAMES * 0.42]
+    span = FRAMES * 0.18
+    p = ease((f - starts[slot]) / span)
+    p = max(0.0, min(1.0, p))
+    return int(255 * p)
+
+
+def brush_progress(f: int) -> float:
+    start = FRAMES * 0.45
+    end = FRAMES * 0.62
+    return ease((f - start) / (end - start)) if f >= start else 0.0
+
+
+def underline_progress(f: int) -> float:
+    start = FRAMES * 0.62
+    end = FRAMES * 0.74
+    return ease((f - start) / (end - start)) if f >= start else 0.0
+
+
+def hold_to_loop(f: int) -> float:
+    """Constellation/code dimming at end of loop for smooth wrap."""
+    start = FRAMES * 0.90
+    if f < start:
         return 1.0
-    return ease((frame - start) / (end - start))
+    return 1.0 - ease((f - start) / (FRAMES - start)) * 0.55
 
 
-def polyline_length(pts: list[tuple[int, int]]) -> float:
-    total = 0.0
-    for a, b in zip(pts, pts[1:]):
-        total += math.hypot(b[0] - a[0], b[1] - a[1])
-    return total
+# ──────────────────────────── pre-bake ────────────────────────────────────
+
+print("baking parchment …")
+PARCHMENT = make_parchment(W, H)
+print("preparing bust …")
+BUST = prepare_bust()
+BUST_X = W - BUST.width - 30
+BUST_Y = H - BUST.height + 10  # let bottom touch banner edge
+
+# Bust eye-line: empirically ~28% from top of cropped bust.
+BUST_EYE_Y = BUST_Y + int(BUST.height * 0.28)
+BUST_EYE_X1 = BUST_X + int(BUST.width * 0.20)
+BUST_EYE_X2 = BUST_X + int(BUST.width * 0.78)
+
+# Constellation seed near the bust head's upper-right.
+NODES, EDGES = build_constellation((BUST_X + BUST.width - 60, BUST_Y + 110))
+
+# Title baseline
+TITLE_X = 56
+TITLE_Y = 70
 
 
-def point_on_polyline(pts: list[tuple[int, int]], dist: float) -> tuple[float, float]:
-    """Return (x, y) at arc-length `dist` along the polyline."""
-    travelled = 0.0
-    for a, b in zip(pts, pts[1:]):
-        seg = math.hypot(b[0] - a[0], b[1] - a[1])
-        if travelled + seg >= dist:
-            t = (dist - travelled) / seg if seg > 0 else 0
-            return (a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t)
-        travelled += seg
-    return pts[-1]
+# ──────────────────────────── frame renderer ──────────────────────────────
 
+def render_frame(f: int) -> Image.Image:
+    im = PARCHMENT.copy()
+    overlay = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(overlay)
 
-def visible_polyline(pts: list[tuple[int, int]], total_len: float, progress: float):
-    """Slice of the polyline that's currently drawn."""
-    target = total_len * progress
-    out = [pts[0]]
-    travelled = 0.0
-    for a, b in zip(pts, pts[1:]):
-        seg = math.hypot(b[0] - a[0], b[1] - a[1])
-        if travelled + seg <= target:
-            out.append(b)
-            travelled += seg
-        else:
-            t = (target - travelled) / seg if seg > 0 else 0
-            out.append((a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t))
-            break
-    return out
+    cp = constellation_progress(f) * hold_to_loop(f)
 
+    # Constellation: edges first (back), then nodes
+    n_visible_edges = int(len(EDGES) * cp)
+    for i, (a, b) in enumerate(EDGES[:n_visible_edges]):
+        x1, y1, _, _ = NODES[a]
+        x2, y2, _, _ = NODES[b]
+        # color is a blend toward the b-node color
+        col = NODES[b][3]
+        alpha = int(95 * hold_to_loop(f))
+        d.line([(x1, y1), (x2, y2)], fill=(*col, alpha), width=1)
+    n_visible_nodes = int(len(NODES) * cp)
+    for x, y, r, c in NODES[:n_visible_nodes]:
+        a = int(255 * hold_to_loop(f))
+        # halo
+        d.ellipse((x - r - 2, y - r - 2, x + r + 2, y + r + 2),
+                  fill=(*c, max(0, a // 4)))
+        d.ellipse((x - r, y - r, x + r, y + r), fill=(*c, a))
 
-def render_frame(frame: int) -> Image.Image:
-    im = Image.new("RGB", (W, H), BG)
-    d = ImageDraw.Draw(im, "RGBA")
+    # Composite overlay onto parchment so bust can sit on top
+    im.paste(overlay, (0, 0), overlay)
 
-    draw_grid(d)
-    draw_panel_chrome(im)
+    # Bust on the right
+    im.paste(BUST, (BUST_X, BUST_Y), BUST)
 
-    # Subtle wing arc behind everything — Daedalus's wings, distant.
-    wing_layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    wd = ImageDraw.Draw(wing_layer)
-    for i, alpha in enumerate((22, 14, 8)):
-        wd.arc(
-            (-160 + i * 30, 60 + i * 20, 380 + i * 30, 480 + i * 20),
-            start=300, end=60, fill=(34, 211, 238, alpha), width=3,
-        )
-        wd.arc(
-            (820 - i * 30, 60 + i * 20, 1360 - i * 30, 480 + i * 20),
-            start=120, end=240, fill=(34, 211, 238, alpha), width=3,
-        )
-    wing_layer = wing_layer.filter(ImageFilter.GaussianBlur(radius=2))
-    im.paste(wing_layer, (0, 0), wing_layer)
-    d = ImageDraw.Draw(im, "RGBA")
+    # Brushstroke across the eyes — ON TOP of the bust
+    bp = brush_progress(f)
+    if bp > 0:
+        draw_brushstroke(im, BUST_EYE_X1, BUST_EYE_Y - 22,
+                         BUST_EYE_X2, BUST_EYE_Y + 22, bp)
 
-    total = polyline_length(NODES)
-    p = thread_progress(frame)
-    visible = visible_polyline(NODES, total, p)
+    # Code overlays — drawn on a fresh RGBA layer so alpha works
+    code_layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    cd = ImageDraw.Draw(code_layer)
+    a0, a1, a2 = code_alpha(f, 0), code_alpha(f, 1), code_alpha(f, 2)
+    if a0 > 0:
+        draw_code_block(cd, [CODE_PY, CODE_PY_2, CODE_PY_3],
+                        BUST_X - 280, 40, F_CODE, a0)
+    if a1 > 0:
+        draw_code_block(cd, CODE_EVENT, BUST_X - 320, 160, F_CODE_SMALL, a1)
+    if a2 > 0:
+        draw_code_block(cd,
+                        [[(t, c)] for t, c in CODE_YAML],
+                        BUST_X - 240, 240, F_CODE_SMALL, a2)
+    im.paste(code_layer, (0, 0), code_layer)
 
-    # Ghost full path — always visible, very faint.
-    d.line(NODES, fill=CYAN_GHOST, width=2, joint="curve")
+    # ─── Title block (left) — drawn last so it sits on top of everything ──
+    text_layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    td = ImageDraw.Draw(text_layer)
 
-    # The drawn thread (Theseus's clew) — bold cyan.
-    if len(visible) >= 2:
-        # Glow halo
-        glow = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-        gd = ImageDraw.Draw(glow)
-        gd.line(visible, fill=(34, 211, 238, 90), width=10, joint="curve")
-        glow = glow.filter(ImageFilter.GaussianBlur(radius=4))
-        im.paste(glow, (0, 0), glow)
-        d = ImageDraw.Draw(im, "RGBA")
-        d.line(visible, fill=CYAN, width=4, joint="curve")
+    # DAEDALUS — display serif, black ink
+    td.text((TITLE_X, TITLE_Y), "Daedalus", font=F_TITLE, fill=(*INK, 255))
 
-    # Nodes — dim until the thread reaches them.
-    travelled_target = total * p
-    cumulative = 0.0
-    reached = [False] * len(NODES)
-    reached[0] = True
-    for idx, (a, b) in enumerate(zip(NODES, NODES[1:])):
-        seg = math.hypot(b[0] - a[0], b[1] - a[1])
-        cumulative += seg
-        if cumulative <= travelled_target + 4:
-            reached[idx + 1] = True
+    # Gold underline accent — animated draw-in
+    up = underline_progress(f)
+    if up > 0:
+        ux2 = TITLE_X + int(140 * up)
+        td.line((TITLE_X, TITLE_Y + 130, ux2, TITLE_Y + 130),
+                fill=(*GOLD, 255), width=3)
 
-    for i, (x, y) in enumerate(NODES):
-        if reached[i]:
-            # Lit node — solid + halo.
-            d.ellipse((x - 14, y - 14, x + 14, y + 14),
-                      fill=(34, 211, 238, 60))
-            d.ellipse((x - 7, y - 7, x + 7, y + 7), fill=CYAN)
-            label = LABEL_NODES.get(i)
-            if label:
-                d.text((x - 28, y + 14), label, font=FONT_TAG, fill=(150, 200, 215))
-        else:
-            d.ellipse((x - 6, y - 6, x + 6, y + 6),
-                      outline=(34, 211, 238, 80), width=2)
+    # Subtitle — two lines, second in cyan
+    td.text((TITLE_X, TITLE_Y + 145), "Agents that fly.",
+            font=F_SUB, fill=(*INK, 255))
+    td.text((TITLE_X, TITLE_Y + 185), "Workflows that don't melt.",
+            font=F_SUB, fill=(*CYAN, 255))
 
-    # Comet head at the tip of the thread.
-    if 0 < p < 1:
-        hx, hy = point_on_polyline(NODES, total * p)
-        head_layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-        hd = ImageDraw.Draw(head_layer)
-        hd.ellipse((hx - 16, hy - 16, hx + 16, hy + 16), fill=(34, 211, 238, 130))
-        head_layer = head_layer.filter(ImageFilter.GaussianBlur(radius=3))
-        im.paste(head_layer, (0, 0), head_layer)
-        d = ImageDraw.Draw(im, "RGBA")
-        d.ellipse((hx - 5, hy - 5, hx + 5, hy + 5), fill=(245, 252, 255))
+    # Caption
+    td.text((TITLE_X, TITLE_Y + 240),
+            "Hot-reload  ·  leases  ·  stalls  ·  shadow → active",
+            font=F_TAG, fill=(*INK_SOFT, 255))
 
-    # Wordmark + subtitle on the right side.
-    tp = text_progress(frame)
-    if tp > 0:
-        alpha = int(255 * tp)
-        title_layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-        td = ImageDraw.Draw(title_layer)
-        td.text((620, 90), "DAEDALUS", font=FONT_TITLE,
-                fill=(34, 211, 238, alpha))
-        ux2 = 620 + int(300 * tp)
-        td.line((620, 165, ux2, 165), fill=(34, 211, 238, alpha), width=3)
-        td.text((620, 178), "the durable thread for agent workflows",
-                font=FONT_SUB, fill=(180, 210, 220, alpha))
-        td.text((620, 208), "leases · hot-reload · stalls · shadow → active",
-                font=FONT_TAG, fill=(110, 145, 160, alpha))
-        im.paste(title_layer, (0, 0), title_layer)
+    im.paste(text_layer, (0, 0), text_layer)
+
+    # Margin icons (fade in alongside the constellation, faintly)
+    icon_layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    icon_draw = ImageDraw.Draw(icon_layer)
+    icon_alpha = int(180 * cp)
+    if icon_alpha > 0:
+        draw_margin_icons(icon_draw, icon_alpha)
+        im.paste(icon_layer, (0, 0), icon_layer)
 
     return im
 
 
+# ──────────────────────────── entry ───────────────────────────────────────
+
 def main() -> None:
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    frames = [render_frame(i) for i in range(FRAMES)]
-    # Quantize to a small palette so the GIF stays small.
-    quantized = [
-        f.convert("P", palette=Image.Palette.ADAPTIVE, colors=32, dither=Image.Dither.NONE)
-        for f in frames
-    ]
+    print(f"rendering {FRAMES} frames @ {W}x{H} …")
+    frames = []
+    for i in range(FRAMES):
+        frames.append(render_frame(i))
+        if i % 10 == 0:
+            print(f"  frame {i}/{FRAMES}")
+    print("quantizing …")
+    # Quantize all frames against the FIRST frame's palette so subsequent
+    # frames reuse the same indices — that lets the GIF encoder's
+    # interframe optimisation actually help. Using per-frame ADAPTIVE
+    # palettes prevents that and bloats the file.
+    base_palette = frames[0].convert(
+        "P", palette=Image.Palette.ADAPTIVE,
+        colors=48, dither=Image.Dither.NONE,
+    )
+    quantized = [base_palette]
+    for f in frames[1:]:
+        quantized.append(f.quantize(palette=base_palette, dither=Image.Dither.NONE))
+    print("encoding GIF …")
     quantized[0].save(
         OUT_PATH,
         save_all=True,
@@ -255,7 +522,8 @@ def main() -> None:
         duration=DURATION_MS,
         loop=0,
         optimize=True,
-        disposal=2,
+        disposal=1,  # leave previous frame intact → encoder can skip
+                     # unchanged pixels in subsequent frames.
     )
     size_kb = OUT_PATH.stat().st_size / 1024
     print(f"wrote {OUT_PATH} ({size_kb:.1f} KiB, {len(frames)} frames)")
