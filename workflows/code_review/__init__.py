@@ -20,6 +20,7 @@ CONFIG_SCHEMA_PATH = Path(__file__).parent / "schema.yaml"
 
 from workflows.code_review.workspace import make_workspace as _make_workspace_inner
 from workflows.code_review.cli import main as cli_main
+from workflows.code_review.preflight import run_preflight
 
 
 def make_workspace(*, workflow_root: Path, config: dict):
@@ -39,4 +40,5 @@ __all__ = [
     "CONFIG_SCHEMA_PATH",
     "make_workspace",
     "cli_main",
+    "run_preflight",
 ]
