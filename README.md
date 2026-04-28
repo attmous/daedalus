@@ -4,7 +4,7 @@
 
 <br>
 
-**Carries every labeled issue all the way through your workflow.**
+**Conducts every labeled issue all the way through your workflow.**
 
 *Daedalus the craftsman built the Labyrinth, gave Theseus the thread, and warned Icarus not to fly too close to the sun.*
 
