@@ -20,9 +20,7 @@
 
 ## What it is
 
-Daedalus is the runtime layer underneath your agentic workflows. Your workflow wrapper is still the brain — it decides *what* should happen next. Daedalus is the loom underneath: it owns the loop, the state, the leases, the retries, the recovery. It's the part you don't want to rewrite for every project.
-
-It also ships a library of **generic workflows** that you adapt to your project's policies and conventions. The first one — and the one we dogfood on this very repo — is **Code-Review**: pick an issue, write the code, get it reviewed, ship the PR. More workflows are coming. Every workflow plugs into the same runtime, so the operational concerns (recovery, hot-reload, observability) are solved once instead of per workflow.
+Daedalus runs your agent workflows reliably, 24/7. You define the workflow — which agent works each stage, what triggers a hand-off, what counts as "done" — and Daedalus runs it: leases, retries, hot-reload, recovery, all the operational surface that's tedious to write for every project. The one we ship and dogfood on this very repo is **Code-Review** (`Issue → Code → Review → Merge`). The same engine runs whatever workflow you write next.
 
 ## Three myths, three guarantees
 
@@ -60,17 +58,11 @@ Daedalus warned Icarus, then flew home. Edits to your workflow rules take effect
 
 ## What's in the box
 
-**Workflows** — adapt them to your project's policies:
-
-- **Code-Review** — `Issue → Code → Review → Merge`. Live and dogfooded on this repo.
-- *More coming.* Tell us what you'd ship next.
-
-**The runtime everything plugs into:**
-
-- **Pick the right agent for the right role.** Codex for review, Claude for code, your own agent for merge — they collaborate on a lane and hand off through the workflow's gates.
-- **Hot-reload of your workflow rules.** Edit `workflow.yaml`, the next tick picks it up. A bad edit keeps the last good config alive instead of crashing the loop.
-- **Stall detection.** Wedged agents get terminated automatically and the lane retries — no zombie workers.
-- **Symphony-aligned event vocabulary.** Events follow the [openai/symphony](https://github.com/openai/symphony) taxonomy, so the same observability tools work across systems.
+- **A Code-Review workflow** — `Issue → Code → Review → Merge`, live and dogfooded on this repo. *More workflows coming.*
+- **The right agent for the right role** — Codex for review, Claude for code, your own agent for merge. They collaborate on a lane and hand off through the workflow's gates.
+- **Hot-reload of your workflow rules** — edit `workflow.yaml`, the next tick picks it up. A bad edit keeps the last good config alive instead of crashing the loop.
+- **Stall detection** — wedged agents get terminated automatically and the lane retries. No zombie workers.
+- **Symphony-aligned event vocabulary** — events follow the [openai/symphony](https://github.com/openai/symphony) taxonomy, so observability tools work across systems.
 - **An operator surface** — `/daedalus status`, `shadow-report`, `doctor`, `iterate-active`. A live HTML/JSON status surface ships separately as a Hermes-Agent watch plugin.
 
 ## Install
