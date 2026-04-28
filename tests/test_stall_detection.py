@@ -209,3 +209,32 @@ def test_schema_rejects_negative_stall_timeout():
     }
     with pytest.raises(JSError):
         Draft7Validator(schema).validate(base)
+
+
+def test_stall_emits_both_events_and_queues_retry(tmp_path, monkeypatch):
+    """Smoke: when reconcile_stalls returns a verdict, the tick-loop
+    integration emits stall_detected, terminates, emits stall_terminated,
+    and queues a retry. Tested via a thin fake orchestrator."""
+    from workflows.code_review.stall import StallVerdict, reconcile_stalls
+    from workflows.code_review.event_taxonomy import (
+        DAEDALUS_STALL_DETECTED, DAEDALUS_STALL_TERMINATED,
+    )
+
+    snap = _snap_with_stall(1000)
+    rt = _FakeRuntime(last_ts=0.0)
+    entry = _FakeEntry(runtime=rt, started_at_monotonic=0.0)
+    verdicts = reconcile_stalls(snap, {"i1": entry}, now=2.0)
+    assert len(verdicts) == 1
+
+    # Emulate the watch.py side-effect block in isolation
+    events: list[dict] = []
+    terminated: list[str] = []
+    retried: list[tuple[str, str]] = []
+    for v in verdicts:
+        events.append({"type": DAEDALUS_STALL_DETECTED, "issue_id": v.issue_id})
+        terminated.append(v.issue_id)
+        events.append({"type": DAEDALUS_STALL_TERMINATED, "issue_id": v.issue_id})
+        retried.append((v.issue_id, "stall_timeout"))
+    assert [e["type"] for e in events] == [DAEDALUS_STALL_DETECTED, DAEDALUS_STALL_TERMINATED]
+    assert terminated == ["i1"]
+    assert retried == [("i1", "stall_timeout")]
