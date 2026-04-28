@@ -66,9 +66,38 @@ def test_atomic_ref_holds_config_snapshot():
     assert ref.get().config == {"v": 2}
 
 
+def test_config_snapshot_inner_dicts_are_read_only():
+    """Code-quality P2 fix: dict contents wrapped in MappingProxyType so
+    accidental mutation surfaces as TypeError at the boundary."""
+    from workflows.code_review.config_snapshot import ConfigSnapshot
+
+    snap = ConfigSnapshot(
+        config={"k": "v"},
+        prompts={"t": "p"},
+        loaded_at=1.0,
+        source_mtime=1.0,
+    )
+    with pytest.raises(TypeError):
+        snap.config["k"] = "mutated"  # type: ignore[index]
+    with pytest.raises(TypeError):
+        snap.prompts["t"] = "mutated"  # type: ignore[index]
+    # Reads still work
+    assert snap.config["k"] == "v"
+    assert snap.prompts["t"] == "p"
+
+
 def test_atomic_ref_concurrent_readers_and_writer_consistent():
     """N reader threads + 1 writer thread; readers always see one of
-    the values the writer set, never a torn read."""
+    the values the writer set, never a torn read.
+
+    Note: under CPython the GIL makes a single-attribute load atomic,
+    so this test cannot directly exercise a torn-read window. It is a
+    smoke / liveness check that the lock scope on the writer side
+    doesn't deadlock and that readers observe published values rather
+    than a stale stuck reference. A true torn-read regression would
+    only surface on free-threaded 3.13+ or PyPy without GIL — out of
+    scope for Daedalus today.
+    """
     import threading
     import time
     from workflows.code_review.config_snapshot import AtomicRef
