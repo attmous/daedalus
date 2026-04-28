@@ -209,3 +209,18 @@ def test_watcher_poll_detects_size_change_at_same_mtime(tmp_path):
     reloads = [t for t, _ in events if t == "daedalus.config_reloaded"]
     assert len(reloads) == 1, f"Expected size-change to trigger reload, got events={events}"
     assert ref.get() is not initial  # snapshot replaced
+
+
+def test_watcher_poll_missing_file_keeps_lkg_no_event(tmp_path):
+    from workflows.code_review.config_snapshot import AtomicRef
+    from workflows.code_review.config_watcher import ConfigWatcher
+
+    p, initial = _seed_snapshot(tmp_path)
+    ref = AtomicRef(initial)
+    events: list[tuple[str, dict]] = []
+    w = ConfigWatcher(p, ref, lambda t, d: events.append((t, d)))
+
+    p.unlink()
+    w.poll()
+    assert ref.get() is initial
+    assert events == []  # missing-during-rename is silent
