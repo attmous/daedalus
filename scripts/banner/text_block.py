@@ -73,15 +73,3 @@ def draw(im: Image.Image, *, underline_progress: float, frame: int) -> None:
     #    isolated. Renders directly onto `im` so the pulse glow can blur
     #    cleanly across the parchment.
     flow.draw(im, anchor=(x, y + config.OFFSET_FLOW), frame=frame)
-
-    # ── Caption line 2 — GitHub mark + roadmap (PNG icon needs Image) ──
-    cap_y_2 = y + config.OFFSET_CAPTION_2
-    icons.paste_github_mark(im,
-                            cx=x + 9, cy=cap_y_2 + 10,
-                            height=18, color=config.INK)
-    cap_layer_2 = Image.new("RGBA", im.size, (0, 0, 0, 0))
-    cd2 = ImageDraw.Draw(cap_layer_2)
-    cd2.text((x + 26, cap_y_2),
-             "GitHub now — Linear next.",
-             font=cap_font, fill=(*config.INK_SOFT, 255))
-    im.paste(cap_layer_2, (0, 0), cap_layer_2)

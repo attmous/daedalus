@@ -61,11 +61,11 @@ OFFSET_GOLD_LINE = 130
 OFFSET_SUBTITLE_1 = 145
 OFFSET_SUBTITLE_2 = 185
 OFFSET_FLOW = 240
-# Two stacked captions:
-#   line 1 — "A Hermes Agent plugin · Reads issues, writes PRs."
-#   line 2 — GitHub mark + "GitHub now — Linear next."
+# Caption underneath the title block:
+#   "A Hermes Agent plugin  ·  Reads issues, writes PRs."
+# (The GitHub-now/Linear-next roadmap line moved into the README so it
+# can carry more weight there. Keeping OFFSET_CAPTION_1 only.)
 OFFSET_CAPTION_1 = 270
-OFFSET_CAPTION_2 = 296
 
 # Bust target height (it sits flush to the bottom-right)
 BUST_TARGET_H = 380

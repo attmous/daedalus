@@ -66,11 +66,14 @@ def hold_to_loop(f: int) -> float:
 #   2. ignite-settle — colour cyan → ink  (a brief "the stage just lit up"
 #                      highlight before it cools to body-text colour)
 
+# Flow timing — first token ignites at frame 0 so the pipeline is the
+# very first thing the viewer sees. Tokens are spread across most of
+# the loop so each stage stays on screen long enough to read.
 FLOW_TOKEN_COUNT = 7
-FLOW_FIRST_START = 0.74    # fraction of loop where first token starts
-FLOW_TOKEN_STRIDE = 0.025  # fraction-of-loop gap between consecutive starts
-FLOW_FADE_IN = 0.04        # how long each token's fade-in takes
-FLOW_SETTLE = 0.12         # how long the cyan→ink settle takes
+FLOW_FIRST_START = 0.00    # first token starts at the beginning of the loop
+FLOW_TOKEN_STRIDE = 0.095  # gap between consecutive token starts
+FLOW_FADE_IN = 0.06        # fade-in duration per token
+FLOW_SETTLE = 0.18         # cyan → ink settle duration per token
 
 
 def flow_token_state(f: int, token_idx: int) -> tuple[int, float]:
