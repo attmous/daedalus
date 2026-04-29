@@ -12,21 +12,22 @@ from pathlib import Path
 from typing import Any
 
 from workflows.code_review.paths import (
-    resolve_default_workflow_root as resolve_yoyopod_core_workflow_root,
-    yoyopod_cli_argv,
+    project_key_for_workflow_root,
+    resolve_default_workflow_root as resolve_workflow_root_default,
+    workflow_cli_argv,
 )
-from workflows.code_review.status import build_status as build_yoyopod_core_status
+from workflows.code_review.status import build_status as build_workflow_status
 
 PLUGIN_DIR = Path(__file__).resolve().parent
 DEFAULT_WORKFLOW_ROOT_ENV_VARS = ("DAEDALUS_WORKFLOW_ROOT",)
 
 
 def resolve_default_workflow_root() -> Path:
-    return resolve_yoyopod_core_workflow_root(plugin_dir=PLUGIN_DIR)
+    return resolve_workflow_root_default(plugin_dir=PLUGIN_DIR)
 
 
 DEFAULT_WORKFLOW_ROOT = resolve_default_workflow_root()
-DEFAULT_PROJECT_KEY = "yoyopod"
+DEFAULT_PROJECT_KEY = project_key_for_workflow_root(DEFAULT_WORKFLOW_ROOT)
 DEFAULT_INSTANCE_ID = "daedalus-plugin"
 
 DAEDALUS_TEMPLATE_UNIT_FILENAMES = {
@@ -75,7 +76,7 @@ def _load_daedalus_module(workflow_root: Path):
 
 
 def _build_project_status(workflow_root: Path) -> dict[str, Any]:
-    return build_yoyopod_core_status(workflow_root)
+    return build_workflow_status(workflow_root)
 
 
 def _compatibility_pairs() -> set[tuple[str | None, str | None]]:

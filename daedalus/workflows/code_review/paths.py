@@ -1,17 +1,33 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 from typing import Mapping
 
 PROJECT_SLUG = "yoyopod_core"
 PROJECT_DISPLAY_NAME = "yoyopod-core"
 WORKSPACE_REPO_NAME = "yoyopod-core"
-DEFAULT_WORKFLOW_ROOT_ENV_VARS = ("DAEDALUS_WORKFLOW_ROOT",)
+DEFAULT_WORKFLOW_ROOT_ENV_VARS = ("DAEDALUS_WORKFLOW_ROOT", "YOYOPOD_WORKFLOW_ROOT")
+
+_PROJECT_KEY_CHARS_RE = re.compile(r"[^a-z0-9._-]+")
+_PROJECT_KEY_SEPARATORS_RE = re.compile(r"[-._]{2,}")
 
 
 def repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
+
+
+def normalize_project_key(value: str | None) -> str:
+    text = str(value or "").strip().lower()
+    text = _PROJECT_KEY_CHARS_RE.sub("-", text)
+    text = _PROJECT_KEY_SEPARATORS_RE.sub("-", text)
+    text = text.strip("-.")
+    return text or "workflow"
+
+
+def project_key_for_workflow_root(workflow_root: Path) -> str:
+    return normalize_project_key(workflow_root.resolve().name)
 
 
 def project_data_root(*, plugin_dir: Path | None = None) -> Path:
