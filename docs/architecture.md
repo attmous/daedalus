@@ -354,15 +354,15 @@ daedalus/
 
 ---
 
-## Current Deployment (YoYoPod)
+## Example Transitional Deployment
 
-The current YoYoPod deployment is a **sensible transitional architecture**:
+One practical deployment shape is a **sensible transitional architecture**:
 
 | Layer | Owner | Role |
 |---|---|---|
-| **Wrapper** | YoYoPod workflow | Semantic policy engine |
+| **Workflow module** | Project workflow | Semantic policy engine |
 | **Daedalus active service** | systemd | Recurring dispatcher |
-| **Wrapper `tick`** | Manual fallback | Operator override |
+| **Workflow `tick`** | Manual fallback | Operator override |
 | **Milestone notifier** | Hermes cron | Support job (not orchestrator) |
 | **Outage alerts** | Daedalus alerts | Support surface (not scheduler) |
 

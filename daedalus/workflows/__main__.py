@@ -13,9 +13,8 @@ inserting the plugin root onto sys.path before the import.
 
 If ``--workflow-root`` is omitted, the entrypoint delegates to the shared
 workflow-root resolver. That keeps ``DAEDALUS_WORKFLOW_ROOT`` as the canonical
-override, preserves ``YOYOPOD_WORKFLOW_ROOT`` as a back-compat alias, and
-falls back to the installed/repo-local workflow layout without hardcoding a
-single project path.
+override and otherwise falls back to the installed/repo-local workflow layout
+without hardcoding a single project path.
 """
 from __future__ import annotations
 
