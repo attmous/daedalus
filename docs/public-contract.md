@@ -10,12 +10,15 @@ These are the surfaces we should treat as `v1` public contract:
 - legacy `config/workflow.yaml` loading for existing instances
 - `hermes plugins install attmous/daedalus --enable`
 - the `hermes_agent.plugins` entry point name `daedalus`
+- `hermes daedalus bootstrap`
 - `hermes daedalus scaffold-workflow`
+- `hermes daedalus service-up`
 - `hermes daedalus init`
 - `hermes daedalus service-*`
 - `/daedalus ...` operator commands
 - `/workflow <name> ...` workflow commands
 - the workflow root naming convention: `~/.hermes/workflows/<owner>-<repo>-<workflow-type>`
+- the repo-local workflow pointer written by `bootstrap`: `./.hermes/daedalus/workflow-root`
 
 Changes to those surfaces should be documented, tested, and treated as compatibility-sensitive.
 

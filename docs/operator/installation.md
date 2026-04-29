@@ -39,7 +39,29 @@ python3 -m pip install .
 hermes plugins enable daedalus
 ```
 
-## Scaffold a workflow root
+## Bootstrap a workflow root
+
+```bash
+cd /path/to/your/repo
+hermes daedalus bootstrap
+```
+
+This is the preferred path. `bootstrap`:
+
+- detects the git repo root from the current checkout
+- derives `github-slug` from `origin`
+- creates the supported instance layout below
+- writes a starter `WORKFLOW.md`
+- writes `./.hermes/daedalus/workflow-root` in the repo checkout so later
+  Daedalus commands can resolve the workflow root automatically
+
+```text
+~/.hermes/workflows/<owner>-<repo>-<workflow-type>/
+```
+
+## Manual scaffold path
+
+If you want explicit control over the target root or slug:
 
 ```bash
 hermes daedalus scaffold-workflow \
@@ -47,7 +69,7 @@ hermes daedalus scaffold-workflow \
   --github-slug your-org/your-repo
 ```
 
-This creates the supported instance layout:
+That creates the same supported instance layout:
 
 ```text
 ~/.hermes/workflows/<owner>-<repo>-<workflow-type>/
@@ -70,7 +92,26 @@ At minimum, set:
 The YAML front matter is the structured config. The Markdown body below it is
 shared workflow policy that Daedalus prepends to its role-specific prompts.
 
-## Initialize and verify
+## Bring it up
+
+```bash
+hermes daedalus service-up
+```
+
+`service-up` runs the supported post-edit path in one command:
+
+- initialize runtime state
+- validate `WORKFLOW.md` and workflow preflight rules
+- install the user systemd unit
+- enable the unit
+- start the service
+
+Use `--service-mode shadow` if you want read-only parity validation first.
+
+## Manual low-level path
+
+If you want to inspect or script each step separately, the lower-level commands
+remain available:
 
 ```bash
 hermes daedalus init \
@@ -79,11 +120,7 @@ hermes daedalus init \
 hermes daedalus doctor \
   --workflow-root ~/.hermes/workflows/your-org-your-repo-code-review \
   --format json
-```
 
-## Supervise it
-
-```bash
 hermes daedalus service-install \
   --workflow-root ~/.hermes/workflows/your-org-your-repo-code-review \
   --service-mode active
@@ -97,12 +134,9 @@ hermes daedalus service-start \
   --service-mode active
 ```
 
-Use `--service-mode shadow` if you want read-only parity validation first.
-
 ## Operate it from Hermes
 
 ```bash
-export DAEDALUS_WORKFLOW_ROOT=~/.hermes/workflows/your-org-your-repo-code-review
 cd /path/to/your/repo
 hermes
 ```

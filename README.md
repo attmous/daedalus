@@ -85,7 +85,30 @@ sudo apt install python3-yaml python3-jsonschema
 # 2. Install and enable the plugin
 hermes plugins install attmous/daedalus --enable
 
-# 3. Scaffold one workflow instance
+# 3. Bootstrap one workflow instance from your repo checkout
+cd /path/to/your/repo
+hermes daedalus bootstrap
+```
+
+`bootstrap` infers the git repo root, derives `github-slug` from `origin`, and
+creates:
+
+```text
+~/.hermes/workflows/<owner>-<repo>-<workflow-type>
+```
+
+It also writes a repo-local pointer at:
+
+```text
+./.hermes/daedalus/workflow-root
+```
+
+So later `hermes daedalus ...` commands can resolve the workflow root directly
+from the repo checkout.
+
+If you need explicit control, the lower-level command is still available:
+
+```bash
 hermes daedalus scaffold-workflow \
   --workflow-root ~/.hermes/workflows/your-org-your-repo-code-review \
   --github-slug your-org/your-repo
@@ -103,33 +126,32 @@ shared workflow policy Daedalus applies across its role-specific prompts.
 Then initialize, verify, and supervise it:
 
 ```bash
+hermes daedalus service-up
+```
+
+`service-up` initializes the runtime, validates `WORKFLOW.md`, installs the
+user systemd unit, enables it, and starts it. If you want to inspect before
+starting, the lower-level commands still exist:
+
+```bash
 hermes daedalus init \
   --workflow-root ~/.hermes/workflows/your-org-your-repo-code-review
 
 hermes daedalus doctor \
   --workflow-root ~/.hermes/workflows/your-org-your-repo-code-review \
   --format json
-
-hermes daedalus service-install \
-  --workflow-root ~/.hermes/workflows/your-org-your-repo-code-review \
-  --service-mode active
-
-hermes daedalus service-enable \
-  --workflow-root ~/.hermes/workflows/your-org-your-repo-code-review \
-  --service-mode active
-
-hermes daedalus service-start \
-  --workflow-root ~/.hermes/workflows/your-org-your-repo-code-review \
-  --service-mode active
 ```
 
 Start Hermes in your repo:
 
 ```bash
-export DAEDALUS_WORKFLOW_ROOT=~/.hermes/workflows/your-org-your-repo-code-review
 cd /path/to/your/repo
 hermes
 ```
+
+Daedalus resolves the workflow root from the repo-local pointer written by
+`bootstrap`. `DAEDALUS_WORKFLOW_ROOT` remains available when you need to
+override it explicitly.
 
 Inside Hermes:
 
