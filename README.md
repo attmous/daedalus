@@ -70,16 +70,15 @@ Inside Hermes Agent:
 
 ```bash
 # Daedalus engine and service commands
-/daedalus status          # show runtime state, workflow root, and important paths
-/daedalus doctor          # run health checks across config, service, state, and integrations
-/daedalus watch           # render a live operator view
-/daedalus service-status  # show the systemd user service state
+/daedalus status                            # show runtime state, workflow root, and important paths
+/daedalus doctor                            # run health checks across config, service, state, and integrations
+/daedalus watch                             # render a live operator view
+/daedalus service-status                    # show the systemd user service state
 
 # Workflow package commands
-/workflow issue-runner status                         # show selected issues, runs, retries, and scheduler state
-/workflow issue-runner run --max-iterations 1 --json  # run one bounded service-loop iteration
-/workflow change-delivery status                      # show active issue/lane and next action
-/workflow change-delivery tick                        # run one change-delivery workflow tick
+/workflow issue-runner status               # show selected issues, runs, retries, and scheduler state
+/workflow change-delivery status            # show active issue/lane and next action
+/workflow change-delivery tick              # run one change-delivery workflow tick
 ```
 
 The operator surfaces read the persisted state for you. You should not need to
