@@ -25,15 +25,19 @@ The harness tests should catch these regressions before review:
 - project-specific playground names must not leak outside `daedalus/projects/**`
 - installation docs must keep the landing-page quick start short and link to
   detailed operator docs
+- Codex app-server tests must cover fake protocol behavior in CI and keep the
+  real app-server smoke opt-in
+- Issue-runner cleanup tests must prove `before_remove` runs before terminal
+  workspaces are deleted
 
 ## Next Checks
 
 Add tests for the next hardening slice in this order:
 
-1. `WORKFLOW*.md` bootstrap branch creation and update behavior when a repo
-   already has one workflow contract.
-2. Codex app-server diagnostics for managed and external service modes.
-3. CLI/docs drift checks for every command shown in the install guide.
+1. CLI/docs drift checks for every command shown in the install guide.
+2. End-to-end `change-delivery` Codex app-server smoke around a real active
+   lane, PR update, and review loop.
+3. Live GitHub recovery coverage for labels, comments, and failure replay.
 
 ## Live GitHub Smoke
 
@@ -46,3 +50,17 @@ pytest tests/test_github_issue_runner_smoke.py -q
 
 See [operator/github-smoke.md](operator/github-smoke.md) for setup and cleanup
 details.
+
+## Codex app-server Smoke
+
+The Codex app-server protocol harness runs in normal CI with a fake app-server.
+The real app-server smoke is skipped by default:
+
+```bash
+DAEDALUS_REAL_CODEX_APP_SERVER=1 \
+pytest tests/test_runtimes_codex_app_server.py \
+  -k real_smoke_start_and_resume -q -s
+```
+
+See [operator/codex-app-server-smoke.md](operator/codex-app-server-smoke.md)
+for the fake/real split and token accounting rule.
