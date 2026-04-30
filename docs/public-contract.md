@@ -31,7 +31,6 @@ These are not public compatibility promises yet:
 
 - SQLite schema details in `runtime/state/daedalus/daedalus.db`
 - event payload internals beyond documented operator output
-- archived design/spec material under `docs/superpowers/`
 - source-repo playground material under `daedalus/projects/**` (not shipped in
   the public plugin payload)
 - experimental skills and local migration helpers

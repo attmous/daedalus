@@ -16,7 +16,7 @@
 
 ## What it is
 
-Daedalus automates your **SDLC** with agents — driven by your GitHub issues. Label an issue and Daedalus walks it through your workflow: picks the right agent for each stage, tracks state, survives crashes, ships when done. The default managed workflow is **Change-Delivery** (`Issue → Code → Review → Merge`). We also bundle **Issue-Runner** as a generic tracker-driven reference workflow.
+Daedalus is a **GitHub-first SDLC automation engine** for Hermes Agent plugins. Label an issue and Daedalus walks it through your workflow: picks the right agent for each stage, tracks state, survives crashes, ships when done. The default managed workflow is **Change-Delivery** (`Issue → Code → Review → Merge`). We also bundle **Issue-Runner** as a generic tracker-driven reference workflow.
 
 ## Three myths, one engine
 
@@ -70,6 +70,7 @@ Daedalus is ready to publish on one explicit path:
 - **Plugin home after install:** `~/.hermes/plugins/daedalus`
 - **Workflow root:** `~/.hermes/workflows/<owner>-<repo>-<workflow-type>`
 - **Workflow contract:** repo-owned `WORKFLOW.md` or `WORKFLOW-<workflow>.md`
+- **First-class tracker:** GitHub issues via an authenticated `gh`
 - **Host Python:** `python3` with `yaml` and `jsonschema` available
 - **24/7 supervision:** `systemd --user`
 - **Runtime adapters:** whatever `WORKFLOW.md` names must exist on the host (`acpx-codex`, `claude-cli`, `hermes-agent`, ...).
@@ -169,6 +170,7 @@ A **labeled issue** is the trigger. The **engine** ticks; for every active issue
 - **[docs/operator/installation.md](docs/operator/installation.md)** — the supported install, scaffold, verify, and supervise path.
 - **[docs/public-contract.md](docs/public-contract.md)** — the stability boundary for the first public release.
 - **[docs/symphony-conformance.md](docs/symphony-conformance.md)** — what is already Symphony-aligned, what is only partial, and what is still missing.
+- **[docs/harness-engineering.md](docs/harness-engineering.md)** — the public-readiness checks that keep the repo generic and GitHub-first.
 - **[docs/security.md](docs/security.md)** — the trust model, shell/runtime posture, and secret-handling expectations.
 - **[docs/concepts/](docs/concepts/)** — short explainers for each moving part: lanes, leases, runtimes, events, hot-reload, stalls.
 - **[docs/operator/](docs/operator/)** — day-to-day commands, the operator cheat sheet, the full slash-command catalogue.

@@ -8,6 +8,7 @@ from workflows.contract import WORKFLOW_POLICY_KEY, load_workflow_contract_file
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_SPECIFIC_TOKEN = "yoyo" + "pod"
 WORKFLOW_EXAMPLES = [
     (
         "change-delivery",
@@ -40,7 +41,7 @@ def test_public_workflow_template_validates_against_schema(workflow_name, templa
 )
 def test_public_workflow_template_uses_generic_placeholders(workflow_name, template_path, placeholder):
     text = template_path.read_text(encoding="utf-8").lower()
-    assert "yoyopod" not in text
+    assert PROJECT_SPECIFIC_TOKEN not in text
     assert placeholder in text
     assert "# workflow policy" in text
 

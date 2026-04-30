@@ -306,7 +306,7 @@ daedalus/
 ├── migration.py             # relay→daedalus filesystem migration
 ├── observability_overrides.py  # Operator config overrides
 ├── runtimes/                # Shared execution backends (Codex, Claude, Hermes)
-├── trackers/                # Shared tracker clients (local-json, Linear, ...)
+├── trackers/                # Shared tracker clients (GitHub, local-json, Linear experimental, ...)
 └── workflows/
     ├── __init__.py          # Workflow loader + CLI dispatcher
     ├── shared/              # Shared paths, config snapshots, stalls
