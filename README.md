@@ -145,18 +145,14 @@ how to use it. See the full [WORKFLOW.md guide](docs/workflows/workflow-contract
 %%{init: {'theme': 'dark', 'themeVariables': { 'primaryColor': '#0B3D4C', 'primaryTextColor': '#22D3EE', 'primaryBorderColor': '#22D3EE', 'lineColor': '#22D3EE', 'secondaryColor': '#0F172A', 'tertiaryColor': '#1E293B'}}}%%
 flowchart LR
     A[Tracker] -->|query| B[Filter]
-    B -->|eligible| C[Workspace]
-    C -->|isolate| D[Runtime]
+    B -->|eligible| D[Runtime]
     D -->|dispatch| E[Agent]
     E -->|result| F[State]
-    F -->|cleanup| G[Done]
     style A fill:#0B3D4C,stroke:#22D3EE,color:#22D3EE
     style B fill:#0B3D4C,stroke:#22D3EE,color:#22D3EE
-    style C fill:#0B3D4C,stroke:#22D3EE,color:#22D3EE
     style D fill:#0B3D4C,stroke:#22D3EE,color:#22D3EE
     style E fill:#0B3D4C,stroke:#22D3EE,color:#22D3EE
     style F fill:#0B3D4C,stroke:#22D3EE,color:#22D3EE
-    style G fill:#0B3D4C,stroke:#22D3EE,color:#22D3EE
 ```
 
 </div>
@@ -164,7 +160,6 @@ flowchart LR
 | Stage | Action | Guarantees |
 |---|---|---|
 | Select | Tracker query → issue filter → eligibility check | Label-scoped, state-aware |
-| Prepare | Workspace isolation → checkout → context assembly | Clean tree, no cross-contamination |
 | Dispatch | Runtime adapter → agent prompt → bounded execution | Timeout, token limit, retry bound |
 | Record | Result capture → state persistence → terminal cleanup | JSONL audit, workspace teardown |
 
@@ -194,8 +189,6 @@ flowchart LR
 
 </div>
 
-`issue-runner` is the default public bootstrap path and generic reference
-workflow. `change-delivery` is richer, more opinionated, and GitHub-backed.
 | Stage | Action | Guarantees |
 |---|---|---|
 | Select | GitHub issue → label filter → lane assignment | SQLite lease, exactly-once |
