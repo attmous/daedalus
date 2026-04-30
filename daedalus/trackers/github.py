@@ -9,7 +9,75 @@ from typing import Any, Callable
 from . import TrackerConfigError, issue_priority_sort_key, normalize_issue, register
 
 
-_GITHUB_SLUG_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+_GITHUB_SLUG_RE = re.compile(
+    r"^(?:(?P<host>[A-Za-z0-9.-]+(?::[0-9]+)?)/)?"
+    r"(?P<owner>[A-Za-z0-9_.-]+)/(?P<repo>[A-Za-z0-9_.-]+)$"
+)
+
+
+def _github_slug_match(raw: str) -> re.Match[str] | None:
+    return _GITHUB_SLUG_RE.match(raw)
+
+
+def _github_slug_config_error() -> TrackerConfigError:
+    return TrackerConfigError(
+        "repository.github-slug must be in owner/repo or host/owner/repo form for tracker.kind='github'"
+    )
+
+
+def github_auth_host_from_slug(slug: str | None) -> str | None:
+    raw = str(slug or "").strip()
+    if not raw:
+        return None
+    match = _github_slug_match(raw)
+    if not match:
+        raise _github_slug_config_error()
+    return match.group("host") or "github.com"
+
+
+def github_name_with_owner_from_slug(slug: str | None) -> str | None:
+    raw = str(slug or "").strip()
+    if not raw:
+        return None
+    match = _github_slug_match(raw)
+    if not match:
+        raise _github_slug_config_error()
+    return f"{match.group('owner')}/{match.group('repo')}"
+
+
+def github_auth_success_accounts(
+    payload: dict[str, Any],
+    *,
+    hostname: str | None = None,
+) -> tuple[str | None, list[dict[str, Any]]]:
+    hosts = payload.get("hosts") if isinstance(payload, dict) else None
+    if not isinstance(hosts, dict):
+        raise RuntimeError("gh auth status did not return host information")
+
+    if hostname:
+        accounts = hosts.get(hostname) or []
+        if not isinstance(accounts, list):
+            raise RuntimeError(f"gh auth status returned invalid {hostname} account information")
+        valid_accounts = [account for account in accounts if isinstance(account, dict)]
+        success_accounts = [
+            account for account in valid_accounts if account.get("state") == "success"
+        ]
+        if not success_accounts:
+            raise RuntimeError(
+                f"gh is not authenticated for {hostname}; run `gh auth login --hostname {hostname}`"
+            )
+        return hostname, success_accounts
+
+    for host, accounts in hosts.items():
+        if not isinstance(accounts, list):
+            continue
+        valid_accounts = [account for account in accounts if isinstance(account, dict)]
+        success_accounts = [
+            account for account in valid_accounts if account.get("state") == "success"
+        ]
+        if success_accounts:
+            return str(host), success_accounts
+    raise RuntimeError("gh is not authenticated for any GitHub host; run `gh auth login`")
 
 
 def issue_label_names(issue: dict[str, Any] | None) -> set[str]:
@@ -77,10 +145,8 @@ def github_slug_from_config(
     ).strip()
     if not raw:
         return None
-    if not _GITHUB_SLUG_RE.match(raw):
-        raise TrackerConfigError(
-            "repository.github-slug must be in owner/repo form for tracker.kind='github'"
-        )
+    if not _github_slug_match(raw):
+        raise _github_slug_config_error()
     return raw
 
 
@@ -244,15 +310,26 @@ class GithubTrackerClient:
             raise RuntimeError("expected gh repo view JSON object payload")
         return payload
 
-    def auth_status_payload(self) -> dict[str, Any]:
-        payload = self._run_json(
-            [
+    def auth_status_payload(self, hostname: str | None = None) -> dict[str, Any]:
+        command = [
+            "gh",
+            "auth",
+            "status",
+            "--json",
+            "hosts",
+        ]
+        if hostname:
+            command = [
                 "gh",
                 "auth",
                 "status",
+                "--hostname",
+                hostname,
                 "--json",
                 "hosts",
-            ],
+            ]
+        payload = self._run_json(
+            command,
             cwd=self._repo_path,
         )
         if not isinstance(payload, dict):

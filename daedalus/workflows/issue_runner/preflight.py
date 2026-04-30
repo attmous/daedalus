@@ -5,7 +5,13 @@ from pathlib import Path
 from typing import Any
 
 from workflows.issue_runner.tracker import TrackerConfigError, build_tracker_client, resolve_tracker_path
-from trackers.github import github_slug_from_config, validate_github_tracker_config
+from trackers.github import (
+    github_auth_host_from_slug,
+    github_auth_success_accounts,
+    github_name_with_owner_from_slug,
+    github_slug_from_config,
+    validate_github_tracker_config,
+)
 
 
 @dataclass(frozen=True)
@@ -81,25 +87,24 @@ def _validate_config(config: dict[str, Any]) -> None:
             repo_path=repo_path,
         )
         if tracker_kind == "github":
-            auth_status = getattr(client, "auth_status_payload")()
-            _assert_github_auth_ok(auth_status)
-            repo_view = getattr(client, "repo_view_payload")()
             expected_slug = github_slug_from_config(tracker_client_cfg, repository_cfg)
+            auth_host = github_auth_host_from_slug(expected_slug)
+            auth_status = getattr(client, "auth_status_payload")(hostname=auth_host)
+            _assert_github_auth_ok(auth_status, hostname=auth_host)
+            repo_view = getattr(client, "repo_view_payload")()
+            expected_name_with_owner = github_name_with_owner_from_slug(expected_slug)
             actual_slug = str(repo_view.get("nameWithOwner") or "").strip()
-            if expected_slug and actual_slug and actual_slug.lower() != expected_slug.lower():
+            if (
+                expected_name_with_owner
+                and actual_slug
+                and actual_slug.lower() != expected_name_with_owner.lower()
+            ):
                 raise RuntimeError(
-                    f"gh resolved repository {actual_slug!r}, expected {expected_slug!r}"
+                    f"gh resolved repository {actual_slug!r}, expected {expected_name_with_owner!r}"
                 )
     except TrackerConfigError as exc:
         raise RuntimeError(str(exc)) from exc
 
 
-def _assert_github_auth_ok(payload: dict[str, Any]) -> None:
-    hosts = payload.get("hosts") if isinstance(payload, dict) else None
-    if not isinstance(hosts, dict):
-        raise RuntimeError("gh auth status did not return host information")
-    github_accounts = hosts.get("github.com") or []
-    if not isinstance(github_accounts, list):
-        raise RuntimeError("gh auth status returned invalid github.com account information")
-    if not any(isinstance(account, dict) and account.get("state") == "success" for account in github_accounts):
-        raise RuntimeError("gh is not authenticated for github.com; run `gh auth login`")
+def _assert_github_auth_ok(payload: dict[str, Any], *, hostname: str | None) -> None:
+    github_auth_success_accounts(payload, hostname=hostname)

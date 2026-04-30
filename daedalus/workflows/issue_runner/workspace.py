@@ -28,7 +28,12 @@ from workflows.issue_runner.tracker import (
     issue_workspace_slug,
     select_issue,
 )
-from trackers.github import github_slug_from_config
+from trackers.github import (
+    github_auth_host_from_slug,
+    github_auth_success_accounts,
+    github_name_with_owner_from_slug,
+    github_slug_from_config,
+)
 
 
 def _now_iso() -> str:
@@ -431,34 +436,52 @@ class IssueRunnerWorkspace:
     def _github_doctor_checks(self) -> list[dict[str, Any]]:
         checks: list[dict[str, Any]] = []
         try:
-            auth_payload = getattr(self.tracker_client, "auth_status_payload")()
-            hosts = auth_payload.get("hosts") if isinstance(auth_payload, dict) else None
-            accounts = hosts.get("github.com") if isinstance(hosts, dict) else None
-            if not isinstance(accounts, list) or not any(
-                isinstance(account, dict) and account.get("state") == "success"
-                for account in accounts
-            ):
-                raise RuntimeError("gh is not authenticated for github.com")
+            expected = github_slug_from_config(
+                self.config.get("tracker") or {},
+                self.config.get("repository") or {},
+            )
+            auth_host = github_auth_host_from_slug(expected)
+            auth_payload = getattr(self.tracker_client, "auth_status_payload")(hostname=auth_host)
+            resolved_host, accounts = github_auth_success_accounts(auth_payload, hostname=auth_host)
             active = next(
                 (
                     account
                     for account in accounts
-                    if isinstance(account, dict) and account.get("active") and account.get("state") == "success"
+                    if account.get("active") and account.get("state") == "success"
                 ),
                 None,
             )
             login = (active or accounts[0]).get("login") if accounts else None
-            checks.append({"name": "github-auth", "status": "pass", "detail": f"gh authenticated as {login or 'unknown'}"})
+            detail = f"gh authenticated as {login or 'unknown'}"
+            if resolved_host and resolved_host != "github.com":
+                detail = f"{detail} on {resolved_host}"
+            checks.append({"name": "github-auth", "status": "pass", "detail": detail})
         except Exception as exc:
             checks.append({"name": "github-auth", "status": "fail", "detail": str(exc)})
 
         try:
             repo_payload = getattr(self.tracker_client, "repo_view_payload")()
             resolved = str(repo_payload.get("nameWithOwner") or "").strip()
-            expected = github_slug_from_config(self.config.get("tracker") or {}, self.config.get("repository") or {})
-            if expected and resolved and resolved.lower() != expected.lower():
-                raise RuntimeError(f"gh resolved repository {resolved!r}, expected {expected!r}")
-            checks.append({"name": "github-repo", "status": "pass", "detail": resolved or (expected or "resolved")})
+            expected = github_slug_from_config(
+                self.config.get("tracker") or {},
+                self.config.get("repository") or {},
+            )
+            expected_name_with_owner = github_name_with_owner_from_slug(expected)
+            if (
+                expected_name_with_owner
+                and resolved
+                and resolved.lower() != expected_name_with_owner.lower()
+            ):
+                raise RuntimeError(
+                    f"gh resolved repository {resolved!r}, expected {expected_name_with_owner!r}"
+                )
+            checks.append(
+                {
+                    "name": "github-repo",
+                    "status": "pass",
+                    "detail": resolved or (expected_name_with_owner or "resolved"),
+                }
+            )
         except Exception as exc:
             checks.append({"name": "github-repo", "status": "fail", "detail": str(exc)})
         return checks

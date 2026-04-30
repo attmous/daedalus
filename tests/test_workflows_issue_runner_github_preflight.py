@@ -61,6 +61,42 @@ def test_issue_runner_preflight_checks_github_auth_and_repo(monkeypatch, tmp_pat
     assert any(command[:3] == ["gh", "repo", "view"] for command in commands)
 
 
+def test_issue_runner_preflight_checks_auth_for_configured_github_host(monkeypatch, tmp_path):
+    from trackers import github as github_tracker
+    from workflows.issue_runner.preflight import run_preflight
+
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    commands = []
+    cfg = _github_config(repo_path)
+    cfg["repository"]["github-slug"] = "github.example.com/attmous/daedalus"
+
+    def fake_run_json(command, cwd=None):
+        commands.append(command)
+        assert cwd == repo_path
+        if command[:3] == ["gh", "auth", "status"]:
+            assert command[3:5] == ["--hostname", "github.example.com"]
+            return {
+                "hosts": {
+                    "github.example.com": [
+                        {"state": "success", "active": True, "login": "enterprise-user"}
+                    ]
+                }
+            }
+        if command[:3] == ["gh", "repo", "view"]:
+            assert command[3] == "github.example.com/attmous/daedalus"
+            return {"nameWithOwner": "attmous/daedalus"}
+        raise AssertionError(f"unexpected command: {command}")
+
+    monkeypatch.setattr(github_tracker, "_subprocess_run_json", fake_run_json)
+
+    result = run_preflight(cfg)
+
+    assert result.ok is True
+    assert any(command[:3] == ["gh", "auth", "status"] for command in commands)
+    assert any(command[:3] == ["gh", "repo", "view"] for command in commands)
+
+
 def test_issue_runner_preflight_rejects_github_state_shape(tmp_path):
     from workflows.issue_runner.preflight import run_preflight
 
@@ -111,4 +147,50 @@ def test_issue_runner_doctor_reports_github_auth_and_repo(monkeypatch, tmp_path)
     assert payload["ok"] is True
     assert checks["tracker"]["status"] == "pass"
     assert checks["github-auth"]["detail"] == "gh authenticated as attmous"
+    assert checks["github-repo"]["detail"] == "attmous/daedalus"
+
+
+def test_issue_runner_doctor_checks_auth_for_configured_github_host(monkeypatch, tmp_path):
+    from workflows.contract import render_workflow_markdown
+    from workflows.issue_runner.workspace import load_workspace_from_config
+
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    workflow_root = tmp_path / "wf"
+    workflow_root.mkdir()
+    cfg = _github_config(repo_path)
+    cfg["repository"]["github-slug"] = "github.example.com/attmous/daedalus"
+    (workflow_root / "WORKFLOW.md").write_text(
+        render_workflow_markdown(config=cfg, prompt_template="Issue: {{ issue.identifier }}"),
+        encoding="utf-8",
+    )
+
+    def fake_run_json(command, cwd=None):
+        assert cwd == repo_path
+        if command[:3] == ["gh", "auth", "status"]:
+            assert command[3:5] == ["--hostname", "github.example.com"]
+            return {
+                "hosts": {
+                    "github.example.com": [
+                        {"state": "success", "active": True, "login": "enterprise-user"}
+                    ]
+                }
+            }
+        if command[:3] == ["gh", "repo", "view"]:
+            assert command[3] == "github.example.com/attmous/daedalus"
+            return {"nameWithOwner": "attmous/daedalus"}
+        if command[:3] == ["gh", "issue", "list"]:
+            return []
+        raise AssertionError(f"unexpected command: {command}")
+
+    workspace = load_workspace_from_config(
+        workspace_root=workflow_root,
+        run_json=fake_run_json,
+    )
+
+    payload = workspace.doctor()
+    checks = {check["name"]: check for check in payload["checks"]}
+
+    assert payload["ok"] is True
+    assert checks["github-auth"]["detail"] == "gh authenticated as enterprise-user on github.example.com"
     assert checks["github-repo"]["detail"] == "attmous/daedalus"
