@@ -1,15 +1,15 @@
 # ADR-0002: Workflows contract + YAML config surface
 
 **Status:** Accepted (2026-04-24)
-**Supersedes:** ADR-0001 (adapters/<project>/ layout)
+**Supersedes:** the early `adapters/<project>/` layout
 
 ## Context
 
-The hermes-relay plugin initially hosted one adapter per project
-(`adapters/yoyopod_core/`). This conflated two concepts:
+The hermes-relay plugin initially hosted one adapter per project. This
+conflated two concepts:
 
 - **Workflow type** (Code-Review, Testing, Security-Review, ...) — the engine
-- **Workspace instance** (YoyoPod, future projects) — the runtime binding
+- **Workspace instance** (a specific repository/workflow root) — the runtime binding
 
 Operators also could not tune workflow behavior (coder model, reviewer model,
 gate policy, ...) without editing Python, and the partial JSON config that
@@ -61,7 +61,5 @@ Negative:
 
 ## References
 
-- Design spec:
-  `docs/superpowers/specs/2026-04-24-workflows-contract-and-code-review-design.md`
-- Implementation plan:
-  `docs/superpowers/plans/2026-04-24-workflows-contract-and-code-review.md`
+Historical implementation notes were removed from the public docs tree during
+the public-standard cleanup. This ADR is the retained decision record.

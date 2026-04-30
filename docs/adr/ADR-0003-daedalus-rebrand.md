@@ -1,7 +1,7 @@
 # ADR-0003: Daedalus rebrand
 
 **Status:** Accepted (2026-04-25)
-**Supersedes:** Project identity from ADR-0001 / ADR-0002 era ("hermes-relay")
+**Supersedes:** Project identity from the ADR-0002 era ("hermes-relay")
 
 ## Context
 
@@ -36,11 +36,10 @@ The rename is a single-sweep, no-backward-compat migration:
   WAL/SHM sidecars), `memory/relay-events.jsonl` →
   `memory/daedalus-events.jsonl`, `memory/hermes-relay-alert-state.json`
   → `memory/daedalus-alert-state.json`
-- Env vars: `HERMES_RELAY_WORKFLOW_ROOT` / `YOYOPOD_RELAY_WORKFLOW_ROOT`
-  → `DAEDALUS_WORKFLOW_ROOT`
-- Systemd: hardcoded `yoyopod-relay-{shadow,active}.service` → template
-  units `daedalus-{shadow,active}@<workspace>.service` (enables multiple
-  workspaces on one host)
+- Env vars: relay-era workflow-root variables → `DAEDALUS_WORKFLOW_ROOT`
+- Systemd: hardcoded project-specific relay units → template units
+  `daedalus-{shadow,active}@<workspace>.service` (enables multiple workspaces
+  on one host)
 - Internal Python identifiers: `RelayCommandError` →
   `DaedalusCommandError`, `init_relay_db` → `init_daedalus_db`,
   `append_relay_event` → `append_daedalus_event`,
@@ -85,6 +84,4 @@ Negative:
 
 ## References
 
-- Spec: `docs/superpowers/specs/2026-04-25-daedalus-rename-design.md`
-- Plan: `docs/superpowers/plans/2026-04-25-daedalus-rename.md`
 - Predecessor: `docs/adr/ADR-0002-workflows-contract.md`

@@ -9,6 +9,7 @@ Entry point for everything that won't fit on the [project landing page](../READM
 - **[workflows/README.md](workflows/README.md)** — the two bundled workflows, when to use each, and where their templates live.
 - **[public-contract.md](public-contract.md)** — the stability boundary for the first public release.
 - **[symphony-conformance.md](symphony-conformance.md)** — where Daedalus matches the current Symphony draft, and where it still differs.
+- **[harness-engineering.md](harness-engineering.md)** — repo-level checks that keep the public surface generic, GitHub-first, and template-safe.
 - **[security.md](security.md)** — the trust model, shell/network posture, and secret-handling expectations.
 
 ## Concepts
@@ -44,8 +45,6 @@ Day-2 commands and observability.
 ## History & decisions
 
 - [Architectural decision records](adr/) — the *why* behind structural choices
-- [Implementation specs](design/) — long-form design specs that became code
-- [Superpowers archive](superpowers/) — brainstorm specs + execution plans, one folder per feature
 
 ## How these docs are organized
 
@@ -55,6 +54,7 @@ docs/
 ├── architecture.md          big picture
 ├── public-contract.md       stable public surfaces for the first release
 ├── symphony-conformance.md  current spec alignment vs. remaining gaps
+├── harness-engineering.md   public-readiness checks and guardrails
 ├── security.md              trust model + execution posture
 │
 ├── concepts/                "what does X mean" — one file per abstraction
@@ -62,7 +62,5 @@ docs/
 ├── workflows/               bundled workflow-specific docs and templates
 ├── operator/                install + day-2 surface — cheat sheets, commands, endpoints
 │
-├── adr/                     architectural decisions (immutable record)
-├── design/                  implementation specs that shipped
-└── superpowers/             brainstorm specs + execution plans (history)
+└── adr/                     architectural decisions
 ```

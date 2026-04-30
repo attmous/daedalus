@@ -8,6 +8,7 @@ The default managed path is for the bundled `change-delivery` workflow, but
 
 - Linux
 - Hermes with plugin loading enabled
+- `gh` authenticated for GitHub-backed workflows
 - `python3` with `yaml` and `jsonschema` available
 - `systemd --user` for supervised active/shadow mode
 - the host CLIs required by the runtimes named in `WORKFLOW.md`
@@ -20,9 +21,10 @@ The bundled `change-delivery` template defaults to:
 If your host does not have those runtimes, edit `WORKFLOW.md` before starting the service.
 
 The bundled `issue-runner` template defaults to `tracker.kind: local-json` so
-it is runnable without an external tracker. If you want Symphony-style tracker
-operation, switch it to `tracker.kind: linear` and set the Linear fields in the
-repo-owned contract before running `service-up`.
+it is runnable without an external tracker. For first-class tracker operation,
+switch it to `tracker.kind: github` and keep `gh` authenticated in the repo
+checkout before running `service-up`. Linear exists as an experimental adapter,
+but it is deferred for the public GitHub-first path.
 
 ## Bundled workflows
 

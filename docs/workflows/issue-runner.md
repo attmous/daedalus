@@ -59,9 +59,9 @@ runtimes:
 
 Supported tracker kinds today:
 
-- `github`
-- `local-json`
-- `linear`
+- `github` — first-class public tracker path, backed by authenticated `gh`
+- `local-json` — local development and test fixture path
+- `linear` — experimental adapter, deferred until after the GitHub-first path is hardened
 
 `issue-runner` composes the shared `trackers/` clients with workflow-specific
 eligibility, ordering, retry, and workspace policy.
@@ -106,7 +106,7 @@ Then edit:
 - `WORKFLOW.md` or `WORKFLOW-issue-runner.md` in the repo checkout
 - nothing extra if you are using `tracker.kind: github` and the repo checkout already has `gh` auth
 - `config/issues.json` if you are using `tracker.kind: local-json`
-- `tracker.endpoint`, `tracker.api_key`, and `tracker.project_slug` if you are using `tracker.kind: linear`
+- `tracker.endpoint`, `tracker.api_key`, and `tracker.project_slug` only if you are deliberately testing the experimental Linear adapter
 
 Then bring it up:
 
@@ -131,7 +131,7 @@ tables.
 
 ## Current limitation
 
-- The Linear adapter follows the Symphony baseline query shape, but still needs real Linear integration smoke coverage before claiming production-grade Linear support.
+- Linear is experimental and deferred. GitHub is the supported public tracker path for this workflow.
 - Managed service mode is `active` only. `shadow` remains specific to `change-delivery`.
 - The bundled Codex app-server adapter supports managed stdio, warm external WebSocket transports, durable thread resume across ticks, and cooperative in-flight cancellation in the supervised `run` loop.
 - Cancellation is cooperative. Codex app-server turns are interrupted when Daedalus requests cancellation; command-style runtimes may only observe cancellation before they start or after they exit.
