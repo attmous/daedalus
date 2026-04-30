@@ -124,33 +124,99 @@ how to use it. See the full [WORKFLOW.md guide](docs/workflows/workflow-contract
 
 ## Bundled Workflows
 
+<div align="center">
+
+| | |
+|:---:|:---:|
+| **issue-runner** | **change-delivery** |
+| 🎯 | 🚀 |
+| `single-turn` | `full-lifecycle` |
+
+</div>
+
+---
+
 ### `issue-runner`
 
-![issue-runner workflow](assets/issue-runner-demo.gif)
+<div align="center">
 
-| Stage | Action |
-|---|---|
-| Select | Tracker query → issue filter → eligibility check |
-| Prepare | Workspace isolation → checkout → context assembly |
-| Dispatch | Runtime adapter → agent prompt → bounded execution |
-| Record | Result capture → state persistence → terminal cleanup |
+```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': { 'primaryColor': '#0B3D4C', 'primaryTextColor': '#22D3EE', 'primaryBorderColor': '#22D3EE', 'lineColor': '#22D3EE', 'secondaryColor': '#0F172A', 'tertiaryColor': '#1E293B'}}}%%
+flowchart LR
+    A[Tracker] -->|query| B[Filter]
+    B -->|eligible| C[Workspace]
+    C -->|isolate| D[Runtime]
+    D -->|dispatch| E[Agent]
+    E -->|result| F[State]
+    F -->|cleanup| G[Done]
+    style A fill:#0B3D4C,stroke:#22D3EE,color:#22D3EE
+    style B fill:#0B3D4C,stroke:#22D3EE,color:#22D3EE
+    style C fill:#0B3D4C,stroke:#22D3EE,color:#22D3EE
+    style D fill:#0B3D4C,stroke:#22D3EE,color:#22D3EE
+    style E fill:#0B3D4C,stroke:#22D3EE,color:#22D3EE
+    style F fill:#0B3D4C,stroke:#22D3EE,color:#22D3EE
+    style G fill:#0B3D4C,stroke:#22D3EE,color:#22D3EE
+```
 
-Single-turn execution. No review gates, no PR lifecycle. Symphony-compatible surface.
+</div>
+
+| Stage | Action | Guarantees |
+|---|---|---|
+| Select | Tracker query → issue filter → eligibility check | Label-scoped, state-aware |
+| Prepare | Workspace isolation → checkout → context assembly | Clean tree, no cross-contamination |
+| Dispatch | Runtime adapter → agent prompt → bounded execution | Timeout, token limit, retry bound |
+| Record | Result capture → state persistence → terminal cleanup | JSONL audit, workspace teardown |
+
+**Surface:** Symphony-compatible. **State:** JSON/JSONL. **Gates:** None.
 
 ---
 
 ### `change-delivery`
 
-![change-delivery workflow](assets/change-delivery-demo.gif)
+<div align="center">
 
-| Stage | Action |
-|---|---|
-| Select | GitHub issue → label filter → lane assignment |
-| Implement | Agent dispatch → code generation → internal review |
-| Publish | PR creation → CI gate → external review |
-| Merge | Approval check → merge commit → promotion hook |
+```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': { 'primaryColor': '#4C1D0B', 'primaryTextColor': '#FB923C', 'primaryBorderColor': '#FB923C', 'lineColor': '#FB923C', 'secondaryColor': '#0F172A', 'tertiaryColor': '#1E293B'}}}%%
+flowchart LR
+    A[Issue] -->|select| B[Lane]
+    B -->|assign| C[Implement]
+    C -->|review| D[PR]
+    D -->|gate| E[Merge]
+    E -->|hook| F[Promote]
+    style A fill:#4C1D0B,stroke:#FB923C,color:#FB923C
+    style B fill:#4C1D0B,stroke:#FB923C,color:#FB923C
+    style C fill:#4C1D0B,stroke:#FB923C,color:#FB923C
+    style D fill:#4C1D0B,stroke:#FB923C,color:#FB923C
+    style E fill:#4C1D0B,stroke:#FB923C,color:#FB923C
+    style F fill:#4C1D0B,stroke:#FB923C,color:#FB923C
+```
 
-Full SDLC lifecycle. SQLite-backed state. Leases, idempotency, review gates, merge promotion.
+</div>
+
+| Stage | Action | Guarantees |
+|---|---|---|
+| Select | GitHub issue → label filter → lane assignment | SQLite lease, exactly-once |
+| Implement | Agent dispatch → code generation → internal review | Actor isolation, thread mapping |
+| Publish | PR creation → CI gate → external review | Idempotent push, status linkback |
+| Merge | Approval check → merge commit → promotion hook | Branch protection, cleanup hook |
+
+**Surface:** SDLC-native. **State:** SQLite + JSONL. **Gates:** Internal review, external review, CI, approval.
+
+---
+
+<div align="center">
+
+| Capability | issue-runner | change-delivery |
+|---|---|:---:|
+| Stateful retries | JSON queue | ✅ SQLite queue |
+| Lease isolation | ❌ | ✅ |
+| Review gates | ❌ | ✅ Internal + External |
+| PR lifecycle | ❌ | ✅ Full |
+| Merge promotion | ❌ | ✅ |
+| Symphony compat | ✅ | Partial |
+| Runtime adapters | All | All |
+
+</div>
 
 ## Supported Surfaces
 
