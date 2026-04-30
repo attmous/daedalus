@@ -27,6 +27,8 @@ The harness tests should catch these regressions before review:
   detailed operator docs
 - Codex app-server tests must cover fake protocol behavior in CI and keep the
   real app-server smoke opt-in
+- Issue-runner cleanup tests must prove `before_remove` runs before terminal
+  workspaces are deleted
 
 ## Next Checks
 
@@ -35,7 +37,7 @@ Add tests for the next hardening slice in this order:
 1. CLI/docs drift checks for every command shown in the install guide.
 2. End-to-end `change-delivery` Codex app-server smoke around a real active
    lane, PR update, and review loop.
-3. External WebSocket auth smoke using a local token-protected listener.
+3. Live GitHub recovery coverage for labels, comments, and failure replay.
 
 ## Live GitHub Smoke
 

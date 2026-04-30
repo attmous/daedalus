@@ -15,8 +15,8 @@ pytest tests/test_runtimes_codex_app_server.py \
 ```
 
 This verifies JSON-RPC start/resume, WebSocket reuse, cancellation,
-read/stall timeout behavior, token/rate-limit mapping, and workflow scheduler
-thread persistence.
+read/stall timeout behavior, token/rate-limit mapping, external WebSocket auth,
+malformed protocol failures, and workflow scheduler thread persistence.
 
 ## Real Local Smoke
 

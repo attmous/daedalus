@@ -207,10 +207,12 @@ def test_issue_runner_tick_runs_selected_issue_and_writes_artifacts(tmp_path):
     stale_terminal_workspace = workflow_root / "workspace" / "issues" / "ISSUE-2"
     stale_terminal_workspace.mkdir(parents=True)
     (stale_terminal_workspace / "stale.txt").write_text("stale\n", encoding="utf-8")
+    hook_calls = []
 
     def fake_run(command, *, cwd=None, timeout=None, env=None):
         if command[:2] == ["bash", "-lc"] and cwd is not None:
             script = command[2]
+            hook_calls.append({"script": script, "cwd": Path(cwd), "env": dict(env or {})})
             if "created.txt" in script:
                 (cwd / "created.txt").write_text("created\n", encoding="utf-8")
             if "before.txt" in script:
@@ -250,6 +252,10 @@ def test_issue_runner_tick_runs_selected_issue_and_writes_artifacts(tmp_path):
     assert (issue_workspace / "created.txt").exists()
     assert (issue_workspace / "before.txt").exists()
     assert (issue_workspace / "after.txt").exists()
+    before_remove_calls = [call for call in hook_calls if "removing.txt" in call["script"]]
+    assert len(before_remove_calls) == 1
+    assert before_remove_calls[0]["cwd"] == stale_terminal_workspace
+    assert before_remove_calls[0]["env"]["ISSUE_ID"] == "ISSUE-2"
     assert not (workflow_root / "workspace" / "issues" / "ISSUE-2").exists()
     status = workspace.build_status()
     assert status["selectedIssue"]["id"] == "ISSUE-1"

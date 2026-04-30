@@ -216,9 +216,11 @@ def _write_fake_cancellable_app_server(path: Path, requests_path: Path) -> None:
 
 
 class _FakeWebSocketAppServer:
-    def __init__(self):
+    def __init__(self, *, required_auth_token: str | None = None):
         self.requests: list[dict] = []
+        self.websocket_authorizations: list[str | None] = []
         self.websocket_connections = 0
+        self.required_auth_token = required_auth_token
         self._stop = threading.Event()
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -260,6 +262,11 @@ class _FakeWebSocketAppServer:
                 return
             if headers.get("upgrade", "").lower() != "websocket":
                 conn.sendall(b"HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n")
+                return
+            authorization = headers.get("authorization")
+            self.websocket_authorizations.append(authorization)
+            if self.required_auth_token and authorization != f"Bearer {self.required_auth_token}":
+                conn.sendall(b"HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\n\r\n")
                 return
             self.websocket_connections += 1
             key = headers["sec-websocket-key"]
@@ -809,6 +816,41 @@ def test_codex_app_server_runtime_connects_to_external_websocket(tmp_path):
         "type": "workspaceWrite",
         "writableRoots": [str(tmp_path)],
     }
+
+
+def test_codex_app_server_runtime_sends_external_websocket_auth_token(tmp_path):
+    from runtimes.codex_app_server import CodexAppServerRuntime
+
+    with _FakeWebSocketAppServer(required_auth_token="secret-token") as server:
+        runtime = CodexAppServerRuntime(
+            {
+                "mode": "external",
+                "endpoint": server.endpoint,
+                "approval_policy": "never",
+                "ws_token": "secret-token",
+                "turn_timeout_ms": 5000,
+                "read_timeout_ms": 1000,
+                "stall_timeout_ms": 5000,
+            },
+            run=None,
+        )
+
+        result = runtime.run_prompt_result(
+            worktree=tmp_path,
+            session_name="ISSUE-AUTH",
+            prompt="Do the thing",
+            model="gpt-5.5",
+        )
+
+    assert result.output == "ws ok\n"
+    assert result.thread_id == "thread-ws"
+    assert server.websocket_authorizations == ["Bearer secret-token"]
+    assert [item.get("method") for item in server.requests] == [
+        "initialize",
+        "initialized",
+        "thread/start",
+        "turn/start",
+    ]
 
 
 def test_codex_app_server_runtime_reuses_external_websocket_by_default(tmp_path):
