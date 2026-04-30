@@ -66,7 +66,7 @@ hermes
 
 Inside Hermes Agent:
 
-```text
+```bash
 # Daedalus engine and service commands
 /daedalus status          # show runtime state, workflow root, and important paths
 /daedalus doctor          # run health checks across config, service, state, and integrations
