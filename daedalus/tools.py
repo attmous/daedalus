@@ -21,7 +21,7 @@ from workflows.contract import (
     workflow_yaml_path as legacy_workflow_config_path,
     workflow_markdown_path,
 )
-from workflows.code_review.paths import (
+from workflows.shared.paths import (
     derive_workflow_instance_name,
     plugin_runtime_path,
     project_key_for_workflow_root,
@@ -29,7 +29,7 @@ from workflows.code_review.paths import (
     resolve_default_workflow_root as resolve_workflow_root_default,
     workflow_cli_argv,
 )
-from workflows.code_review.status import build_status as build_workflow_status
+from workflows.change_delivery.status import build_status as build_workflow_status
 
 PLUGIN_DIR = Path(__file__).resolve().parent
 DEFAULT_WORKFLOW_ROOT_ENV_VARS = ("DAEDALUS_WORKFLOW_ROOT",)
@@ -1139,7 +1139,8 @@ def _lazy_cmd_watch(args, parser):
 
 def _workflow_template_path(workflow_name: str) -> Path:
     templates = {
-        "code-review": PLUGIN_DIR / "workflows" / "code_review" / "workflow.template.md",
+        "change-delivery": PLUGIN_DIR / "workflows" / "change_delivery" / "workflow.template.md",
+        "issue-runner": PLUGIN_DIR / "workflows" / "issue_runner" / "workflow.template.md",
     }
     path = templates.get(workflow_name)
     if path is None:
@@ -1239,6 +1240,11 @@ def bootstrap_workflow_root(
     pointer_path = repo_local_workflow_pointer_path(repo_root)
     pointer_path.parent.mkdir(parents=True, exist_ok=True)
     pointer_path.write_text(str(resolved_workflow_root) + "\n", encoding="utf-8")
+    if workflow_name == "change-delivery":
+        next_command = "hermes daedalus service-up"
+    else:
+        next_command = f"python3 {PLUGIN_DIR / 'workflows' / '__main__.py'} --workflow-root {resolved_workflow_root} tick"
+
     result.update(
         {
             "bootstrap": True,
@@ -1246,7 +1252,7 @@ def bootstrap_workflow_root(
             "remote_url": remote_url,
             "repo_pointer_path": str(pointer_path),
             "next_edit_path": result["contract_path"],
-            "next_command": "hermes daedalus service-up",
+            "next_command": next_command,
         }
     )
     return result
@@ -1334,6 +1340,10 @@ def scaffold_workflow_root(
         render_workflow_markdown(config=config, prompt_template=workflow_policy),
         encoding="utf-8",
     )
+    if workflow_name == "issue-runner":
+        issues_template = PLUGIN_DIR / "workflows" / "issue_runner" / "issues.template.json"
+        issues_path = root / "config" / "issues.json"
+        issues_path.write_text(issues_template.read_text(encoding="utf-8"), encoding="utf-8")
     if force and legacy_config_path.exists():
         legacy_config_path.unlink()
     return {
@@ -1519,9 +1529,9 @@ def cmd_set_observability(args, parser) -> str:
 def cmd_get_observability(args, parser) -> str:
     """``/daedalus get-observability --workflow X``: show effective config + source."""
     try:
-        from workflows.code_review.observability import resolve_effective_config
+        from workflows.change_delivery.observability import resolve_effective_config
     except ImportError:
-        path = PLUGIN_DIR / "workflows" / "code_review" / "observability.py"
+        path = PLUGIN_DIR / "workflows" / "change_delivery" / "observability.py"
         spec = importlib.util.spec_from_file_location("daedalus_observability_for_cli", path)
         if spec is None or spec.loader is None:
             raise DaedalusCommandError(f"unable to load observability resolver from {path}")
@@ -1818,7 +1828,7 @@ def configure_subcommands(parser: argparse.ArgumentParser) -> argparse.ArgumentP
         help="Override observability config for a workflow (writes runtime override file).",
     )
     set_obs_cmd.add_argument("--workflow-root", type=Path, default=default_workflow_root_path)
-    set_obs_cmd.add_argument("--workflow", required=True, help="Workflow name (e.g. code-review)")
+    set_obs_cmd.add_argument("--workflow", required=True, help="Workflow name (e.g. change-delivery)")
     set_obs_cmd.add_argument("--github-comments", choices=["on", "off", "unset"], required=True)
     set_obs_cmd.set_defaults(handler=cmd_set_observability, func=run_cli_command)
 
@@ -1840,7 +1850,7 @@ def configure_subcommands(parser: argparse.ArgumentParser) -> argparse.ArgumentP
         required=True,
         help="Workflow root to create. Directory name must be <owner>-<repo>-<workflow-type>.",
     )
-    scaffold_cmd.add_argument("--workflow", default="code-review", choices=["code-review"])
+    scaffold_cmd.add_argument("--workflow", default="change-delivery", choices=["change-delivery", "issue-runner"])
     scaffold_cmd.add_argument("--repo-path", type=Path)
     scaffold_cmd.add_argument("--github-slug", required=True)
     scaffold_cmd.add_argument("--active-lane-label", default="active-lane")
@@ -1855,7 +1865,7 @@ def configure_subcommands(parser: argparse.ArgumentParser) -> argparse.ArgumentP
     )
     bootstrap_cmd.add_argument("--repo-path", type=Path, help="Git checkout to inspect (defaults to current working directory).")
     bootstrap_cmd.add_argument("--workflow-root", type=Path, help="Optional explicit workflow root override.")
-    bootstrap_cmd.add_argument("--workflow", default="code-review", choices=["code-review"])
+    bootstrap_cmd.add_argument("--workflow", default="change-delivery", choices=["change-delivery"])
     bootstrap_cmd.add_argument("--github-slug", help="Override the inferred GitHub slug from git origin.")
     bootstrap_cmd.add_argument("--active-lane-label", default="active-lane")
     bootstrap_cmd.add_argument("--engine-owner", default="hermes", choices=["hermes", "openclaw"])

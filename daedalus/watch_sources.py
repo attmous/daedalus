@@ -20,13 +20,13 @@ from typing import Any
 
 # Sibling-import boilerplate.
 try:
-    from workflows.code_review.paths import runtime_paths
+    from workflows.shared.paths import runtime_paths
 except ImportError:
     import importlib.util as _ilu
     _here = Path(__file__).resolve().parent
     _spec = _ilu.spec_from_file_location(
-        "daedalus_workflows_code_review_paths_for_watch",
-        _here / "workflows" / "code_review" / "paths.py",
+        "daedalus_workflows_shared_paths_for_watch",
+        _here / "workflows" / "shared" / "paths.py",
     )
     _mod = _ilu.module_from_spec(_spec)
     _spec.loader.exec_module(_mod)

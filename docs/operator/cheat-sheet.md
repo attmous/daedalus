@@ -3,6 +3,7 @@
 > **When confused, trust GitHub + live derived status first, Daedalus DB second, stale ledger prose last.**
 
 This doc is for the 3am debugging session. Everything here is copy-paste ready.
+It is specifically written for the opinionated `change-delivery` workflow.
 
 ---
 
@@ -357,7 +358,7 @@ python3 ~/.hermes/plugins/daedalus/workflows/__main__.py \
 
 ### Force a comment sync
 ```bash
-/daedalus set-observability --workflow code-review --github-comments on
+/daedalus set-observability --workflow change-delivery --github-comments on
 # Then trigger any action; the comment will update on the next tick.
 ```
 
@@ -379,7 +380,7 @@ touch ~/.hermes/workflows/<owner>-<repo>-<workflow-type>/WORKFLOW.md
 
 ### Show effective config (merged layers)
 ```bash
-/daedalus get-observability --workflow code-review
+/daedalus get-observability --workflow change-delivery
 ```
 
 ---

@@ -7,6 +7,9 @@ For the operator playbook ("when something looks wrong, do X"), see
 `docs/operator/cheat-sheet.md`. This file is a flat catalog: every command,
 grouped by purpose, with a one-line description.
 
+Workflow-specific commands are grouped by workflow below. Do not assume every
+workflow exposes the richer `change-delivery` command surface.
+
 ## `/daedalus` — engine + service control
 
 ### Inspection (read-only)
@@ -184,45 +187,56 @@ Daedalus service
 || `/workflow <name>` | Show that workflow's `--help` |
 || `/workflow <name> <cmd> [args]` | Route to that workflow's CLI |
 
-### `code-review` workflow shortcuts (the common ones)
+### `change-delivery` workflow shortcuts (the common ones)
+
+This is the opinionated managed SDLC workflow.
 
 || Command | What it does |
 |---|---|---|
-|| `/workflow code-review status` | Lane state + `nextAction` |
-|| `/workflow code-review tick` | One workflow tick |
-|| `/workflow code-review show-active-lane` | Current active GitHub issue |
-|| `/workflow code-review show-lane-state` | `.lane-state.json` contents |
-|| `/workflow code-review show-lane-memo` | `.lane-memo.md` contents |
-|| `/workflow code-review dispatch-implementation-turn` | Force a coder turn |
-|| `/workflow code-review dispatch-claude-review` | Force an internal Claude review |
-|| `/workflow code-review publish-ready-pr` | Force PR publish |
-|| `/workflow code-review merge-and-promote` | Force merge + promote next lane |
-|| `/workflow code-review reconcile` | Repair stale ledger state |
-|| `/workflow code-review pause` | Disable lane processing |
-|| `/workflow code-review resume` | Re-enable |
+|| `/workflow change-delivery status` | Lane state + `nextAction` |
+|| `/workflow change-delivery tick` | One workflow tick |
+|| `/workflow change-delivery show-active-lane` | Current active GitHub issue |
+|| `/workflow change-delivery show-lane-state` | `.lane-state.json` contents |
+|| `/workflow change-delivery show-lane-memo` | `.lane-memo.md` contents |
+|| `/workflow change-delivery dispatch-implementation-turn` | Force a coder turn |
+|| `/workflow change-delivery dispatch-claude-review` | Force an internal Claude review |
+|| `/workflow change-delivery publish-ready-pr` | Force PR publish |
+|| `/workflow change-delivery merge-and-promote` | Force merge + promote next lane |
+|| `/workflow change-delivery reconcile` | Repair stale ledger state |
+|| `/workflow change-delivery pause` | Disable lane processing |
+|| `/workflow change-delivery resume` | Re-enable |
+
+### `issue-runner` workflow shortcuts
+
+This is the bundled generic tracker-driven workflow.
+
+|| Command | What it does |
+|---|---|---|
+|| `/workflow issue-runner status` | Selected issue + last run summary |
+|| `/workflow issue-runner doctor` | Validate tracker, workspace, and runtime references |
+|| `/workflow issue-runner tick` | Run one issue-runner dispatch tick |
 
 ### Webhook commands
 
 || Command | What it does |
 |---|---|---|
-|| `/workflow code-review webhooks status` | Show configured webhook subscribers |
-|| `/workflow code-review webhooks test` | Fire a test event to all webhooks |
+|| `/workflow change-delivery webhooks status` | Show configured webhook subscribers |
+|| `/workflow change-delivery webhooks test` | Fire a test event to all webhooks |
 
 ### Comments commands
 
 || Command | What it does |
 |---|---|---|
-|| `/workflow code-review comments status` | Show comment publisher state |
-|| `/workflow code-review comments sync` | Force a comment sync for current lane |
+|| `/workflow change-delivery comments status` | Show comment publisher state |
+|| `/workflow change-delivery comments sync` | Force a comment sync for current lane |
 
 ## Most useful day-to-day, in order
 
 1. `/daedalus watch` — live overview of every active lane in one frame
-2. `/workflow code-review status` — current lane + next action
-3. `/daedalus doctor` — overall health
-4. `/workflow code-review show-active-lane` — what GitHub thinks
-5. `/daedalus service-logs` — last 50 journal entries from the active service
-5. `/workflow code-review tick` — manually fire a tick when impatient
+2. `/daedalus doctor` — overall health
+3. `/workflow <name> status` — workflow-specific current state
+4. `/daedalus service-logs` — last 50 journal entries from the active service
+5. `/workflow change-delivery tick` or `/workflow issue-runner tick` — manually fire a tick when impatient
 
 ## Notes
 
