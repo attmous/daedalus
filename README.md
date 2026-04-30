@@ -1,6 +1,6 @@
 # Daedalus
 
-**GitHub-first SDLC automation engine for Hermes Agent.**
+**Durable SDLC automation engine for Hermes Agent.**
 
 Daedalus is a stateful workflow runtime for agent-driven software delivery. It
 turns tracker issues into supervised agent work, records durable state, retries
@@ -41,12 +41,12 @@ workflow package owns its own policy, schema, prompts, gates, and commands.
 
 | Workflow | Purpose | Best fit |
 |---|---|---|
-| `change-delivery` | GitHub issue -> code -> internal review -> PR -> external review -> merge | Opinionated SDLC automation with review and merge gates |
 | `issue-runner` | tracker issue -> isolated workspace -> hooks -> prompt -> one agent run | Generic Symphony-shaped issue execution |
+| `change-delivery` | GitHub-backed issue -> code -> internal review -> PR -> external review -> merge | Opinionated SDLC automation with review and merge gates |
 
-`change-delivery` is the default public bootstrap path. `issue-runner` is the
-cleaner reference workflow for generic tracker-driven automation and future
-Symphony compatibility.
+`issue-runner` is the default public bootstrap path and the cleaner reference
+workflow for generic tracker-driven automation and future Symphony
+compatibility. `change-delivery` is the richer GitHub-backed SDLC workflow.
 
 ## Control Loop
 
@@ -107,13 +107,13 @@ hermes daedalus service-up
 hermes
 ```
 
-Use the generic workflow instead:
+Use the opinionated change-delivery workflow instead:
 
 ```bash
-hermes daedalus bootstrap --workflow issue-runner
+hermes daedalus bootstrap --workflow change-delivery
 ```
 
-`bootstrap` detects the repo, derives the GitHub slug, creates the workflow
+`bootstrap` detects the repo, derives the repo slug, creates the workflow
 root, writes the repo-owned workflow contract, commits it on a bootstrap branch,
 and writes `./.hermes/daedalus/workflow-root` so later commands can resolve the
 instance from the repo checkout.
