@@ -10,6 +10,11 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+from engine.audit import make_audit_fn as _engine_make_audit_fn
+from engine.storage import append_jsonl as _append_jsonl
+from engine.storage import load_optional_json as _load_optional_json
+from engine.storage import write_json_atomic as _write_json
+from engine.storage import write_text_atomic as _write_text
 from workflows.change_delivery.migrations import get_ledger_field
 from workflows.change_delivery.runtimes import build_runtimes
 
@@ -189,35 +194,6 @@ def _load_yaml(path: Path) -> dict[str, Any]:
     return data
 
 
-def _write_json(path: Path, payload: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    tmp.replace(path)
-
-
-def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(payload, sort_keys=True) + "\n")
-
-
-def _load_optional_json(path: Path | None) -> dict[str, Any] | None:
-    if path is None or not path.exists():
-        return None
-    try:
-        return _load_json(path)
-    except Exception:
-        return None
-
-
-def _write_text(path: Path, content: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(content, encoding="utf-8")
-    tmp.replace(path)
-
-
 def _now_ms() -> int:
     return int(time.time() * 1000)
 
@@ -328,24 +304,11 @@ def _make_audit_fn(
          after the write. Publisher exceptions are swallowed — observability
          must never break workflow execution.
     """
-    def audit(action, summary, **extra):
-        _append_jsonl(
-            audit_log_path,
-            {
-                "at": _now_iso(),
-                "action": action,
-                "summary": summary,
-                **extra,
-            },
-        )
-        if publisher is not None:
-            try:
-                publisher(action=action, summary=summary, extra=dict(extra))
-            except Exception:
-                # Best-effort observability hook; never raise into the caller.
-                pass
-
-    return audit
+    return _engine_make_audit_fn(
+        audit_log_path=Path(audit_log_path),
+        now_iso=_now_iso,
+        publisher=publisher,
+    )
 
 
 def _make_comment_publisher(

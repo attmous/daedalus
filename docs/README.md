@@ -25,6 +25,7 @@ What each abstraction *means* — read these before reading code.
 
 | | |
 |---|---|
+| [Engine](concepts/engine.md) | Shared durable mechanics: tick, service loop, state stores, scheduler, audit, SQLite. |
 | [Lanes](concepts/lanes.md) | The unit of work. State machine, lifecycle, terminal states. |
 | [Leases & heartbeats](concepts/leases.md) | How a single owner stays responsible for a lane. |
 | [Runtimes](concepts/runtimes.md) | The shared execution backends: `claude-cli`, `acpx-codex`, `hermes-agent`, `codex-app-server`. |

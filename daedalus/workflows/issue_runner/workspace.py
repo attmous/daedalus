@@ -15,6 +15,18 @@ import yaml
 from jsonschema import Draft7Validator
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 
+from engine.scheduler import (
+    build_scheduler_payload,
+    codex_threads_snapshot,
+    restore_scheduler_state,
+    retry_due_at,
+    retry_queue_snapshot,
+    running_snapshot,
+)
+from engine.driver import WorkflowDriver
+from engine.storage import append_jsonl as _append_jsonl
+from engine.storage import load_optional_json as _load_optional_json
+from engine.storage import write_json_atomic as _write_json
 from runtimes import PromptRunResult, Runtime, build_runtimes
 from workflows.contract import WORKFLOW_POLICY_KEY, WorkflowContractError, load_workflow_contract
 from workflows.shared.config_snapshot import AtomicRef, ConfigSnapshot
@@ -84,29 +96,6 @@ def _tracker_config_for_client(config: dict[str, Any]) -> dict[str, Any]:
     return tracker_cfg
 
 
-def _write_json(path: Path, payload: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    tmp.replace(path)
-
-
-def _load_optional_json(path: Path | None) -> dict[str, Any] | None:
-    if path is None or not path.exists():
-        return None
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return None
-    return payload if isinstance(payload, dict) else None
-
-
-def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(payload, sort_keys=True) + "\n")
-
-
 def _schema_path() -> Path:
     return Path(__file__).with_name("schema.yaml")
 
@@ -142,17 +131,6 @@ def _assert_workspace_inside_root(workspace_root: Path, issue_workspace: Path) -
     resolved = issue_workspace.expanduser().resolve()
     if resolved == root or not _is_relative_to(resolved, root):
         raise RuntimeError(f"invalid workspace path: {resolved} is not a child of {root}")
-
-
-def _retry_due_at(entry: dict[str, Any] | None, *, default: float | None = None) -> float:
-    payload = entry or {}
-    if payload.get("due_at_monotonic") is not None:
-        return float(payload.get("due_at_monotonic") or 0.0)
-    if payload.get("due_at_epoch") is not None:
-        return float(payload.get("due_at_epoch") or 0.0)
-    if payload.get("dueAtEpoch") is not None:
-        return float(payload.get("dueAtEpoch") or 0.0)
-    return float(default or _now_epoch())
 
 
 def _render_prompt(*, prompt_template: str, issue: dict[str, Any], attempt: int | None) -> str:
@@ -292,7 +270,7 @@ def _scheduler_state_from_config(config: dict[str, Any]) -> dict[str, Any]:
 
 
 @dataclass
-class IssueRunnerWorkspace:
+class IssueRunnerWorkspace(WorkflowDriver):
     path: Path
     config: dict[str, Any]
     snapshot_ref: AtomicRef[ConfigSnapshot]
@@ -511,72 +489,29 @@ class IssueRunnerWorkspace:
     def _persist_scheduler_state(self) -> None:
         _write_json(
             self.scheduler_path,
-            {
-                "workflow": "issue-runner",
-                "updatedAt": _now_iso(),
-                "retry_queue": self._retry_queue_snapshot(),
-                "running": self._running_snapshot(),
-                "codex_totals": dict(self.codex_totals or {}),
-                "codex_threads": self._codex_threads_snapshot(),
-            },
+            build_scheduler_payload(
+                workflow="issue-runner",
+                retry_entries=self.retry_entries,
+                running_entries=self.running_entries,
+                codex_totals=self.codex_totals,
+                codex_threads=self.codex_threads,
+                now_iso=_now_iso(),
+                now_epoch=_now_epoch(),
+            ),
         )
 
     def _restore_scheduler_state(self) -> None:
         payload = self._load_scheduler_state()
-        retry_entries: dict[str, dict[str, Any]] = {}
-        for item in payload.get("retry_queue") or payload.get("retryQueue") or []:
-            if not isinstance(item, dict):
-                continue
-            issue_id = str(item.get("issue_id") or item.get("issueId") or "").strip()
-            if not issue_id:
-                continue
-            retry_entries[issue_id] = {
-                "issue_id": issue_id,
-                "identifier": item.get("identifier"),
-                "attempt": int(item.get("attempt") or 0),
-                "error": item.get("error"),
-                "due_at_epoch": float(item.get("due_at_epoch") or item.get("dueAtEpoch") or _now_epoch()),
-                "current_attempt": item.get("current_attempt") or item.get("currentAttempt"),
-            }
-
-        running_entries: dict[str, dict[str, Any]] = {}
-        recovered_running: list[dict[str, Any]] = []
-        for item in payload.get("running") or []:
-            if not isinstance(item, dict):
-                continue
-            issue_id = str(item.get("issue_id") or item.get("issueId") or "").strip()
-            if not issue_id:
-                continue
-            entry = {
-                "issue_id": issue_id,
-                "worker_id": item.get("worker_id") or item.get("workerId") or f"worker:{issue_id}:recovered",
-                "identifier": item.get("identifier"),
-                "attempt": int(item.get("attempt") or 0),
-                "state": item.get("state"),
-                "worker_status": item.get("worker_status") or item.get("workerStatus") or "recovered",
-                "started_at_epoch": float(item.get("started_at_epoch") or item.get("startedAtEpoch") or _now_epoch()),
-                "heartbeat_at_epoch": float(
-                    item.get("heartbeat_at_epoch")
-                    or item.get("heartbeatAtEpoch")
-                    or item.get("started_at_epoch")
-                    or item.get("startedAtEpoch")
-                    or _now_epoch()
-                ),
-                "cancel_requested": bool(item.get("cancel_requested") or item.get("cancelRequested") or False),
-                "cancel_reason": item.get("cancel_reason") or item.get("cancelReason"),
-            }
-            running_entries[issue_id] = entry
-            recovered_running.append(entry)
-
-        self.retry_entries = retry_entries
+        restored = restore_scheduler_state(payload, now_epoch=_now_epoch())
+        self.retry_entries = restored.retry_entries
         self.running_entries = {}
-        self.codex_totals = dict(payload.get("codex_totals") or payload.get("codexTotals") or {})
-        self.codex_threads = self._restore_codex_threads(payload.get("codex_threads") or {})
+        self.codex_totals = dict(restored.codex_totals)
+        self.codex_threads = restored.codex_threads
         self.running_issue_id = None
 
-        if recovered_running:
+        if restored.recovered_running:
             now_epoch = _now_epoch()
-            for entry in recovered_running:
+            for entry in restored.recovered_running:
                 issue_id = str(entry.get("issue_id") or "")
                 existing = self.retry_entries.get(issue_id) or {}
                 self.retry_entries[issue_id] = {
@@ -590,76 +525,13 @@ class IssueRunnerWorkspace:
             self._persist_scheduler_state()
 
     def _running_snapshot(self) -> list[dict[str, Any]]:
-        now_epoch = _now_epoch()
-        running = []
-        for issue_id, entry in self.running_entries.items():
-            started_at_epoch = float(entry.get("started_at_epoch") or now_epoch)
-            heartbeat_at_epoch = float(entry.get("heartbeat_at_epoch") or started_at_epoch)
-            running.append(
-                {
-                    "issue_id": issue_id,
-                    "worker_id": entry.get("worker_id"),
-                    "identifier": entry.get("identifier"),
-                    "attempt": int(entry.get("attempt") or 0),
-                    "state": entry.get("state"),
-                    "worker_status": entry.get("worker_status") or "running",
-                    "started_at_epoch": started_at_epoch,
-                    "heartbeat_at_epoch": heartbeat_at_epoch,
-                    "running_for_ms": max(int((now_epoch - started_at_epoch) * 1000), 0),
-                    "heartbeat_age_ms": max(int((now_epoch - heartbeat_at_epoch) * 1000), 0),
-                    "cancel_requested": bool(entry.get("cancel_requested") or False),
-                    "cancel_reason": entry.get("cancel_reason"),
-                    "thread_id": entry.get("thread_id"),
-                    "turn_id": entry.get("turn_id"),
-                }
-            )
-        running.sort(key=lambda item: (item["state"] or "", item["identifier"] or item["issue_id"]))
-        return running
+        return running_snapshot(self.running_entries, now_epoch=_now_epoch())
 
     def _retry_queue_snapshot(self) -> list[dict[str, Any]]:
-        now_epoch = _now_epoch()
-        entries = []
-        for issue_id, entry in self.retry_entries.items():
-            due_at = _retry_due_at(entry, default=now_epoch)
-            entries.append(
-                {
-                    "issue_id": issue_id,
-                    "identifier": entry.get("identifier"),
-                    "attempt": int(entry.get("attempt") or 0),
-                    "error": entry.get("error"),
-                    "due_at_epoch": due_at,
-                    "due_in_ms": max(int((due_at - now_epoch) * 1000), 0),
-                }
-            )
-        entries.sort(key=lambda item: (item["due_in_ms"], item["attempt"], item["identifier"] or item["issue_id"]))
-        return entries
-
-    def _restore_codex_threads(self, raw: Any) -> dict[str, dict[str, Any]]:
-        if not isinstance(raw, dict):
-            return {}
-        restored: dict[str, dict[str, Any]] = {}
-        for issue_id, item in raw.items():
-            if not isinstance(item, dict):
-                continue
-            normalized_issue_id = str(item.get("issue_id") or issue_id or "").strip()
-            thread_id = str(item.get("thread_id") or "").strip()
-            if not normalized_issue_id or not thread_id:
-                continue
-            restored[normalized_issue_id] = {
-                "issue_id": normalized_issue_id,
-                "identifier": item.get("identifier"),
-                "session_name": item.get("session_name"),
-                "thread_id": thread_id,
-                "turn_id": item.get("turn_id"),
-                "updated_at": item.get("updated_at"),
-            }
-        return restored
+        return retry_queue_snapshot(self.retry_entries, now_epoch=_now_epoch())
 
     def _codex_threads_snapshot(self) -> dict[str, dict[str, Any]]:
-        return {
-            issue_id: dict(entry)
-            for issue_id, entry in sorted(self.codex_threads.items(), key=lambda item: item[0])
-        }
+        return codex_threads_snapshot(self.codex_threads)
 
     def _codex_thread_for_issue(self, issue: dict[str, Any]) -> str | None:
         issue_id = str(issue.get("id") or "").strip()
@@ -698,13 +570,13 @@ class IssueRunnerWorkspace:
         due_entries = sorted(
             self.retry_entries.items(),
             key=lambda item: (
-                _retry_due_at(item[1], default=0.0),
+                retry_due_at(item[1], default=0.0),
                 int((item[1] or {}).get("attempt") or 0),
                 str((item[1] or {}).get("identifier") or item[0]),
             ),
         )
         for issue_id, entry in due_entries:
-            if _retry_due_at(entry, default=0.0) > now_epoch:
+            if retry_due_at(entry, default=0.0) > now_epoch:
                 continue
             issue = issues_by_id.get(issue_id)
             if issue is None:
@@ -796,7 +668,7 @@ class IssueRunnerWorkspace:
         pending_retry_ids = {
             issue_id
             for issue_id, entry in self.retry_entries.items()
-            if _retry_due_at(entry, default=0.0) > _now_epoch()
+            if retry_due_at(entry, default=0.0) > _now_epoch()
         }
         running_ids = set(self.running_entries)
         selected: list[tuple[dict[str, Any], dict[str, Any] | None]] = []
@@ -819,10 +691,10 @@ class IssueRunnerWorkspace:
             [
                 (issue_id, entry)
                 for issue_id, entry in self.retry_entries.items()
-                if _retry_due_at(entry, default=0.0) <= _now_epoch()
+                if retry_due_at(entry, default=0.0) <= _now_epoch()
             ],
             key=lambda item: (
-                _retry_due_at(item[1], default=0.0),
+                retry_due_at(item[1], default=0.0),
                 int((item[1] or {}).get("attempt") or 0),
                 str((item[1] or {}).get("identifier") or item[0]),
             ),

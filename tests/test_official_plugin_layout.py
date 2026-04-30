@@ -21,6 +21,7 @@ def test_repo_root_exposes_official_hermes_plugin_layout():
     expected = [
         REPO_ROOT / "plugin.yaml",
         REPO_ROOT / "__init__.py",
+        REPO_ROOT / "engine" / "__init__.py",
         REPO_ROOT / "runtimes" / "__init__.py",
         REPO_ROOT / "schemas.py",
         REPO_ROOT / "daedalus_cli.py",
@@ -132,6 +133,21 @@ def test_repo_root_runtimes_wrapper_exposes_shared_runtime_modules():
     assert runtimes_pkg.__file__ is not None
     assert codex.__file__ is not None
     assert "daedalus/runtimes/codex_app_server" in codex.__file__
+
+
+def test_repo_root_engine_wrapper_exposes_shared_engine_modules():
+    for module_name in list(sys.modules):
+        if module_name == "engine" or module_name.startswith("engine."):
+            del sys.modules[module_name]
+
+    import importlib
+
+    engine_pkg = importlib.import_module("engine")
+    scheduler = importlib.import_module("engine.scheduler")
+
+    assert engine_pkg.__file__ is not None
+    assert scheduler.__file__ is not None
+    assert "daedalus/engine/scheduler" in scheduler.__file__
 
 
 def test_repo_root_trackers_wrapper_exposes_shared_tracker_modules():
