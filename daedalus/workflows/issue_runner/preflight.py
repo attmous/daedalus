@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from workflows.issue_runner.tracker import TrackerConfigError, build_tracker_client, resolve_tracker_path
+from trackers.github import github_slug_from_config, validate_github_tracker_config
 
 
 @dataclass(frozen=True)
@@ -60,12 +61,45 @@ def _validate_config(config: dict[str, Any]) -> None:
         if not repo_path.is_absolute():
             repo_path = (workflow_root / repo_path).resolve()
     try:
+        tracker_kind = str(tracker_cfg.get("kind") or "").strip()
+        tracker_client_cfg = dict(tracker_cfg)
+        if tracker_kind == "github":
+            slug = github_slug_from_config(tracker_client_cfg, repository_cfg)
+            if slug:
+                tracker_client_cfg.setdefault("github_slug", slug)
+            validate_github_tracker_config(
+                workflow_root=workflow_root,
+                tracker_cfg=tracker_client_cfg,
+                repository_cfg=repository_cfg,
+                repo_path=repo_path,
+            )
         if str(tracker_cfg.get("kind") or "").strip() == "local-json":
             resolve_tracker_path(workflow_root=workflow_root, tracker_cfg=tracker_cfg)
-        build_tracker_client(
+        client = build_tracker_client(
             workflow_root=workflow_root,
-            tracker_cfg=tracker_cfg,
+            tracker_cfg=tracker_client_cfg,
             repo_path=repo_path,
         )
+        if tracker_kind == "github":
+            auth_status = getattr(client, "auth_status_payload")()
+            _assert_github_auth_ok(auth_status)
+            repo_view = getattr(client, "repo_view_payload")()
+            expected_slug = github_slug_from_config(tracker_client_cfg, repository_cfg)
+            actual_slug = str(repo_view.get("nameWithOwner") or "").strip()
+            if expected_slug and actual_slug and actual_slug.lower() != expected_slug.lower():
+                raise RuntimeError(
+                    f"gh resolved repository {actual_slug!r}, expected {expected_slug!r}"
+                )
     except TrackerConfigError as exc:
         raise RuntimeError(str(exc)) from exc
+
+
+def _assert_github_auth_ok(payload: dict[str, Any]) -> None:
+    hosts = payload.get("hosts") if isinstance(payload, dict) else None
+    if not isinstance(hosts, dict):
+        raise RuntimeError("gh auth status did not return host information")
+    github_accounts = hosts.get("github.com") or []
+    if not isinstance(github_accounts, list):
+        raise RuntimeError("gh auth status returned invalid github.com account information")
+    if not any(isinstance(account, dict) and account.get("state") == "success" for account in github_accounts):
+        raise RuntimeError("gh is not authenticated for github.com; run `gh auth login`")

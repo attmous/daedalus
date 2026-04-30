@@ -28,6 +28,7 @@ from workflows.issue_runner.tracker import (
     issue_workspace_slug,
     select_issue,
 )
+from trackers.github import github_slug_from_config
 
 
 def _now_iso() -> str:
@@ -58,6 +59,17 @@ def _repository_path_from_config(workflow_root: Path, config: dict[str, Any]) ->
     if not path.is_absolute():
         path = (workflow_root / path).resolve()
     return path
+
+
+def _tracker_config_for_client(config: dict[str, Any]) -> dict[str, Any]:
+    tracker_cfg = dict(config.get("tracker") or {})
+    if str(tracker_cfg.get("kind") or "").strip() != "github":
+        return tracker_cfg
+    repository_cfg = config.get("repository") or {}
+    slug = github_slug_from_config(tracker_cfg, repository_cfg)
+    if slug:
+        tracker_cfg.setdefault("github_slug", slug)
+    return tracker_cfg
 
 
 def _write_json(path: Path, payload: Any) -> None:
@@ -392,6 +404,10 @@ class IssueRunnerWorkspace:
         except Exception as exc:
             checks.append({"name": "tracker", "status": "fail", "detail": str(exc)})
 
+        tracker_cfg = self.config.get("tracker") or {}
+        if str(tracker_cfg.get("kind") or "").strip() == "github":
+            checks.extend(self._github_doctor_checks())
+
         try:
             self.issue_workspace_root.mkdir(parents=True, exist_ok=True)
             checks.append({"name": "workspace-root", "status": "pass", "detail": str(self.issue_workspace_root)})
@@ -411,6 +427,41 @@ class IssueRunnerWorkspace:
             "checks": checks,
             "updatedAt": _now_iso(),
         }
+
+    def _github_doctor_checks(self) -> list[dict[str, Any]]:
+        checks: list[dict[str, Any]] = []
+        try:
+            auth_payload = getattr(self.tracker_client, "auth_status_payload")()
+            hosts = auth_payload.get("hosts") if isinstance(auth_payload, dict) else None
+            accounts = hosts.get("github.com") if isinstance(hosts, dict) else None
+            if not isinstance(accounts, list) or not any(
+                isinstance(account, dict) and account.get("state") == "success"
+                for account in accounts
+            ):
+                raise RuntimeError("gh is not authenticated for github.com")
+            active = next(
+                (
+                    account
+                    for account in accounts
+                    if isinstance(account, dict) and account.get("active") and account.get("state") == "success"
+                ),
+                None,
+            )
+            login = (active or accounts[0]).get("login") if accounts else None
+            checks.append({"name": "github-auth", "status": "pass", "detail": f"gh authenticated as {login or 'unknown'}"})
+        except Exception as exc:
+            checks.append({"name": "github-auth", "status": "fail", "detail": str(exc)})
+
+        try:
+            repo_payload = getattr(self.tracker_client, "repo_view_payload")()
+            resolved = str(repo_payload.get("nameWithOwner") or "").strip()
+            expected = github_slug_from_config(self.config.get("tracker") or {}, self.config.get("repository") or {})
+            if expected and resolved and resolved.lower() != expected.lower():
+                raise RuntimeError(f"gh resolved repository {resolved!r}, expected {expected!r}")
+            checks.append({"name": "github-repo", "status": "pass", "detail": resolved or (expected or "resolved")})
+        except Exception as exc:
+            checks.append({"name": "github-repo", "status": "fail", "detail": str(exc)})
+        return checks
 
     def _runtime_diagnostics(self) -> dict[str, dict[str, Any]]:
         diagnostics: dict[str, dict[str, Any]] = {}
@@ -1732,16 +1783,17 @@ class IssueRunnerWorkspace:
         self.prompt_template = contract.prompt_template
         self.snapshot_ref.set(snapshot)
         tracker_cfg = cfg.get("tracker") or {}
+        tracker_client_cfg = _tracker_config_for_client(cfg)
         workspace_cfg = cfg.get("workspace") or {}
         storage_cfg = cfg.get("storage") or {}
         repo_path = _repository_path_from_config(self.path, cfg)
-        tracker_source_cfg = dict(tracker_cfg)
+        tracker_source_cfg = dict(tracker_client_cfg)
         if repo_path is not None and str(tracker_cfg.get("kind") or "").strip() == "github":
             tracker_source_cfg.setdefault("repo_path", str(repo_path))
         self.tracker_source = describe_tracker_source(workflow_root=self.path, tracker_cfg=tracker_source_cfg)
         self.tracker_client = build_tracker_client(
             workflow_root=self.path,
-            tracker_cfg=tracker_cfg,
+            tracker_cfg=tracker_client_cfg,
             repo_path=repo_path,
             run_json=self._run_json,
         )
@@ -1786,10 +1838,11 @@ def load_workspace_from_config(
         source_size=st.st_size,
     )
     tracker_cfg = cfg.get("tracker") or {}
+    tracker_client_cfg = _tracker_config_for_client(cfg)
     workspace_cfg = cfg.get("workspace") or {}
     storage_cfg = cfg.get("storage") or {}
     repo_path = _repository_path_from_config(root, cfg)
-    tracker_source_cfg = dict(tracker_cfg)
+    tracker_source_cfg = dict(tracker_client_cfg)
     if repo_path is not None and str(tracker_cfg.get("kind") or "").strip() == "github":
         tracker_source_cfg.setdefault("repo_path", str(repo_path))
 
@@ -1803,7 +1856,7 @@ def load_workspace_from_config(
     tracker_source = describe_tracker_source(workflow_root=root, tracker_cfg=tracker_source_cfg)
     tracker_client = build_tracker_client(
         workflow_root=root,
-        tracker_cfg=tracker_cfg,
+        tracker_cfg=tracker_client_cfg,
         repo_path=repo_path,
         run_json=run_json or _subprocess_run_json,
     )
