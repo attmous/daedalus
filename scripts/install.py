@@ -20,6 +20,7 @@ PAYLOAD_ITEMS = [
     "observability_overrides.py",
     "plugin.yaml",
     "runtime.py",
+    "engine",
     "runtimes",
     "schemas.py",
     "trackers",

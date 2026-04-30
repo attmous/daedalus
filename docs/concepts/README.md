@@ -47,6 +47,7 @@ The beating heart of Daedalus. These concepts explain how the engine keeps work 
 
 | Concept | One-Liner | Read This If... |
 |:---|:---|:---|
+| [**Engine**](./engine.md) | Shared durable mechanics: tick, service loop, state stores, scheduler, audit, SQLite. | ...you want the boundary between Daedalus runtime and workflow packages. |
 | [**Leases**](./leases.md) | The thread Theseus carried into the labyrinth. Heartbeat-based ownership with automatic recovery. | ...you want to understand how Daedalus prevents split-brain and claims dead lanes. |
 | [**Actions**](./actions.md) | The `change-delivery` active/shadow action queue. Queued, idempotent, tracked with composite keys. | ...you want to know how the opinionated workflow guarantees exactly-once execution. |
 | [**Shadow → Active**](./shadow-active.md) | Two execution modes: observe safely, then promote to real side effects. | ...you want to validate Daedalus parity before letting it touch real PRs. |
@@ -160,12 +161,13 @@ GitHub Issue ──► [Lanes] ──► [Leases] claim ownership
 
 **New to Daedalus?** Read in this order:
 
-1. [**Architecture**](../architecture.md) — understand the engine/workflow boundary
-2. [**Leases**](./leases.md) — understand how Daedalus stays alive
-3. [**Runtimes**](./runtimes.md) — understand how turns execute
-4. [**Hot-reload**](./hot-reload.md) — understand how policy changes land
-5. [**Workflow docs**](../workflows/README.md) — choose the bundled workflow that matches your use case
-6. [**Actions**](./actions.md) — read this when operating `change-delivery`
+1. [**Architecture**](../architecture.md) — understand the big picture
+2. [**Engine**](./engine.md) — understand shared durable mechanics
+3. [**Leases**](./leases.md) — understand how Daedalus stays alive
+4. [**Runtimes**](./runtimes.md) — understand how turns execute
+5. [**Hot-reload**](./hot-reload.md) — understand how policy changes land
+6. [**Workflow docs**](../workflows/README.md) — choose the bundled workflow that matches your use case
+7. [**Actions**](./actions.md) — read this when operating `change-delivery`
 
 **Operating Daedalus day-to-day?** Keep these open:
 
@@ -187,6 +189,7 @@ GitHub Issue ──► [Lanes] ──► [Leases] claim ownership
 | Doc | What It Covers |
 |---|---|
 | [Architecture Overview](../architecture.md) | The big picture — how all concepts fit together |
+| [Engine](./engine.md) | The shared runtime mechanisms below workflow packages |
 | [Bundled Workflows](../workflows/README.md) | Workflow-specific docs for `change-delivery` and `issue-runner` |
 | [Operator Cheat Sheet](../operator/cheat-sheet.md) | Day-to-day commands, SQL, debugging |
 | [Slash Commands](../operator/slash-commands.md) | Every `/daedalus` command explained |

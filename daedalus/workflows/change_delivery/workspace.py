@@ -10,8 +10,15 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+from engine.audit import make_audit_fn as _engine_make_audit_fn
+from engine.state import load_engine_scheduler_state, save_engine_scheduler_state
+from engine.storage import append_jsonl as _append_jsonl
+from engine.storage import load_optional_json as _load_optional_json
+from engine.storage import write_json_atomic as _write_json
+from engine.storage import write_text_atomic as _write_text
 from workflows.change_delivery.migrations import get_ledger_field
 from workflows.change_delivery.runtimes import build_runtimes
+from workflows.shared.paths import runtime_paths
 
 
 def _derive_lane_selection_cfg(yaml_cfg, *, active_lane_label):
@@ -189,35 +196,6 @@ def _load_yaml(path: Path) -> dict[str, Any]:
     return data
 
 
-def _write_json(path: Path, payload: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    tmp.replace(path)
-
-
-def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(payload, sort_keys=True) + "\n")
-
-
-def _load_optional_json(path: Path | None) -> dict[str, Any] | None:
-    if path is None or not path.exists():
-        return None
-    try:
-        return _load_json(path)
-    except Exception:
-        return None
-
-
-def _write_text(path: Path, content: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(content, encoding="utf-8")
-    tmp.replace(path)
-
-
 def _now_ms() -> int:
     return int(time.time() * 1000)
 
@@ -328,24 +306,11 @@ def _make_audit_fn(
          after the write. Publisher exceptions are swallowed — observability
          must never break workflow execution.
     """
-    def audit(action, summary, **extra):
-        _append_jsonl(
-            audit_log_path,
-            {
-                "at": _now_iso(),
-                "action": action,
-                "summary": summary,
-                **extra,
-            },
-        )
-        if publisher is not None:
-            try:
-                publisher(action=action, summary=summary, extra=dict(extra))
-            except Exception:
-                # Best-effort observability hook; never raise into the caller.
-                pass
-
-    return audit
+    return _engine_make_audit_fn(
+        audit_log_path=Path(audit_log_path),
+        now_iso=_now_iso,
+        publisher=publisher,
+    )
 
 
 def _make_comment_publisher(
@@ -458,6 +423,7 @@ def make_workspace(*, workspace_root: Path, config: dict[str, Any]) -> SimpleNam
     health_path = Path(config["healthPath"])
     audit_log_path = Path(config["auditLogPath"])
     scheduler_path = Path(config.get("schedulerPath") or (workspace_root / "memory/workflow-scheduler.json"))
+    db_path = runtime_paths(workspace_root)["db_path"]
     sessions_state_path = workspace_root / "state/sessions"
 
     # -- config constants ------------------------------------------------
@@ -558,9 +524,24 @@ def make_workspace(*, workspace_root: Path, config: dict[str, Any]) -> SimpleNam
         _write_json(ledger_path, payload)
 
     def load_scheduler() -> dict[str, Any]:
-        return _load_optional_json(scheduler_path) or {}
+        return load_engine_scheduler_state(
+            db_path,
+            workflow="change-delivery",
+            now_iso=_now_iso(),
+            now_epoch=time.time(),
+        )
 
     def save_scheduler(payload: dict[str, Any]) -> None:
+        save_engine_scheduler_state(
+            db_path,
+            workflow="change-delivery",
+            retry_entries={},
+            running_entries={},
+            codex_totals=payload.get("codex_totals") or payload.get("codexTotals") or {},
+            codex_threads=payload.get("codex_threads") or payload.get("codexThreads") or {},
+            now_iso=payload.get("updatedAt") or _now_iso(),
+            now_epoch=time.time(),
+        )
         _write_json(scheduler_path, payload)
 
     # Wire the comment publisher (returns None when observability is disabled —

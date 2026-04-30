@@ -11,6 +11,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+from engine.state import init_engine_state
+from engine.sqlite import connect_daedalus_db
 from workflows.shared.paths import (
     plugin_entrypoint_path,
     project_key_for_workflow_root,
@@ -98,14 +100,7 @@ def _parse_json_blob(value: Any) -> Any:
 
 
 def _connect(db_path: Path) -> sqlite3.Connection:
-    _ensure_parent(db_path)
-    conn = sqlite3.connect(db_path)
-    conn.execute("PRAGMA journal_mode = WAL")
-    conn.execute("PRAGMA synchronous = NORMAL")
-    conn.execute("PRAGMA foreign_keys = ON")
-    conn.execute("PRAGMA temp_store = MEMORY")
-    conn.execute("PRAGMA busy_timeout = 5000")
-    return conn
+    return connect_daedalus_db(db_path)
 
 
 def _table_exists(conn: sqlite3.Connection, table_name: str) -> bool:
@@ -538,6 +533,7 @@ def init_daedalus_db(*, workflow_root: Path, project_key: str) -> dict[str, Any]
             CREATE INDEX IF NOT EXISTS idx_state_projections_lane_type ON state_projections(lane_id, projection_type);
             """
         )
+        init_engine_state(conn)
         now_iso = _now_iso()
         runtime_row = conn.execute(
             "SELECT schema_version FROM daedalus_runtime WHERE runtime_id='daedalus'"
