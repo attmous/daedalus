@@ -22,11 +22,13 @@ store, leases, tracker clients, runtime adapters, and observability around it.
 
 | Capability | What it means |
 |---|---|
-| **Repo-owned workflow contracts** | Generates `WORKFLOW.md` into your target repo so config and policy live beside the code being automated. |
-| **Durable runtime state** | Persists leases, running work, retries, thread mappings, audit history, status, and health in SQLite, JSON, and JSONL. |
-| **Supervised service loop** | Runs under `systemd --user`, survives restarts, reconciles stalled work, and resumes eligible runs. |
-| **Runtime flexibility** | Dispatches through runtime profiles for hosted agents, CLI agents, Codex app-server, or custom commands. |
-| **Operator surface** | Exposes `/daedalus`, `/workflow`, watch output, service controls, and optional HTTP status. |
+| Issue-based automation | Turns selected issues into supervised workflow runs with explicit lifecycle policy. |
+| Repo-owned workflow contracts | Generates `WORKFLOW.md` into your target repo so config and policy live beside the code being automated. |
+| Durable runtime state | Persists leases, running work, retries, thread mappings, audit history, status, and health in SQLite, JSON, and JSONL. |
+| Supervised service loop | Runs under `systemd --user`, survives restarts, reconciles stalled work, and resumes eligible runs. |
+| Runtime flexibility | Dispatches through runtime profiles for hosted agents, CLI agents, Codex app-server, or custom commands. |
+| Operator surface | Exposes `/daedalus`, `/workflow`, watch output, service controls, and optional HTTP status. |
+| Bundled workflow engine | Ships `issue-runner` and `change-delivery`, with shared tracker, runtime, config, and observability primitives. |
 
 ## Quick Start
 
