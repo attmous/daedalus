@@ -71,24 +71,6 @@ For manual scaffold paths, service modes, pip installs, and every lower-level co
 use the full install guide:
 [docs/operator/installation.md](docs/operator/installation.md).
 
-## Configure The Workflow
-
-Edit the generated contract in your target repo:
-
-- `WORKFLOW.md` when the repo carries one workflow
-- `WORKFLOW-issue-runner.md` / `WORKFLOW-change-delivery.md` when it carries more than one
-
-Common knobs live in the YAML front matter:
-
-- `tracker` / `repository`: issue source, repo checkout, labels, states
-- `runtimes`: runtime profiles such as Codex app-server, CLI agents, or custom commands
-- `agents`: model/runtime bindings for workflow roles
-- `hooks` / `gates`: workflow-specific lifecycle policy
-- `observability` / `server`: comments, webhooks, HTTP status
-
-The Markdown body is the workflow policy prompt. The workflow package decides
-how to use it. See the full [WORKFLOW.md guide](docs/workflows/workflow-contract.md).
-
 ## What Is Stateful
 
 Daedalus is not controlled by Markdown files alone. The workflow contract is
@@ -129,6 +111,24 @@ Inside Hermes Agent:
 The operator surfaces read the persisted state for you. You should not need to
 inspect SQLite, scheduler JSON, JSONL logs, or systemd journals by hand during
 normal operation.
+
+## Configure The Workflow
+
+Edit the generated contract in your target repo:
+
+- `WORKFLOW.md` when the repo carries one workflow
+- `WORKFLOW-issue-runner.md` / `WORKFLOW-change-delivery.md` when it carries more than one
+
+Common knobs live in the YAML front matter:
+
+- `tracker` / `repository`: issue source, repo checkout, labels, states
+- `runtimes`: runtime profiles such as Codex app-server, CLI agents, or custom commands
+- `agents`: model/runtime bindings for workflow roles
+- `hooks` / `gates`: workflow-specific lifecycle policy
+- `observability` / `server`: comments, webhooks, HTTP status
+
+The Markdown body is the workflow policy prompt. The workflow package decides
+how to use it. See the full [WORKFLOW.md guide](docs/workflows/workflow-contract.md).
 
 ## Supported Surfaces
 
