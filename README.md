@@ -4,13 +4,11 @@
 
 ![Daedalus banner](assets/daedalus-banner.gif)
 
-**Durable SDLC automation engine for Hermes Agent.**
+**Durable SDLC automation engine for Hermes-Agent.**
 
-[![Python](https://img.shields.io/badge/python-3.10%2B-22D3EE?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
-[![License](https://img.shields.io/badge/license-MIT-22D3EE?style=flat-square)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-pytest-22D3EE?style=flat-square&logo=pytest&logoColor=white)]()
-[![Platform](https://img.shields.io/badge/platform-Linux-22D3EE?style=flat-square&logo=linux&logoColor=white)]()
-[![Hermes](https://img.shields.io/badge/hermes-plugin-22D3EE?style=flat-square)]()
+[![Python](https://img.shields.io/badge/python-3.10%2B-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
+[![License](https://img.shields.io/badge/license-MIT-4CAF50?style=flat-square)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Linux-FCC624?style=flat-square&logo=linux&logoColor=black)]()
 
 </div>
 
@@ -129,41 +127,99 @@ how to use it. See the full [WORKFLOW.md guide](docs/workflows/workflow-contract
 
 <div align="center">
 
-<table>
-<tr>
-<td width="50%" valign="top">
+| | |
+|:---:|:---:|
+| **issue-runner** | **change-delivery** |
+| 🎯 | 🚀 |
+| `single-turn` | `full-lifecycle` |
 
-### 🎯 `issue-runner`
+</div>
 
-**The lightweight path.**
+---
 
+### `issue-runner`
+
+<div align="center">
+
+```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': { 'primaryColor': '#0B3D4C', 'primaryTextColor': '#22D3EE', 'primaryBorderColor': '#22D3EE', 'lineColor': '#22D3EE', 'secondaryColor': '#0F172A', 'tertiaryColor': '#1E293B'}}}%%
+flowchart LR
+    A[Tracker] -->|query| B[Filter]
+    B -->|eligible| C[Workspace]
+    C -->|isolate| D[Runtime]
+    D -->|dispatch| E[Agent]
+    E -->|result| F[State]
+    F -->|cleanup| G[Done]
+    style A fill:#0B3D4C,stroke:#22D3EE,color:#22D3EE
+    style B fill:#0B3D4C,stroke:#22D3EE,color:#22D3EE
+    style C fill:#0B3D4C,stroke:#22D3EE,color:#22D3EE
+    style D fill:#0B3D4C,stroke:#22D3EE,color:#22D3EE
+    style E fill:#0B3D4C,stroke:#22D3EE,color:#22D3EE
+    style F fill:#0B3D4C,stroke:#22D3EE,color:#22D3EE
+    style G fill:#0B3D4C,stroke:#22D3EE,color:#22D3EE
 ```
-issue → workspace → hooks → prompt → agent run
+
+</div>
+
+| Stage | Action | Guarantees |
+|---|---|---|
+| Select | Tracker query → issue filter → eligibility check | Label-scoped, state-aware |
+| Prepare | Workspace isolation → checkout → context assembly | Clean tree, no cross-contamination |
+| Dispatch | Runtime adapter → agent prompt → bounded execution | Timeout, token limit, retry bound |
+| Record | Result capture → state persistence → terminal cleanup | JSONL audit, workspace teardown |
+
+**Surface:** Symphony-compatible. **State:** JSON/JSONL. **Gates:** None.
+
+---
+
+### `change-delivery`
+
+<div align="center">
+
+```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': { 'primaryColor': '#4C1D0B', 'primaryTextColor': '#FB923C', 'primaryBorderColor': '#FB923C', 'lineColor': '#FB923C', 'secondaryColor': '#0F172A', 'tertiaryColor': '#1E293B'}}}%%
+flowchart LR
+    A[Issue] -->|select| B[Lane]
+    B -->|assign| C[Implement]
+    C -->|review| D[PR]
+    D -->|gate| E[Merge]
+    E -->|hook| F[Promote]
+    style A fill:#4C1D0B,stroke:#FB923C,color:#FB923C
+    style B fill:#4C1D0B,stroke:#FB923C,color:#FB923C
+    style C fill:#4C1D0B,stroke:#FB923C,color:#FB923C
+    style D fill:#4C1D0B,stroke:#FB923C,color:#FB923C
+    style E fill:#4C1D0B,stroke:#FB923C,color:#FB923C
+    style F fill:#4C1D0B,stroke:#FB923C,color:#FB923C
 ```
-
-Use this when you want a small, generic issue workflow without ceremony. Closest surface to Symphony-style execution. Good for experiments, one-off tasks, and simple automation.
-
-</td>
-<td width="50%" valign="top">
-
-### 🚀 `change-delivery`
-
-**The opinionated SDLC path.**
-
-```
-issue → implementation → internal review → PR → external review → merge
-```
-
-Use this when you want full lifecycle automation with review gates, PR publishing, and merge promotion. Built for production software delivery.
-
-</td>
-</tr>
-</table>
 
 </div>
 
 `issue-runner` is the default public bootstrap path and generic reference
 workflow. `change-delivery` is richer, more opinionated, and GitHub-backed.
+| Stage | Action | Guarantees |
+|---|---|---|
+| Select | GitHub issue → label filter → lane assignment | SQLite lease, exactly-once |
+| Implement | Agent dispatch → code generation → internal review | Actor isolation, thread mapping |
+| Publish | PR creation → CI gate → external review | Idempotent push, status linkback |
+| Merge | Approval check → merge commit → promotion hook | Branch protection, cleanup hook |
+
+**Surface:** SDLC-native. **State:** SQLite + JSONL. **Gates:** Internal review, external review, CI, approval.
+
+---
+
+<div align="center">
+
+| Capability | issue-runner | change-delivery |
+|---|---|:---:|
+| Stateful retries | JSON queue | ✅ SQLite queue |
+| Lease isolation | ❌ | ✅ |
+| Review gates | ❌ | ✅ Internal + External |
+| PR lifecycle | ❌ | ✅ Full |
+| Merge promotion | ❌ | ✅ |
+| Symphony compat | ✅ | Partial |
+| Runtime adapters | All | All |
+
+</div>
 
 ## Supported Surfaces
 
