@@ -1,38 +1,58 @@
 from pathlib import Path
 
 import jsonschema
+import pytest
 import yaml
 
 from workflows.contract import WORKFLOW_POLICY_KEY, load_workflow_contract_file
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-TEMPLATE_PATH = REPO_ROOT / "docs" / "examples" / "change-delivery.workflow.md"
-PAYLOAD_TEMPLATE_PATH = (
-    REPO_ROOT / "daedalus" / "workflows" / "change_delivery" / "workflow.template.md"
-)
-SCHEMA_PATH = REPO_ROOT / "daedalus" / "workflows" / "change_delivery" / "schema.yaml"
+WORKFLOW_EXAMPLES = [
+    (
+        "change-delivery",
+        REPO_ROOT / "docs" / "examples" / "change-delivery.workflow.md",
+        REPO_ROOT / "daedalus" / "workflows" / "change_delivery" / "workflow.template.md",
+        REPO_ROOT / "daedalus" / "workflows" / "change_delivery" / "schema.yaml",
+    ),
+    (
+        "issue-runner",
+        REPO_ROOT / "docs" / "examples" / "issue-runner.workflow.md",
+        REPO_ROOT / "daedalus" / "workflows" / "issue_runner" / "workflow.template.md",
+        REPO_ROOT / "daedalus" / "workflows" / "issue_runner" / "schema.yaml",
+    ),
+]
 
 
-def test_public_workflow_template_validates_against_schema():
-    template = load_workflow_contract_file(TEMPLATE_PATH).config
-    schema = yaml.safe_load(SCHEMA_PATH.read_text(encoding="utf-8"))
+@pytest.mark.parametrize(("workflow_name", "template_path", "_payload_path", "schema_path"), WORKFLOW_EXAMPLES)
+def test_public_workflow_template_validates_against_schema(workflow_name, template_path, _payload_path, schema_path):
+    template = load_workflow_contract_file(template_path).config
+    schema = yaml.safe_load(schema_path.read_text(encoding="utf-8"))
     jsonschema.validate(template, schema)
 
 
-def test_public_workflow_template_uses_generic_placeholders():
-    text = TEMPLATE_PATH.read_text(encoding="utf-8").lower()
+@pytest.mark.parametrize(
+    ("workflow_name", "template_path", "placeholder"),
+    [
+        ("change-delivery", REPO_ROOT / "docs" / "examples" / "change-delivery.workflow.md", "your-org-your-repo-change-delivery"),
+        ("issue-runner", REPO_ROOT / "docs" / "examples" / "issue-runner.workflow.md", "your-org-your-repo-issue-runner"),
+    ],
+)
+def test_public_workflow_template_uses_generic_placeholders(workflow_name, template_path, placeholder):
+    text = template_path.read_text(encoding="utf-8").lower()
     assert "yoyopod" not in text
-    assert "your-org-your-repo-change-delivery" in text
+    assert placeholder in text
     assert "# workflow policy" in text
 
 
-def test_public_workflow_template_uses_markdown_body_for_shared_policy():
-    contract = load_workflow_contract_file(TEMPLATE_PATH)
+@pytest.mark.parametrize(("workflow_name", "template_path"), [(name, template, ) for name, template, _payload, _schema in WORKFLOW_EXAMPLES])
+def test_public_workflow_template_uses_markdown_body_for_shared_policy(workflow_name, template_path):
+    contract = load_workflow_contract_file(template_path)
 
     assert contract.config[WORKFLOW_POLICY_KEY]
-    assert "keep scope narrow" in contract.config[WORKFLOW_POLICY_KEY].lower()
+    assert workflow_name in contract.config[WORKFLOW_POLICY_KEY].lower()
 
 
-def test_payload_workflow_template_matches_docs_copy():
-    assert PAYLOAD_TEMPLATE_PATH.read_text(encoding="utf-8") == TEMPLATE_PATH.read_text(encoding="utf-8")
+@pytest.mark.parametrize(("workflow_name", "template_path", "payload_template_path", "_schema_path"), WORKFLOW_EXAMPLES)
+def test_payload_workflow_template_matches_docs_copy(workflow_name, template_path, payload_template_path, _schema_path):
+    assert payload_template_path.read_text(encoding="utf-8") == template_path.read_text(encoding="utf-8")

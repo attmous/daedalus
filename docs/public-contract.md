@@ -35,13 +35,12 @@ These are not public compatibility promises yet:
 
 We can refactor those freely as long as the stable surfaces above keep working.
 
-## Supported workflow
-
-The first bundled public workflow is:
+## Bundled workflows
 
 - `workflow: change-delivery`
-
-Additional workflow types should not be advertised as public contract until they have the same scaffold, schema, docs, and smoke-test coverage.
+  This is the supported managed workflow behind the public `bootstrap` and `service-up` path.
+- `workflow: issue-runner`
+  This is bundled as a generic reference workflow and loads through `/workflow ...` plus explicit `scaffold-workflow`, but it is not yet part of the managed `bootstrap` / `service-up` contract.
 
 ## Contract preference
 

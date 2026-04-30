@@ -148,7 +148,7 @@ def _emit_dispatch_skipped_event(
     try:
         # Imported lazily to avoid pulling change_delivery-specific paths into the
         # generic dispatcher's import graph at module load time.
-        from workflows.change_delivery.paths import runtime_paths
+        from workflows.shared.paths import runtime_paths
         import runtime as _runtime
 
         paths = runtime_paths(workflow_root)

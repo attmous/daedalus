@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from workflows.change_delivery.paths import (
+from workflows.shared.paths import (
     plugin_entrypoint_path,
     project_key_for_workflow_root,
     runtime_paths,

@@ -84,6 +84,8 @@ def test_wheel_contains_runtime_loaded_plugin_payload(tmp_path):
         "daedalus/workflows/change_delivery/schema.yaml",
         "daedalus/workflows/change_delivery/workflow.template.md",
         "daedalus/workflows/change_delivery/prompts/coder.md",
+        "daedalus/workflows/issue_runner/schema.yaml",
+        "daedalus/workflows/issue_runner/workflow.template.md",
     }
     missing = sorted(path for path in expected if path not in names)
     assert not missing, f"wheel missing runtime payload files: {missing}"

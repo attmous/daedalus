@@ -27,6 +27,8 @@ def test_repo_root_exposes_official_hermes_plugin_layout():
         REPO_ROOT / "workflows" / "__main__.py",
         REPO_ROOT / "workflows" / "change_delivery" / "__init__.py",
         REPO_ROOT / "workflows" / "change_delivery" / "__main__.py",
+        REPO_ROOT / "workflows" / "issue_runner" / "__init__.py",
+        REPO_ROOT / "workflows" / "issue_runner" / "__main__.py",
     ]
     missing = [str(path.relative_to(REPO_ROOT)) for path in expected if not path.exists()]
     assert not missing, f"missing repo-root plugin files: {missing}"
@@ -88,3 +90,16 @@ def test_repo_root_workflows_wrapper_exposes_change_delivery_submodules():
 
     assert runtimes.__file__ is not None
     assert "daedalus/workflows/change_delivery/runtimes" in runtimes.__file__
+
+
+def test_repo_root_workflows_wrapper_exposes_issue_runner_submodules():
+    for module_name in list(sys.modules):
+        if module_name == "workflows" or module_name.startswith("workflows."):
+            del sys.modules[module_name]
+
+    import importlib
+
+    tracker = importlib.import_module("workflows.issue_runner.tracker")
+
+    assert tracker.__file__ is not None
+    assert "daedalus/workflows/issue_runner/tracker" in tracker.__file__

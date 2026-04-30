@@ -2,8 +2,12 @@
 
 Each subdirectory under `workflows/` is one **workflow** — a Python
 package implementing the stages, gates, and agent dispatch for a
-specific lifecycle. The first workflow we ship and dogfood is
-`change_delivery/` (`Issue → Code → Review → Merge`).
+specific lifecycle. Today we bundle two workflow surfaces:
+
+- `change_delivery/` — the opinionated managed SDLC workflow (`Issue → Code → Review → Merge`)
+- `issue_runner/` — the generic tracker-driven reference workflow
+
+Shared infrastructure lives under `shared/`.
 
 Workflows are loaded by name through `workflows.<slug>`. The dispatcher
 in `__init__.py` enforces a small contract: every workflow package must
@@ -24,6 +28,7 @@ workflows/
 ├── __init__.py              # workflow loader + dispatcher contract
 ├── __main__.py              # `python -m workflows <name> ...` entrypoint
 ├── README.md                # this file
+├── shared/                  # reusable paths, snapshots, runtimes, stall helpers
 └── change_delivery/         # the bundled Issue → Code → Review → Merge workflow
     ├── __init__.py          # workflow contract attrs (NAME, schema, etc.)
     ├── __main__.py          # `python -m workflows.change_delivery ...`
@@ -55,7 +60,16 @@ workflows/
     ├── workspace.py         # workspace bootstrap (config + paths + db)
     ├── actions.py           # the action enum the runtime dispatches on
     ├── preflight.py         # config validity check (callable per-tick)
-    └── paths.py             # canonical paths inside a project workspace
+    └── paths.py             # compatibility re-export for shared path helpers
+└── issue_runner/            # generic tracker-driven issue execution workflow
+    ├── __init__.py          # workflow contract attrs (NAME, schema, etc.)
+    ├── __main__.py          # `python -m workflows.issue_runner ...`
+    ├── cli.py               # status, doctor, tick
+    ├── preflight.py         # config validity checks for dispatch-gated commands
+    ├── schema.yaml          # JSON Schema for the workflow's config
+    ├── tracker.py           # local-json tracker loading + issue selection
+    ├── workspace.py         # runtime wiring, hooks, prompt rendering, storage
+    └── workflow.template.md # scaffoldable WORKFLOW.md baseline
 ```
 
 ## How a workflow runs
@@ -67,7 +81,7 @@ workflows/
 3. `make_workspace(workflow_root, config)` returns the workspace
    object the CLI subcommands operate on.
 4. Per-tick: preflight validates the config; if it passes, the
-   orchestrator picks a lane and dispatches the next agent role.
+   workflow-specific workspace runs its next action.
 
 ## Adding a new workflow
 
@@ -79,6 +93,6 @@ workflows/
 4. Reference it from `WORKFLOW.md` front matter in the workflow root:
    `workflow: <your-name>`.
 
-The `change_delivery/` package is the reference implementation — start by
-copying its `__init__.py`, `cli.py`, and `schema.yaml` and pruning what
-you don't need.
+`change_delivery/` is the managed SDLC reference implementation.
+`issue_runner/` is the smaller generic reference surface. Start by
+copying the one whose contract is closer to the lifecycle you want.

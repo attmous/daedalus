@@ -16,7 +16,7 @@
 
 ## What it is
 
-Daedalus automates your **SDLC** with agents — driven by your GitHub issues. Label an issue and Daedalus walks it through your workflow: picks the right agent for each stage, tracks state, survives crashes, ships when done. The first workflow we ship is **Change-Delivery** (`Issue → Code → Review → Merge`). More are coming.
+Daedalus automates your **SDLC** with agents — driven by your GitHub issues. Label an issue and Daedalus walks it through your workflow: picks the right agent for each stage, tracks state, survives crashes, ships when done. The default managed workflow is **Change-Delivery** (`Issue → Code → Review → Merge`). We also bundle **Issue-Runner** as a generic tracker-driven reference workflow.
 
 ## Three myths, one engine
 

@@ -1,0 +1,11 @@
+{
+  "issues": [
+    {
+      "id": "ISSUE-1",
+      "title": "Sample tracker issue",
+      "description": "Replace this file with your tracker export or test fixture.",
+      "state": "todo",
+      "labels": ["sample"]
+    }
+  ]
+}

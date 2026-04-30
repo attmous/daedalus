@@ -27,6 +27,7 @@ def test_execute_workflow_command_lists_workflows_with_no_args(tmp_path, monkeyp
     result = tools.execute_workflow_command("")
     assert "available workflows" in result.lower()
     assert "change-delivery" in result
+    assert "issue-runner" in result
 
 
 def test_execute_workflow_command_routes_to_workflow_cli(tmp_path, monkeypatch):

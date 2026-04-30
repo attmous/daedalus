@@ -21,7 +21,7 @@ from workflows.contract import (
     workflow_yaml_path as legacy_workflow_config_path,
     workflow_markdown_path,
 )
-from workflows.change_delivery.paths import (
+from workflows.shared.paths import (
     derive_workflow_instance_name,
     plugin_runtime_path,
     project_key_for_workflow_root,
@@ -1140,6 +1140,7 @@ def _lazy_cmd_watch(args, parser):
 def _workflow_template_path(workflow_name: str) -> Path:
     templates = {
         "change-delivery": PLUGIN_DIR / "workflows" / "change_delivery" / "workflow.template.md",
+        "issue-runner": PLUGIN_DIR / "workflows" / "issue_runner" / "workflow.template.md",
     }
     path = templates.get(workflow_name)
     if path is None:
@@ -1239,6 +1240,11 @@ def bootstrap_workflow_root(
     pointer_path = repo_local_workflow_pointer_path(repo_root)
     pointer_path.parent.mkdir(parents=True, exist_ok=True)
     pointer_path.write_text(str(resolved_workflow_root) + "\n", encoding="utf-8")
+    if workflow_name == "change-delivery":
+        next_command = "hermes daedalus service-up"
+    else:
+        next_command = f"python3 {PLUGIN_DIR / 'workflows' / '__main__.py'} --workflow-root {resolved_workflow_root} tick"
+
     result.update(
         {
             "bootstrap": True,
@@ -1246,7 +1252,7 @@ def bootstrap_workflow_root(
             "remote_url": remote_url,
             "repo_pointer_path": str(pointer_path),
             "next_edit_path": result["contract_path"],
-            "next_command": "hermes daedalus service-up",
+            "next_command": next_command,
         }
     )
     return result
@@ -1334,6 +1340,10 @@ def scaffold_workflow_root(
         render_workflow_markdown(config=config, prompt_template=workflow_policy),
         encoding="utf-8",
     )
+    if workflow_name == "issue-runner":
+        issues_template = PLUGIN_DIR / "workflows" / "issue_runner" / "issues.template.json"
+        issues_path = root / "config" / "issues.json"
+        issues_path.write_text(issues_template.read_text(encoding="utf-8"), encoding="utf-8")
     if force and legacy_config_path.exists():
         legacy_config_path.unlink()
     return {
@@ -1840,7 +1850,7 @@ def configure_subcommands(parser: argparse.ArgumentParser) -> argparse.ArgumentP
         required=True,
         help="Workflow root to create. Directory name must be <owner>-<repo>-<workflow-type>.",
     )
-    scaffold_cmd.add_argument("--workflow", default="change-delivery", choices=["change-delivery"])
+    scaffold_cmd.add_argument("--workflow", default="change-delivery", choices=["change-delivery", "issue-runner"])
     scaffold_cmd.add_argument("--repo-path", type=Path)
     scaffold_cmd.add_argument("--github-slug", required=True)
     scaffold_cmd.add_argument("--active-lane-label", default="active-lane")
