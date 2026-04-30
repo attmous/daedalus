@@ -22,39 +22,11 @@ store, leases, tracker clients, runtime adapters, and observability around it.
 
 | Capability | What it means |
 |---|---|
-| Issue-based automation | Turns selected issues into supervised workflow runs with explicit lifecycle policy. |
-| Repo-owned workflow contracts | Generates `WORKFLOW.md` into your target repo so config and policy live beside the code being automated. |
-| Durable runtime state | Persists leases, running work, retries, thread mappings, audit history, status, and health in SQLite, JSON, and JSONL. |
-| Supervised service loop | Runs under `systemd --user`, survives restarts, reconciles stalled work, and resumes eligible runs. |
-| Runtime flexibility | Dispatches through runtime profiles for hosted agents, CLI agents, Codex app-server, or custom commands. |
-| Operator surface | Exposes `/daedalus`, `/workflow`, watch output, service controls, and optional HTTP status. |
-| Bundled workflow engine | Ships `issue-runner` and `change-delivery`, with shared tracker, runtime, config, and observability primitives. |
-
-## Mental Model
-
-| Term | Meaning |
-|---|---|
-| Target repo | The user repository where work should happen. Bootstrap writes `WORKFLOW.md` here. |
-| Workflow contract | `WORKFLOW.md` or `WORKFLOW-<name>.md`; YAML front matter plus Markdown policy text. |
-| Workflow root | Durable instance data under `~/.hermes/workflows/<owner>-<repo>-<workflow-type>`. |
-| Workflow package | The installed Python implementation that decides the lifecycle for a selected issue. |
-| Tracker | The system Daedalus reads issues from and writes status back to. |
-| Issue | The unit of work selected from a tracker. Workflows should model issues, not one tracker vendor. |
-| Runtime | The adapter that runs an agent or command against a workspace. |
-| Workspace | The isolated checkout/path where the agent does work for an issue. |
-| State store | SQLite, JSON, and JSONL files that preserve current state, history, retries, leases, and metrics. |
-| Operator surface | Hermes commands, service controls, watch output, and optional HTTP status. |
-
-## Bundled Workflows
-
-| Workflow | What it automates | Use it when |
-|---|---|---|
-| `issue-runner` | issue -> workspace -> hooks -> prompt -> one agent run | You want a small generic issue workflow. |
-| `change-delivery` | issue -> implementation -> internal review -> PR -> external review -> merge | You want the opinionated SDLC workflow with review and merge gates. |
-
-`issue-runner` is the generic reference workflow and the closest surface to
-Symphony-style issue execution. `change-delivery` is richer and more
-opinionated.
+| **Repo-owned workflow contracts** | Generates `WORKFLOW.md` into your target repo so config and policy live beside the code being automated. |
+| **Durable runtime state** | Persists leases, running work, retries, thread mappings, audit history, status, and health in SQLite, JSON, and JSONL. |
+| **Supervised service loop** | Runs under `systemd --user`, survives restarts, reconciles stalled work, and resumes eligible runs. |
+| **Runtime flexibility** | Dispatches through runtime profiles for hosted agents, CLI agents, Codex app-server, or custom commands. |
+| **Operator surface** | Exposes `/daedalus`, `/workflow`, watch output, service controls, and optional HTTP status. |
 
 ## Quick Start
 
@@ -129,6 +101,32 @@ Common knobs live in the YAML front matter:
 
 The Markdown body is the workflow policy prompt. The workflow package decides
 how to use it. See the full [WORKFLOW.md guide](docs/workflows/workflow-contract.md).
+
+## Mental Model
+
+| Term | Meaning |
+|---|---|
+| Target repo | The user repository where work should happen. Bootstrap writes `WORKFLOW.md` here. |
+| Workflow contract | `WORKFLOW.md` or `WORKFLOW-<name>.md`; YAML front matter plus Markdown policy text. |
+| Workflow root | Durable instance data under `~/.hermes/workflows/<owner>-<repo>-<workflow-type>`. |
+| Workflow package | The installed Python implementation that decides the lifecycle for a selected issue. |
+| Tracker | The system Daedalus reads issues from and writes status back to. |
+| Issue | The unit of work selected from a tracker. Workflows should model issues, not one tracker vendor. |
+| Runtime | The adapter that runs an agent or command against a workspace. |
+| Workspace | The isolated checkout/path where the agent does work for an issue. |
+| State store | SQLite, JSON, and JSONL files that preserve current state, history, retries, leases, and metrics. |
+| Operator surface | Hermes commands, service controls, watch output, and optional HTTP status. |
+
+## Bundled Workflows
+
+| Workflow | What it automates | Use it when |
+|---|---|---|
+| `issue-runner` | issue -> workspace -> hooks -> prompt -> one agent run | You want a small generic issue workflow. |
+| `change-delivery` | issue -> implementation -> internal review -> PR -> external review -> merge | You want the opinionated SDLC workflow with review and merge gates. |
+
+`issue-runner` is the generic reference workflow and the closest surface to
+Symphony-style issue execution. `change-delivery` is richer and more
+opinionated.
 
 ## Supported Surfaces
 
