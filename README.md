@@ -9,11 +9,6 @@
 [![Python](https://img.shields.io/badge/python-3.10%2B-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-4CAF50?style=flat-square)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Linux-FCC624?style=flat-square&logo=linux&logoColor=black)]()
-[![Hermes](https://img.shields.io/badge/Hermes-Plugin-22D3EE?style=flat-square)]()
-[![OpenAI](https://img.shields.io/badge/OpenAI-Symphony%20Compliant-412991?style=flat-square&logo=openai&logoColor=white)]()
-[![Codex](https://img.shields.io/badge/Codex-Runtime-000000?style=flat-square&logo=openai&logoColor=white)]()
-[![Claude](https://img.shields.io/badge/Claude-Runtime-D97757?style=flat-square)]()
-[![Hermes Agent](https://img.shields.io/badge/Hermes%20Agent-Runtime-22D3EE?style=flat-square)]()
 
 </div>
 
