@@ -562,7 +562,7 @@ def test_run_dispatch_lane_turn_reconciles_runtime_error_after_local_head(tmp_pa
                 rate_limits=None,
             )
 
-    def run_prompt_fn(*, worktree, session_name, prompt, codex_model):
+    def run_stage_fn(*, worktree, session_name, prompt, actor_name, actor_cfg, runtime_name, runtime_kind, resume_session_id=None):
         raise RuntimeCompletedThenTimedOut()
 
     def reconcile_fn(*, fix_watchers=False):
@@ -585,7 +585,12 @@ def test_run_dispatch_lane_turn_reconciles_runtime_error_after_local_head(tmp_pa
         audit_action="dispatch-implementation-turn",
         **{
             **deps,
-            "run_prompt_fn": run_prompt_fn,
+            "run_stage_fn": run_stage_fn,
+            "implementation_actor_cfg": {
+                "name": "Change_Implementer",
+                "model": "gpt-5.5",
+                "runtime": "coder-runtime",
+            },
             "reconcile_fn": reconcile_fn,
             "runtime_name": "coder-runtime",
             "runtime_kind": "codex-app-server",
