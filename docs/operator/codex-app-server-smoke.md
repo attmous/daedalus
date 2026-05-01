@@ -46,20 +46,47 @@ changes to Codex runtime/service behavior, not as a required CI gate.
 
 ## Change-Delivery Fixture Smoke
 
-`change-delivery` has an opt-in fixture smoke skeleton for prepared workflow
-roots. It does not create GitHub issues or PRs by itself; point it at a workflow
-root you already prepared with a `change-delivery` `WORKFLOW.md` and at least
-one `codex-app-server` runtime profile.
+`change-delivery` has an opt-in self-contained smoke for the first live lane
+dispatch. It creates a temporary GitHub issue with a unique active-lane label,
+builds a temporary `change-delivery` workflow root, dispatches one real Codex
+app-server lane turn, verifies durable thread state and tracker feedback, then
+cleans up the issue, label, branch, PR, and `/tmp/issue-<n>` worktree if they
+were created.
 
 ```bash
 DAEDALUS_CHANGE_DELIVERY_CODEX_E2E=1 \
-DAEDALUS_CHANGE_DELIVERY_E2E_WORKFLOW_ROOT=~/.hermes/workflows/your-org-your-repo-change-delivery \
+DAEDALUS_CHANGE_DELIVERY_E2E_REPO=your-org/your-repo \
 pytest tests/test_change_delivery_codex_app_server_smoke.py -q -s
 ```
 
-This is the first harness anchor for a fuller issue-to-PR-to-review-to-merge
-Codex app-server E2E. Keep it opt-in until the fixture can create and clean up
-its own GitHub issue, branch, PR, and review artifacts.
+Optional controls:
+
+```bash
+export DAEDALUS_CHANGE_DELIVERY_E2E_REPO_PATH=/path/to/local/checkout
+export DAEDALUS_CHANGE_DELIVERY_E2E_ACTIVE_LABEL=daedalus-active-smoke
+export DAEDALUS_CHANGE_DELIVERY_CODEX_MODEL=gpt-5.4-mini
+```
+
+If `DAEDALUS_CHANGE_DELIVERY_E2E_REPO_PATH` is not set, the test clones the
+repository into a temporary directory. The repository must have an `origin/main`
+branch because `change-delivery` currently prepares lane worktrees from
+`origin/main`.
+
+This proves live GitHub issue selection, repo-owned workflow construction,
+Codex app-server dispatch, thread persistence, and tracker feedback for the
+flagship workflow. It is still not the full issue-to-PR-to-review-to-merge E2E.
+
+## One-Command Live Harness
+
+Use the local harness to run every live smoke whose environment is configured:
+
+```bash
+scripts/smoke-live.sh --list
+scripts/smoke-live.sh
+```
+
+The harness skips unconfigured smokes and runs only the ones with their required
+environment variables present.
 
 ## Token Accounting Rule
 
