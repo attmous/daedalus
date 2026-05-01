@@ -1266,20 +1266,20 @@ def derive_shadow_actions_for_lane(*, lane_row: dict[str, Any], reviews: list[di
         and repair_brief.get("forHeadSha") == current_head_sha
         and (repair_brief.get("mustFix") or repair_brief.get("shouldFix"))
     )
-    last_codex_cloud_handoff = session_control.get("lastCodexCloudRepairHandoff") or {}
-    last_claude_handoff = session_control.get("lastClaudeRepairHandoff") or {}
+    last_external_review_handoff = session_control.get("lastExternalReviewRepairHandoff") or {}
+    last_internal_review_handoff = session_control.get("lastInternalReviewRepairHandoff") or {}
     internal_review_completed_at = (internal_review or {}).get("completed_at")
     local_repair_handoff_already_sent = bool(
-        last_claude_handoff.get("sessionName") == actor_row.get("backend_identity")
-        and last_claude_handoff.get("headSha") == current_head_sha
+        last_internal_review_handoff.get("sessionName") == actor_row.get("backend_identity")
+        and last_internal_review_handoff.get("headSha") == current_head_sha
         and internal_review
-        and last_claude_handoff.get("reviewedAt") == internal_review_completed_at
+        and last_internal_review_handoff.get("reviewedAt") == internal_review_completed_at
     )
     repair_handoff_already_sent = bool(
-        last_codex_cloud_handoff.get("sessionName") == actor_row.get("backend_identity")
-        and last_codex_cloud_handoff.get("headSha") == current_head_sha
+        last_external_review_handoff.get("sessionName") == actor_row.get("backend_identity")
+        and last_external_review_handoff.get("headSha") == current_head_sha
         and external_review
-        and last_codex_cloud_handoff.get("reviewedAt") == external_review.get("completed_at")
+        and last_external_review_handoff.get("reviewedAt") == external_review.get("completed_at")
     )
     if (
         workflow_state in {"implementing_local", "implementing"}

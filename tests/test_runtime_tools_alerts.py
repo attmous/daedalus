@@ -401,7 +401,7 @@ def test_derive_shadow_actions_skips_duplicate_local_review_repair_handoff(runti
             "metadata_json": json.dumps(
                 {
                     "sessionControl": {
-                        "lastClaudeRepairHandoff": {
+                        "lastInternalReviewRepairHandoff": {
                             "sessionName": "lane-221",
                             "headSha": "abc123",
                             "reviewedAt": "2026-04-22T00:05:00Z",
