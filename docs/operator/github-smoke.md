@@ -19,6 +19,13 @@ export DAEDALUS_GITHUB_SMOKE_REPO=your-org/your-repo
 pytest tests/test_github_issue_runner_smoke.py -q
 ```
 
+Or run it through the shared live-smoke harness:
+
+```bash
+export DAEDALUS_GITHUB_SMOKE_REPO=your-org/your-repo
+scripts/smoke-live.sh --only github-issue-runner
+```
+
 Optional controls:
 
 ```bash

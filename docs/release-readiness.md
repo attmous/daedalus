@@ -37,8 +37,8 @@ should be backed by documentation, tests, or an operator smoke path.
 | Public-surface guardrails | Strong | Generic examples, placeholder-only `projects/`, packaging checks, CLI/docs drift checks |
 | Agent-legible workflows | Good | Workflow docs link the default templates and operator paths |
 | Custom structural checks | Good | Public harness tests and workflow-template drift checks |
-| Live integration evidence | Partial | Opt-in GitHub smoke covers feedback, retry recovery, and terminal cleanup; real Codex app-server smokes remain opt-in |
-| Recurring cleanup discipline | Partial | Guardrails exist, but no scheduled quality task yet |
+| Live integration evidence | Partial | Opt-in GitHub smoke covers feedback, retry recovery, and terminal cleanup; change-delivery Codex smoke creates its own GitHub issue and workflow root; real Codex app-server smokes remain opt-in |
+| Recurring cleanup discipline | Good | Scheduled release-scorecard workflow checks evidence paths weekly and on demand |
 
 ## Gates Before Community Launch
 
@@ -51,18 +51,18 @@ should be backed by documentation, tests, or an operator smoke path.
 7. Keep Codex app-server real-runtime tests opt-in and fake protocol tests in CI.
 8. Keep the live GitHub smoke runnable before calling GitHub automation
    production-grade.
-9. Expand the `change-delivery` Codex app-server smoke from fixture validation
+9. Expand the `change-delivery` Codex app-server smoke from live lane dispatch
    into a full issue-to-PR-to-review-to-merge E2E before calling the flagship
    workflow app-server-complete.
-10. Add scheduled cleanup or scorecard refresh work before claiming mature
+10. Keep the scheduled scorecard green before claiming mature
     harness-engineering discipline.
 
 ## Next Hardening Slice
 
-The highest-leverage next implementation slice is deeper live E2E evidence:
+The highest-leverage next implementation slice is deeper flagship E2E evidence:
 
-1. Teach the `change-delivery` Codex app-server smoke fixture to create and
-   clean up its own GitHub artifacts.
-2. Add a one-command local harness that runs all opt-in live smokes when the
-   required environment variables are present.
-3. Add scheduled scorecard refresh automation for release-readiness gates.
+1. Extend the `change-delivery` Codex app-server smoke through PR creation or
+   update, not only lane dispatch.
+2. Add internal-review loop evidence for `change-delivery` with a bounded,
+   cleanup-safe fixture.
+3. Add release-candidate evidence output to `scripts/smoke-live.sh`.
