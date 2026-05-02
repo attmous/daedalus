@@ -25,15 +25,16 @@ def encode(
     target.parent.mkdir(parents=True, exist_ok=True)
 
     print("quantizing …")
-    base_palette = frames[0].convert(
+    rgb_frames = [frame.convert("RGB") for frame in frames]
+    base_palette = rgb_frames[0].convert(
         "P",
         palette=Image.Palette.ADAPTIVE,
         colors=colors,
         dither=Image.Dither.NONE,
     )
     quantized = [base_palette]
-    for f in frames[1:]:
-        quantized.append(f.quantize(palette=base_palette, dither=Image.Dither.NONE))
+    for frame in rgb_frames[1:]:
+        quantized.append(frame.quantize(palette=base_palette, dither=Image.Dither.NONE))
 
     print("encoding GIF …")
     quantized[0].save(

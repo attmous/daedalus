@@ -26,6 +26,14 @@ from PIL import Image, ImageDraw
 from . import config, flow, icons, typography
 
 
+def _title_emblem() -> Image.Image:
+    src = Image.open(config.BUST_SRC).convert("RGBA")
+    if src.getbbox():
+        src = src.crop(src.getbbox())
+    ratio = min(config.TITLE_EMBLEM_W / src.width, config.TITLE_EMBLEM_H / src.height)
+    return src.resize((int(src.width * ratio), int(src.height * ratio)), Image.LANCZOS)
+
+
 def draw(im: Image.Image, *, frame: int) -> None:
     """Paint the entire left-side title block onto `im`."""
 
@@ -45,20 +53,20 @@ def draw(im: Image.Image, *, frame: int) -> None:
     x = config.TITLE_X
     y = config.TITLE_Y
 
-    # Wordmark
-    d.text((x, y), "Sprints", font=typography.title(), fill=(*config.INK, 255))
+    emblem = _title_emblem()
+    im.paste(emblem, (x + 18, y - 18), emblem)
 
     # Subtitle — two lines, second in cyan
     d.text(
         (x, y + config.OFFSET_SUBTITLE_1),
-        "Repo policy in motion.",
+        "A Hermes-Agent plugin",
         font=typography.subtitle(),
         fill=(*config.INK, 255),
     )
     d.text(
         (x, y + config.OFFSET_SUBTITLE_2),
-        "A Hermes-Agent plugin",
-        font=typography.subtitle(),
+        "for supervised autonomous coding agents' workflows",
+        font=typography.tagline(),
         fill=(*config.CYAN, 255),
     )
 

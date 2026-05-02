@@ -40,6 +40,10 @@ def subtitle_italic() -> ImageFont.ImageFont:
     return font(config.FONT_DISPLAY_ITALIC, 38)
 
 
+def tagline() -> ImageFont.ImageFont:
+    return font(config.FONT_DISPLAY, 30)
+
+
 def caption_serif_italic() -> ImageFont.ImageFont:
     return font(config.FONT_DISPLAY_ITALIC, 17)
 

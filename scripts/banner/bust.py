@@ -8,10 +8,10 @@ from . import config
 
 
 def _resize_to_target(src: Image.Image) -> Image.Image:
-    """Resize to height = BUST_TARGET_H, preserving aspect ratio."""
-    ratio = config.BUST_TARGET_H / src.height
+    """Resize to fit the configured hero emblem box."""
+    ratio = min(config.BUST_TARGET_W / src.width, config.BUST_TARGET_H / src.height)
     return src.resize(
-        (int(src.width * ratio), config.BUST_TARGET_H),
+        (int(src.width * ratio), int(src.height * ratio)),
         Image.LANCZOS,
     )
 
@@ -51,6 +51,10 @@ def _key_engraving(src: Image.Image) -> Image.Image:
 def prepare_bust() -> Image.Image:
     """Load, crop, key, and soften the right-side hero image."""
     src = Image.open(config.BUST_SRC).convert("RGBA")
+    if src.getbbox() and src.split()[3].getextrema()[0] < 255:
+        src = src.crop(src.getbbox())
+        return _resize_to_target(src)
+
     w0, h0 = src.size
 
     # Trim plate borders / edge content.
@@ -68,7 +72,7 @@ def prepare_bust() -> Image.Image:
 def placement(bust: Image.Image) -> dict:
     """Return placement coordinates derived from the hero image size."""
     bust_x = config.W - bust.width - config.BUST_RIGHT_MARGIN
-    bust_y = config.H - bust.height + 10
+    bust_y = 118
     return {
         "x": bust_x,
         "y": bust_y,

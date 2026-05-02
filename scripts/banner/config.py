@@ -13,7 +13,7 @@ ASSETS = ROOT / "assets"
 OUT_PATH = ASSETS / "sprints-banner.gif"
 
 # Right-side hero source art.
-BUST_SRC = ASSETS / "source" / "sprints-emblem.jpg"
+BUST_SRC = ASSETS / "source" / "sprints-emblem.png"
 
 FONT_DISPLAY = ASSETS / "fonts" / "PlayfairDisplay.ttf"
 FONT_DISPLAY_ITALIC = ASSETS / "fonts" / "PlayfairDisplay-Italic.ttf"
@@ -57,11 +57,13 @@ CADUCEUS_HEIGHT = 280
 # Title block — shifted right to leave room for the caduceus.
 TITLE_X = 130
 TITLE_Y = 70
+TITLE_EMBLEM_W = 500
+TITLE_EMBLEM_H = 170
 
 # Title block vertical offsets relative to TITLE_Y.
-OFFSET_SUBTITLE_1 = 145
-OFFSET_SUBTITLE_2 = 185
-OFFSET_FLOW = 240
+OFFSET_SUBTITLE_1 = 170
+OFFSET_SUBTITLE_2 = 218
+OFFSET_FLOW = 286
 # Caption underneath the title block:
 #   "A Hermes Agent plugin  ·  Reads issues, writes PRs."
 # (The GitHub-now/Linear-next roadmap line moved into the README so it
@@ -70,5 +72,6 @@ OFFSET_CAPTION_1 = 270
 
 # Hero image target height — leaves margin so the engraved emblem
 # reads as a framed editorial plate, not a dominating photo.
-BUST_TARGET_H = 320
+BUST_TARGET_H = 155
+BUST_TARGET_W = 510
 BUST_RIGHT_MARGIN = 40

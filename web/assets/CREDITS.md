@@ -1,10 +1,10 @@
 # Asset credits
 
-## Banner source art — `source/sprints-emblem.jpg`
+## Sprints emblem — `source/sprints-emblem.png`
 
-- **Subject:** Public-domain engraved figure used as temporary banner source art.
-- **Status:** Public domain.
-- **Used in:** `assets/sprints-banner.gif` — right-side hero illustration.
+- **Subject:** User-provided Sprints wordmark.
+- **Status:** Project-owned brand asset.
+- **Used in:** `assets/sprints-banner.gif` — left-side title emblem.
 
 ## Caduceus illustration — `source/caduceus.jpg`
 
