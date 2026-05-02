@@ -4,6 +4,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from workflows.workflow import ModuleWorkflow
+
 NAME = "issue-runner"
 SUPPORTED_SCHEMA_VERSIONS = (1,)
 CONFIG_SCHEMA_PATH = Path(__file__).parent / "schema.yaml"
@@ -14,6 +16,10 @@ from workflows.issue_runner.cli import main as cli_main
 from workflows.issue_runner.preflight import run_preflight
 from workflows.issue_runner.workspace import make_workspace
 from workflows.issue_runner.workspace import load_workspace_from_config
+
+import sys as _sys
+
+WORKFLOW = ModuleWorkflow(_sys.modules[__name__])
 
 
 def service_prepare(
@@ -60,6 +66,7 @@ __all__ = [
     "CONFIG_SCHEMA_PATH",
     "PREFLIGHT_GATED_COMMANDS",
     "SERVICE_MODES",
+    "WORKFLOW",
     "make_workspace",
     "cli_main",
     "run_preflight",

@@ -15,6 +15,8 @@ This package satisfies the daedalus workflow-plugin contract:
 from pathlib import Path
 from typing import Any
 
+from workflows.workflow import ModuleWorkflow
+
 NAME = "change-delivery"
 SUPPORTED_SCHEMA_VERSIONS = (1,)
 CONFIG_SCHEMA_PATH = Path(__file__).parent / "schema.yaml"
@@ -47,6 +49,10 @@ from workflows.change_delivery.workspace import make_workspace as _make_workspac
 from workflows.change_delivery.workspace import load_workspace_from_config
 from workflows.change_delivery.cli import main as cli_main
 from workflows.change_delivery.preflight import run_preflight
+
+import sys as _sys
+
+WORKFLOW = ModuleWorkflow(_sys.modules[__name__])
 
 
 def make_workspace(*, workflow_root: Path, config: dict):
@@ -148,6 +154,7 @@ __all__ = [
     "CONFIG_SCHEMA_PATH",
     "PREFLIGHT_GATED_COMMANDS",
     "SERVICE_MODES",
+    "WORKFLOW",
     "make_workspace",
     "cli_main",
     "run_preflight",
