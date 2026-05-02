@@ -1,4 +1,5 @@
 """Font loading. Single source of truth for sizes/styles."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -37,6 +38,10 @@ def subtitle() -> ImageFont.ImageFont:
 
 def subtitle_italic() -> ImageFont.ImageFont:
     return font(config.FONT_DISPLAY_ITALIC, 38)
+
+
+def tagline() -> ImageFont.ImageFont:
+    return font(config.FONT_DISPLAY, 30)
 
 
 def caption_serif_italic() -> ImageFont.ImageFont:

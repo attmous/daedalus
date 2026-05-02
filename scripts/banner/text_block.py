@@ -6,7 +6,7 @@ Now takes the Image object too, because the inline icons are PNG-embedded
 Layout:
 
     ┌────────────────────────────────────────────────────────────┐
-    │ ☤    Daedalus              [code] [bust]                  │
+    │ ☤    Sprints              [code] [bust]                  │
     │      ─                                                     │
     │      Agents that fly.                                      │
     │      Workflows that don't melt.                            │
@@ -18,11 +18,20 @@ Layout:
 The caduceus is a tall decorative emblem on the far-left margin.
 The GitHub mark is inline next to its tagline clause.
 """
+
 from __future__ import annotations
 
 from PIL import Image, ImageDraw
 
 from . import config, flow, icons, typography
+
+
+def _title_emblem() -> Image.Image:
+    src = Image.open(config.BUST_SRC).convert("RGBA")
+    if src.getbbox():
+        src = src.crop(src.getbbox())
+    ratio = min(config.TITLE_EMBLEM_W / src.width, config.TITLE_EMBLEM_H / src.height)
+    return src.resize((int(src.width * ratio), int(src.height * ratio)), Image.LANCZOS)
 
 
 def draw(im: Image.Image, *, frame: int) -> None:
@@ -44,21 +53,31 @@ def draw(im: Image.Image, *, frame: int) -> None:
     x = config.TITLE_X
     y = config.TITLE_Y
 
-    # Wordmark
-    d.text((x, y), "Daedalus",
-           font=typography.title(), fill=(*config.INK, 255))
+    emblem = _title_emblem()
+    im.paste(emblem, (x + 18, y - 18), emblem)
 
     # Subtitle — two lines, second in cyan
-    d.text((x, y + config.OFFSET_SUBTITLE_1), "Agents that fly.",
-           font=typography.subtitle(), fill=(*config.INK, 255))
-    d.text((x, y + config.OFFSET_SUBTITLE_2), "Workflows that don't melt.",
-           font=typography.subtitle(), fill=(*config.CYAN, 255))
+    d.text(
+        (x, y + config.OFFSET_SUBTITLE_1),
+        "A Hermes-Agent plugin",
+        font=typography.subtitle(),
+        fill=(*config.INK, 255),
+    )
+    d.text(
+        (x, y + config.OFFSET_SUBTITLE_2),
+        "for supervised autonomous coding agents' workflows",
+        font=typography.tagline(),
+        fill=(*config.CYAN, 255),
+    )
 
     # Caption line 1 — plugin + behaviour
     cap_font = typography.caption_serif_italic()
-    d.text((x, y + config.OFFSET_CAPTION_1),
-           "A Hermes Agent plugin  ·  Reads issues, writes PRs.",
-           font=cap_font, fill=(*config.INK, 255))
+    d.text(
+        (x, y + config.OFFSET_CAPTION_1),
+        "",
+        font=cap_font,
+        fill=(*config.INK, 255),
+    )
 
     im.paste(text_layer, (0, 0), text_layer)
 

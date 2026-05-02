@@ -5,12 +5,12 @@ __pycache__/
 .pytest_cache/
 .DS_Store
 .claude/
-.hermes/daedalus/workflow-root
+.hermes/sprints/workflow-root
 build/
 dist/
 *.egg-info/
 content/*
-daedalus/projects/*/runtime/*
-!daedalus/projects/*/runtime/README.md
-daedalus/projects/*/workspace/*
-!daedalus/projects/*/workspace/README.md
+sprints/projects/*/runtime/*
+!sprints/projects/*/runtime/README.md
+sprints/projects/*/workspace/*
+!sprints/projects/*/workspace/README.md

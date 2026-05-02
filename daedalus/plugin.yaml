@@ -1,6 +1,0 @@
-name: daedalus
-version: 0.3.0
-description: Daedalus workflow engine and operator control surface.
-author: Hermes Agent
-provides_hooks: []
-provides_tools: []

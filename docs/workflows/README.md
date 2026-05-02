@@ -1,34 +1,23 @@
-# Bundled workflows
+# Workflows
 
-Daedalus ships more than one workflow. The engine, lease model, runtime
-adapters, and `WORKFLOW.md` contract are shared; each workflow package defines
-its own lifecycle, prompts, gates, and operator commands.
+Sprints ships one workflow engine: `agentic`.
 
-## At a glance
+The bundled files under `sprints/workflows/templates/` are policy templates for
+that engine. They are not separate Python workflow packages.
 
-| Workflow | Use it when... | Default template | Managed path |
-|---|---|---|---|
-| [`issue-runner`](issue-runner.md) | you want a generic tracker-driven workflow that selects issues, creates workspaces, runs hooks, and invokes one agent | [`docs/examples/issue-runner.workflow.md`](../examples/issue-runner.workflow.md) | yes — default `bootstrap` + `service-up` |
-| [`change-delivery`](change-delivery.md) | you want issue -> actor implementation -> gates -> PR -> merge delivery with GitHub as the first-class tracker/code-host path | [`docs/examples/change-delivery.workflow.md`](../examples/change-delivery.workflow.md) | yes — `bootstrap --workflow change-delivery` + `service-up` |
+## Files
 
-For the contract file itself, see the [`WORKFLOW.md` guide](workflow-contract.md).
-Both bundled templates default runtime-backed stages to `codex-app-server`;
-bind individual roles to Hermes Agent or another runtime profile when that is a
-better fit for the stage.
+| File | Purpose |
+| --- | --- |
+| `sprints/workflows/workflow.template.md` | Minimal bootstrap contract. |
+| `sprints/workflows/templates/issue-runner.md` | Issue-focused policy template. |
+| `sprints/workflows/templates/change-delivery.md` | Implementation/review policy template. |
+| `sprints/workflows/templates/release.md` | Release planning and verification template. |
+| `sprints/workflows/templates/triage.md` | Incoming work triage template. |
 
-## The boundary
+## Contract
 
-- Generic docs such as [architecture](../architecture.md), [public contract](../public-contract.md), [security](../security.md), and the engine-level concept docs describe Daedalus itself.
-- Workflow docs describe the lifecycle and contract details that belong to one workflow package.
-- If a doc is mostly about PR publish/merge stages, actor/stage/gate policy, or code-host approvals, it belongs to `change-delivery`, not to the generic engine story.
+Use `WORKFLOW.md` in the target repo.
 
-## Repo Contract Naming
-
-Daedalus uses `WORKFLOW.md` when a repository carries one workflow. When you
-bootstrap a second workflow, Daedalus promotes the existing default contract to
-`WORKFLOW-<existing-workflow>.md` and writes the new contract to
-`WORKFLOW-<new-workflow>.md`.
-
-Bootstrap does not overwrite existing named workflow contracts. If
-`WORKFLOW.md` is a non-Daedalus file, rename it manually or choose a different
-repo before running `hermes daedalus bootstrap`.
+The file has YAML front matter for mechanics and Markdown sections for policy.
+Read [workflow-contract.md](workflow-contract.md) for the exact shape.
