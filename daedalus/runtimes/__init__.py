@@ -110,13 +110,13 @@ def _ensure_builtin_runtimes_registered() -> None:
     from . import claude_cli
     from . import codex_acpx
     from . import codex_app_server
-    from . import hermes_agent
+    from . import hermes_agent_cli
 
     builtins = {
         "acpx-codex": getattr(codex_acpx, "AcpxCodexRuntime", None),
         "claude-cli": getattr(claude_cli, "ClaudeCliRuntime", None),
         "codex-app-server": getattr(codex_app_server, "CodexAppServerRuntime", None),
-        "hermes-agent": getattr(hermes_agent, "HermesAgentRuntime", None),
+        "hermes-agent": getattr(hermes_agent_cli, "HermesAgentRuntime", None),
     }
     for kind, cls in builtins.items():
         if cls is not None:
