@@ -1,4 +1,4 @@
-"""Compatibility facade for workflow loading APIs."""
+﻿"""Compatibility facade for workflow loading APIs."""
 
 from workflows.contracts import (
     DEFAULT_WORKFLOW_MARKDOWN_FILENAME,
@@ -39,7 +39,7 @@ from workflows.registry import (
     make_workspace,
     run_cli,
 )
-from workflows.runtime_config import (
+from workflows.bindings import (
     RuntimePresetError,
     available_runtime_presets,
     bind_runtime_role,

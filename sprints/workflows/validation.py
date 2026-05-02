@@ -1,4 +1,4 @@
-"""Workflow contract validation and readiness recommendations."""
+﻿"""Workflow contract validation and readiness recommendations."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import yaml
 
 from workflows.contracts import WorkflowContract, WorkflowContractError, load_workflow_contract
 from workflows.registry import Workflow, load_workflow_object
-from workflows.runtime_config import (
+from workflows.bindings import (
     runtime_availability_checks,
     runtime_binding_checks,
     runtime_capability_checks,
