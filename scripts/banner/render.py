@@ -1,12 +1,22 @@
 """Per-frame composition. Glues all the modules together.
 
 Frame layers (bottom → top):
-    1. Parchment
-    2. Constellation (animated draw-in)
-    3. Right-side hero source art
-    4. Floating code overlays (staggered fade-in)
-    5. Right-margin editorial vignettes
-    6. Left-side title block (caduceus + wordmark + animated flow line)
+
+    1. Parchment           — flat cream background plate (parchment.py)
+    2. Constellation       — animated node/edge network (constellation.py)
+    3. Code overlays       — three editorial code blocks fading in
+                              top-right (code_overlays.py)
+    4. Margin vignettes    — magnifying glass / doc / curly braces in
+                              the right margin (icons.py)
+    5. Title block         — caduceus + wordmark emblem + subtitle +
+                              tagline + animated workflow flow line
+                              (text_block.py + flow.py + icons.py)
+
+Every visual constant comes from ``config`` and every animation curve
+from ``timeline`` — this module owns layer order and nothing else.
+To retune what an element looks like, edit its module; to retune
+*when* it appears, edit ``timeline.py``; to retune colours / anchors,
+edit ``config.py``.
 """
 
 from __future__ import annotations
@@ -27,7 +37,7 @@ from . import (
     typography,
 )
 
-# Determinism for the constellation seed.
+# Determinism for the constellation seed — the same network every run.
 random.seed(7)
 
 
@@ -38,9 +48,12 @@ class Scene:
         print("baking parchment …")
         self.parchment = parchment.make_parchment()
         print("preparing bust …")
+        # The "bust" image is loaded so its dimensions can anchor the
+        # constellation seed point — the image itself is composited
+        # into the title block as the wordmark emblem (text_block.py),
+        # not pasted as a separate hero plate.
         self.bust = bust_mod.prepare_bust()
         self.bust_pos = bust_mod.placement(self.bust)
-        # Constellation seed near the bust head's upper-right.
         seed_origin = (
             self.bust_pos["x"] + self.bust.width - 60,
             self.bust_pos["y"] + 110,
@@ -49,20 +62,21 @@ class Scene:
 
 
 def render_frame(scene: Scene, f: int) -> Image.Image:
+    """Render frame ``f`` of the banner. ``f`` is in [0, FRAMES)."""
     im = scene.parchment.copy()
     overlay = Image.new("RGBA", (config.W, config.H), (0, 0, 0, 0))
     d = ImageDraw.Draw(overlay)
 
+    # Loop-tail dim and constellation reveal progress.
     dim = timeline.hold_to_loop(f)
     cp = timeline.constellation_progress(f) * dim
 
-    # 1+2. constellation (under hero)
+    # Layer 2 — constellation
     constellation.draw(d, scene.nodes, scene.edges, cp, dim)
     im.paste(overlay, (0, 0), overlay)
 
-    # 3. code overlays (each on its own RGBA layer for clean alpha).
-    # The Sprints emblem is now the left-side wordmark, so the animated code
-    # occupies the right side of the banner.
+    # Layer 3 — three code blocks fade in top-right, each on its own
+    # RGBA layer so per-block alpha composites cleanly.
     code_layer = Image.new("RGBA", (config.W, config.H), (0, 0, 0, 0))
     cd = ImageDraw.Draw(code_layer)
     code_x = 870
@@ -92,7 +106,7 @@ def render_frame(scene: Scene, f: int) -> Image.Image:
     )
     im.paste(code_layer, (0, 0), code_layer)
 
-    # 5. right-margin editorial vignettes
+    # Layer 4 — right-margin editorial vignettes (faded with constellation).
     margin = Image.new("RGBA", (config.W, config.H), (0, 0, 0, 0))
     md = ImageDraw.Draw(margin)
     margin_alpha = int(180 * cp)
@@ -100,9 +114,11 @@ def render_frame(scene: Scene, f: int) -> Image.Image:
         icons.draw_margin_icons(md, margin_alpha)
     im.paste(margin, (0, 0), margin)
 
-    # 6. left-side title block (always opaque; workflow flow line
-    # animates stage-by-stage with a pulse). text_block paints onto
-    # `im` directly so it can paste PNG icons.
+    # Layer 5 — title block on the left. Always opaque except the flow
+    # line, which animates stage-by-stage with a pulse. ``text_block``
+    # paints onto ``im`` directly so it can paste PNG icons (caduceus,
+    # wordmark emblem) and flow.py can blur the pulse glow into the
+    # parchment cleanly.
     text_block.draw(im, frame=f)
 
     return im

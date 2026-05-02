@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="400" viewBox="0 0 1200 400" fill="none" role="img" aria-label="Hermes Sprints — a Hermes-Agent plugin for supervised autonomous coding agents' workflows">
+  <!-- Static counterpart of assets/sprints-banner.gif. Same parchment palette
+       (PAPER #E8E2D5, INK #1C2024, CYAN #10828E, HERMES_GOLD #A5843C) as
+       scripts/banner/config.py so the GIF and SVG read as the same banner.
+       Rendered where SVG is supported; the README falls back to the GIF
+       elsewhere. -->
+
+  <!-- Parchment background -->
+  <rect width="1200" height="400" fill="#E8E2D5"/>
+
+  <!-- ── Caduceus, far-left margin (stylised line drawing) ──────────────── -->
+  <g transform="translate(60 60)" stroke="#A5843C" stroke-width="2.4" stroke-linecap="round" fill="none">
+    <!-- central staff -->
+    <path d="M 30 0 V 280"/>
+    <!-- twin serpents winding around the staff -->
+    <path d="M 30 30 C 12 50 12 70 30 90 C 48 110 48 130 30 150 C 12 170 12 190 30 210 C 48 230 48 250 30 270"/>
+    <path d="M 30 30 C 48 50 48 70 30 90 C 12 110 12 130 30 150 C 48 170 48 190 30 210 C 12 230 12 250 30 270"/>
+    <!-- wings, top -->
+    <path d="M 30 18 C 8 8 -2 22 4 38 C 12 32 22 30 30 32"/>
+    <path d="M 30 18 C 52 8 62 22 56 38 C 48 32 38 30 30 32"/>
+    <!-- finial knob -->
+    <circle cx="30" cy="6" r="4" fill="#A5843C"/>
+    <!-- serpent heads -->
+    <circle cx="14" cy="276" r="3" fill="#A5843C"/>
+    <circle cx="46" cy="276" r="3" fill="#A5843C"/>
+  </g>
+
+  <!-- ── Title block ────────────────────────────────────────────────────── -->
+  <g transform="translate(130 70)">
+    <!-- Wordmark: serif "Sprints" in dark ink. The GIF uses the ornate
+         metallic emblem (assets/source/sprints-emblem.png); the SVG
+         renders a clean serif stand-in so it stays self-contained and
+         scales crisply at any size. -->
+    <text x="18" y="118"
+          fill="#1C2024"
+          font-family="'Playfair Display', 'Times New Roman', Georgia, serif"
+          font-size="120"
+          font-style="italic"
+          font-weight="700"
+          letter-spacing="0.01em">Sprints</text>
+
+    <!-- Subtitle -->
+    <text x="0" y="200"
+          fill="#1C2024"
+          font-family="'Playfair Display', 'Times New Roman', Georgia, serif"
+          font-size="38"
+          font-weight="600">A Hermes-Agent plugin</text>
+
+    <!-- Cyan tagline -->
+    <text x="0" y="248"
+          fill="#10828E"
+          font-family="'Playfair Display', 'Times New Roman', Georgia, serif"
+          font-size="30"
+          font-weight="500">for supervised autonomous coding agents&#39; workflows</text>
+
+    <!-- Workflow flow line: Issue → Code → Review → Merge -->
+    <g transform="translate(0 316)"
+       font-family="ui-sans-serif, system-ui, 'DejaVu Sans', sans-serif"
+       font-size="15"
+       font-weight="700"
+       fill="#1C2024"
+       letter-spacing="0.06em">
+      <text x="0" y="0">ISSUE</text>
+      <text x="74" y="0" fill="#4C545C">→</text>
+      <text x="100" y="0">CODE</text>
+      <text x="170" y="0" fill="#4C545C">→</text>
+      <text x="196" y="0">REVIEW</text>
+      <text x="282" y="0" fill="#4C545C">→</text>
+      <text x="308" y="0">MERGE</text>
+    </g>
+  </g>
+
+  <!-- ── Right-margin editorial vignettes (mirror icons.py) ─────────────── -->
+  <g stroke="#4C545C" fill="none" stroke-width="2">
+    <!-- magnifying glass -->
+    <circle cx="1150" cy="40" r="10"/>
+    <line x1="1157" y1="47" x2="1164" y2="54"/>
+    <!-- doc -->
+    <rect x="1144" y="100" width="16" height="20"/>
+    <line x1="1148" y1="106" x2="1156" y2="106" stroke-width="1"/>
+    <line x1="1148" y1="111" x2="1156" y2="111" stroke-width="1"/>
+    <line x1="1148" y1="116" x2="1153" y2="116" stroke-width="1"/>
+  </g>
+  <text x="1152" y="194" fill="#4C545C" text-anchor="middle"
+        font-family="ui-sans-serif, system-ui, 'DejaVu Sans', sans-serif"
+        font-size="15">{ }</text>
+</svg>
