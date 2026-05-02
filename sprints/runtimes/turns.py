@@ -39,14 +39,14 @@ def command_output_result(output: str) -> PromptRunResult:
 
 
 def prompt_result_from_payload(
-    payload: dict[str, Any], *, fallback_output: str = ""
+    payload: dict[str, Any], *, command_output: str = ""
 ) -> PromptRunResult:
     metrics = payload.get("metrics") if isinstance(payload.get("metrics"), dict) else {}
     output = payload.get("output")
     if output is None:
         output = payload.get("text")
     if output is None:
-        output = fallback_output
+        output = command_output
     tokens = payload.get("tokens")
     if tokens is None:
         tokens = payload.get("token_usage") or metrics.get("tokens")
@@ -70,7 +70,7 @@ def prompt_result_from_payload(
 
 
 def load_structured_result(
-    path: Path, *, fallback_output: str = ""
+    path: Path, *, command_output: str = ""
 ) -> PromptRunResult | None:
     path = Path(path)
     if not path.exists() or path.stat().st_size <= 0:
@@ -78,7 +78,7 @@ def load_structured_result(
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         raise ValueError(f"structured runtime result must be a JSON object: {path}")
-    return prompt_result_from_payload(payload, fallback_output=fallback_output)
+    return prompt_result_from_payload(payload, command_output=command_output)
 
 
 def prompt_result_from_stage(result: RuntimeStageResult) -> PromptRunResult:
@@ -155,9 +155,7 @@ def runtime_result_path(
     return out_dir / f"{stage_name}-{digest}.result.json"
 
 
-def substitute_command_placeholders(
-    argv: list[str], values: dict[str, str]
-) -> list[str]:
+def substitute_command_values(argv: list[str], values: dict[str, str]) -> list[str]:
     resolved = []
     for arg in argv:
         text = str(arg)
@@ -178,7 +176,7 @@ def run_runtime_stage(
     prompt: str,
     prompt_path: Path | None = None,
     env: dict[str, str] | None = None,
-    placeholders: dict[str, str] | None = None,
+    command_values: dict[str, str] | None = None,
     resume_session_id: str | None = None,
     cancel_event: Any | None = None,
     progress_callback: Callable[[Any], None] | None = None,
@@ -188,7 +186,7 @@ def run_runtime_stage(
 
     Workflows own policy, prompts, and state transitions. This helper owns the
     common runtime boundary: session setup, command overrides, prompt-file
-    materialization, placeholder substitution, cancellation/progress hooks, and
+    materialization, command variable substitution, cancellation/progress hooks, and
     a normalized output/result shape.
     """
     worktree = Path(worktree)
@@ -229,7 +227,7 @@ def run_runtime_stage(
             )
             if resolved_result_path.exists():
                 resolved_result_path.unlink()
-            argv = substitute_command_placeholders(
+            argv = substitute_command_values(
                 command,
                 {
                     "model": model,
@@ -238,7 +236,7 @@ def run_runtime_stage(
                     "result_path": str(resolved_result_path),
                     "worktree": str(worktree),
                     "session_name": session_name,
-                    **(placeholders or {}),
+                    **(command_values or {}),
                 },
             )
             stage_env = dict(env or {})
@@ -251,7 +249,7 @@ def run_runtime_stage(
                 runtime.run_command(worktree=worktree, command_argv=argv, env=stage_env)
             )
             runtime_result = load_structured_result(
-                resolved_result_path, fallback_output=output
+                resolved_result_path, command_output=output
             ) or command_output_result(output)
             return RuntimeStageResult(
                 output=runtime_result.output,

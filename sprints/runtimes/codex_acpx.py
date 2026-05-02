@@ -3,18 +3,14 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
-from . import SessionHandle, SessionHealth, register
+from . import SessionHandle, SessionHealth
 
 
-@register("acpx-codex")
 class AcpxCodexRuntime:
     def __init__(self, cfg: dict, *, run, run_json):
-        self._cfg = cfg
+        del cfg
         self._run = run
         self._run_json = run_json
-        self._freshness = int(cfg.get("session-idle-freshness-seconds", 900))
-        self._grace = int(cfg.get("session-idle-grace-seconds", 1800))
-        self._nudge_cooldown = int(cfg.get("session-nudge-cooldown-seconds", 600))
         self._last_activity: float | None = None
 
     def _record_activity(self) -> None:
@@ -101,15 +97,10 @@ class AcpxCodexRuntime:
                 last_used_at=session_meta.get("last_used_at"),
             )
         del worktree, now_epoch
-        legacy_health = {
-            "healthy": True,
-            "reason": "session-present",
-            "lastUsedAt": session_meta.get("last_used_at"),
-        }
         return SessionHealth(
-            healthy=bool(legacy_health.get("healthy")),
-            reason=legacy_health.get("reason"),
-            last_used_at=legacy_health.get("lastUsedAt"),
+            healthy=True,
+            reason="session-present",
+            last_used_at=session_meta.get("last_used_at"),
         )
 
     def close_session(self, *, worktree: Path, session_name: str) -> None:

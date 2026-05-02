@@ -4,10 +4,9 @@ import time
 from pathlib import Path
 from typing import Any
 
-from . import PromptRunResult, SessionHandle, SessionHealth, register
+from . import PromptRunResult, SessionHandle, SessionHealth
 
 
-@register("hermes-agent")
 class HermesAgentRuntime:
     def __init__(self, cfg: dict, *, run, run_json=None):
         self._cfg = cfg

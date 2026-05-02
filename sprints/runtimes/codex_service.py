@@ -9,7 +9,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from engine.state import read_engine_scheduler_state
-from workflows.loader import load_workflow_contract
+from workflows.loader import WorkflowContractError, load_workflow_contract
 from workflows.paths import runtime_paths
 
 CODEX_APP_SERVER_SERVICE_PREFIX = "sprints-codex-app-server"
@@ -554,31 +554,41 @@ def _codex_app_server_endpoint_is_loopback(endpoint: str) -> bool:
 
 def _load_codex_scheduler_snapshot(workflow_root: Path) -> dict[str, Any]:
     db_path = runtime_paths(workflow_root)["db_path"]
-    workflow_names: list[str] = []
     try:
         contract = load_workflow_contract(workflow_root)
-        workflow_name = str(contract.config.get("workflow") or "").strip()
-        if workflow_name:
-            workflow_names.append(workflow_name)
-    except Exception:
-        pass
-    if not workflow_names:
-        workflow_names = ["issue-runner", "change-delivery"]
+    except (
+        FileNotFoundError,
+        WorkflowContractError,
+        OSError,
+        UnicodeDecodeError,
+    ) as exc:
+        return {
+            "ok": False,
+            "path": str(db_path),
+            "exists": db_path.exists(),
+            "threads": [],
+            "totals": {},
+            "invalid_thread_count": 0,
+            "error": str(exc),
+        }
+    workflow_name = str(contract.config.get("workflow") or "").strip()
+    if not workflow_name:
+        return {
+            "ok": False,
+            "path": str(db_path),
+            "exists": db_path.exists(),
+            "threads": [],
+            "totals": {},
+            "invalid_thread_count": 0,
+            "error": f"{contract.source_path} is missing top-level `workflow:` field",
+        }
 
-    scheduler: dict[str, Any] | None = None
-    for workflow_name in workflow_names:
-        scheduler = read_engine_scheduler_state(
-            db_path,
-            workflow=workflow_name,
-            now_iso=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            now_epoch=time.time(),
-        )
-        if scheduler is None:
-            continue
-        raw_threads = scheduler.get("runtime_sessions") or {}
-        totals = scheduler.get("runtime_totals") or {}
-        if raw_threads or totals or workflow_name == workflow_names[-1]:
-            break
+    scheduler = read_engine_scheduler_state(
+        db_path,
+        workflow=workflow_name,
+        now_iso=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        now_epoch=time.time(),
+    )
 
     if scheduler is None:
         return {

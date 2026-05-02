@@ -4,10 +4,9 @@ import inspect
 import time
 from pathlib import Path
 
-from . import SessionHandle, SessionHealth, register
+from . import SessionHandle, SessionHealth
 
 
-@register("claude-cli")
 class ClaudeCliRuntime:
     def __init__(self, cfg: dict, *, run, run_json=None):
         self._cfg = cfg

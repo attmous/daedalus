@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import urlparse
 
-from . import PromptRunResult, SessionHandle, SessionHealth, register
+from . import PromptRunResult, SessionHandle, SessionHealth
 
 
 class CodexAppServerError(RuntimeError):
@@ -490,7 +490,6 @@ class _WebSocketAppServerClient(_AppServerClient):
         return b"".join(chunks)
 
 
-@register("codex-app-server")
 class CodexAppServerRuntime:
     def __init__(self, cfg: dict, *, run, run_json=None):
         del run, run_json
@@ -764,7 +763,7 @@ class CodexAppServerRuntime:
             self._warm_client = self._build_client(worktree=worktree, env=env)
             try:
                 self._initialize(client=self._warm_client, state=state)
-            except Exception:
+            except CodexAppServerError:
                 self._drop_warm_client()
                 raise
         return self._warm_client
@@ -1079,10 +1078,7 @@ class CodexAppServerRuntime:
     def _notify_progress(self, state: _RunState) -> None:
         if self._progress_callback is None:
             return
-        try:
-            self._progress_callback(self._result_from_state(state))
-        except Exception:
-            return
+        self._progress_callback(self._result_from_state(state))
 
     def _consume_message(self, message: dict[str, Any], *, state: _RunState) -> bool:
         method = str(message.get("method") or "").strip()
