@@ -23,7 +23,10 @@ from engine.scheduler import (
     retry_queue_snapshot,
     running_snapshot,
 )
-from workflows.core.types import WorkflowDriver
+try:
+    from engine.driver import WorkflowDriver
+except ModuleNotFoundError:
+    from daedalus.engine.driver import WorkflowDriver
 from engine.lifecycle import (
     clear_work_entries,
     mark_running_work,
@@ -39,9 +42,9 @@ from runtimes.registry import build_runtimes
 from runtimes.types import PromptRunResult, Runtime
 from runtimes.stages import prompt_result_from_stage, run_runtime_stage
 from workflows.contract import WORKFLOW_POLICY_KEY, WorkflowContractError, load_workflow_contract
-from workflows.core.config import ConfigError
-from workflows.core.hooks import build_hook_env, run_shell_hook
-from workflows.core.prompts import render_prompt_template
+from workflows.config import ConfigError
+from workflows.hooks import build_hook_env, run_shell_hook
+from workflows.prompts import render_prompt_template
 from workflows.shared.config_snapshot import AtomicRef, ConfigSnapshot
 from workflows.shared.paths import runtime_paths
 from workflows.issue_runner.config import (

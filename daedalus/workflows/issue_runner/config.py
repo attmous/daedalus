@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from workflows.core.config import ConfigView, get_int, get_mapping, get_value, resolve_path
+from workflows.config import ConfigView, get_int, get_mapping, get_value, resolve_path
 
 
 DEFAULT_ACTIVE_STATES = ("todo", "open", "ready")

@@ -2,7 +2,10 @@ import json
 from pathlib import Path
 
 from workflows.contract import render_workflow_markdown
-from workflows.core.types import WorkflowDriver
+try:
+    from engine.driver import WorkflowDriver
+except ModuleNotFoundError:
+    from daedalus.engine.driver import WorkflowDriver
 
 
 def test_issue_runner_workspace_conforms_to_workflow_driver_protocol(tmp_path):

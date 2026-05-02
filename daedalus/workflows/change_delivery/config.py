@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from workflows.core.config import ConfigView, resolve_path
+from workflows.config import ConfigView, resolve_path
 
 
 @dataclass(frozen=True)

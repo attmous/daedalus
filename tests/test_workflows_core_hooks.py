@@ -3,13 +3,13 @@ from types import SimpleNamespace
 
 import pytest
 
-from workflows.core.hooks import build_hook_env, run_shell_hook
+from workflows.hooks import build_hook_env, run_shell_hook
 
 
 def test_build_hook_env_stringifies_values():
     assert build_hook_env({"A": 1, "B": Path("/tmp/work")}) == {
         "A": "1",
-        "B": "/tmp/work",
+        "B": str(Path("/tmp/work")),
     }
 
 

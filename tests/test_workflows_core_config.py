@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from workflows.core.config import (
+from workflows.config import (
     ConfigError,
     ConfigView,
     first_present,

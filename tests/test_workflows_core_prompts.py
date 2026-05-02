@@ -1,6 +1,6 @@
 import pytest
 
-from workflows.core.prompts import render_prompt_template
+from workflows.prompts import render_prompt_template
 
 
 def test_render_prompt_template_renders_issue_fields_and_attempt():
