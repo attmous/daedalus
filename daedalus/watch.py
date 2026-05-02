@@ -7,6 +7,8 @@ real TTY.
 """
 from __future__ import annotations
 
+import json
+import time
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -206,32 +208,33 @@ def reconcile_stalls_tick(
     orchestrator,
     now: float | None = None,
 ) -> list:
-    import time as _time
-
     from workflows.change_delivery.event_taxonomy import (
         DAEDALUS_STALL_DETECTED,
         DAEDALUS_STALL_TERMINATED,
     )
     from workflows.change_delivery.stall import reconcile_stalls
-    from runtime import append_daedalus_event
 
     if now is None:
-        now = _time.monotonic()
+        now = time.monotonic()
+
+    def append_event(event: dict[str, Any]) -> None:
+        event_log_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            **event,
+        }
+        with event_log_path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(payload, sort_keys=True) + "\n")
+
     verdicts = reconcile_stalls(snapshot, running, now=now)
     for verdict in verdicts:
-        append_daedalus_event(
-            event_log_path=event_log_path,
-            event={
-                "type": DAEDALUS_STALL_DETECTED,
-                "issue_id": verdict.issue_id,
-                "elapsed_seconds": verdict.elapsed_seconds,
-                "threshold_seconds": verdict.threshold_seconds,
-            },
-        )
+        append_event({
+            "type": DAEDALUS_STALL_DETECTED,
+            "issue_id": verdict.issue_id,
+            "elapsed_seconds": verdict.elapsed_seconds,
+            "threshold_seconds": verdict.threshold_seconds,
+        })
         orchestrator.terminate_worker(verdict.issue_id, reason="stall")
-        append_daedalus_event(
-            event_log_path=event_log_path,
-            event={"type": DAEDALUS_STALL_TERMINATED, "issue_id": verdict.issue_id},
-        )
+        append_event({"type": DAEDALUS_STALL_TERMINATED, "issue_id": verdict.issue_id})
         orchestrator.queue_retry(verdict.issue_id, error="stall_timeout")
     return verdicts

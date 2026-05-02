@@ -150,10 +150,8 @@ def _emit_dispatch_skipped_event(
     to surface as a WorkflowContractError.
     """
     try:
-        # Imported lazily to avoid pulling change_delivery-specific paths into the
-        # generic dispatcher's import graph at module load time.
+        from engine.store import EngineStore
         from workflows.shared.paths import runtime_paths
-        import runtime as _runtime
 
         paths = runtime_paths(workflow_root)
         event = {
@@ -162,8 +160,10 @@ def _emit_dispatch_skipped_event(
             "code": error_code,
             "detail": error_detail,
         }
-        _runtime.append_daedalus_event(
-            event_log_path=paths["event_log_path"], event=event
+        EngineStore(db_path=paths["db_path"], workflow=workflow_name).append_event(
+            event_type="daedalus.dispatch_skipped",
+            severity="warn",
+            payload=event,
         )
     except Exception:
         # Best-effort: never let event-log failures shadow the preflight error.

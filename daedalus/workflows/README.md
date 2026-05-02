@@ -9,8 +9,7 @@ specific lifecycle. Today we bundle two workflow surfaces:
 
 Shared workflow mechanics live under `shared/`. Shared execution backends live
 under top-level `runtimes/`, shared tracker integrations live under
-top-level `trackers/`, and PR/merge integrations live under top-level
-`code_hosts/`.
+top-level `trackers/`, including PR/merge clients.
 
 Workflows are loaded by name through `workflows.<slug>`. The dispatcher
 in `__init__.py` enforces a small contract: every workflow package must
