@@ -208,9 +208,9 @@ under_review → findings_open → approved → merged
 
 | Role | Model | Purpose |
 |:---|:---|:---|
-| Internal Coder | `gpt-5.3-codex-spark/high` | Default implementation |
-| Escalation Coder | `gpt-5.4` | Large-effort / complex tasks |
-| Internal Reviewer | `claude-sonnet-4-6` | Local unpublished branch gate |
+| Implementer | `gpt-5.4` | Default implementation |
+| High-effort implementer | `gpt-5.4` | Large-effort / complex tasks |
+| Reviewer | `gpt-5.4` | Local unpublished branch gate |
 | External Reviewer | external review | Published PR review |
 | Advisory Reviewer | Rock Claw | Optional additional eyes |
 
@@ -219,7 +219,7 @@ under_review → findings_open → approved → merged
 ## Handoff Map
 
 ```
-Orchestrator ──► Coder ──► Internal Reviewer ──► Publish ──► External Reviewer (external review) ──► Merge
+Orchestrator ──► Implementer ──► Reviewer ──► Publish ──► External Review ──► Merge
      │              │                    │                                    │                          │
      │              │                    └─► repair ──────────────────────────┘                          │
      │              │                                                                                    │
@@ -230,12 +230,12 @@ Orchestrator ──► Coder ──► Internal Reviewer ──► Publish ─�
 
 | Step | Workflow Action | Daedalus Action |
 |:---|:---|:---|
-| 1. Orchestrator → Coder | `dispatch-implementation-turn` | `dispatch_implementation_turn` |
-| 2. Coder → Internal Reviewer | `run_internal_review` | `request_internal_review` |
-| 3. Internal Reviewer → Coder repair | local findings → lane session | `dispatch_repair_handoff` |
-| 4. Internal Reviewer → Publish | workflow derives publish | `publish_pr` |
+| 1. Orchestrator → Implementer | `dispatch-implementation-turn` | `dispatch_implementation_turn` |
+| 2. Implementer → Reviewer | `run_internal_review` | `request_internal_review` |
+| 3. Reviewer → Implementer repair | local findings → lane session | `dispatch_repair_handoff` |
+| 4. Reviewer → Publish | workflow derives publish | `publish_pr` |
 | 5. Publish → external review | external review triggered | — |
-| 6. external review → Coder repair | post-publish findings | `dispatch_repair_handoff` |
+| 6. external review → Implementer repair | post-publish findings | `dispatch_repair_handoff` |
 | 7. Clean → Merge | `merge_and_promote` | `merge_pr` |
 
 ---
@@ -300,7 +300,7 @@ order by requested_at desc;
 
 **Ask:**
 - Is the lane local/no-PR or published/PR-backed?
-- Is the coder session stale?
+- Is the implementation actor session stale?
 - Did a repair handoff already go out?
 - Is the local head ahead of PR head?
 - Are you looking at workflow-derived truth or Daedalus runtime truth?
@@ -399,10 +399,9 @@ Tracker feedback is configured in `WORKFLOW.md` under `tracker-feedback`.
 
 | Knob | Value |
 |:---|:---|
-| Coder default model | `gpt-5.3-codex-spark/high` |
-| Coder large-effort model | `gpt-5.3-codex` |
-| Coder escalation model | `gpt-5.4` |
-| Internal reviewer model | `claude-sonnet-4-6` |
+| Implementer default model | `gpt-5.4` |
+| Implementer high-effort model | `gpt-5.4` |
+| Reviewer model | `gpt-5.4` |
 | Internal review pass-with-findings reviews | `1` |
 | Internal review max turns | `12` |
 | Lane failure retry budget | `3` |

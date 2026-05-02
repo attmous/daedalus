@@ -1,5 +1,6 @@
 import json
 import sqlite3
+import threading
 
 
 def test_engine_storage_writes_json_and_jsonl(tmp_path):
@@ -48,7 +49,7 @@ def test_engine_scheduler_restores_legacy_shapes_and_snapshots():
                 }
             ],
             "codexTotals": {"total_tokens": 5},
-            "codex_threads": {"42": {"thread_id": "thread-1", "turn_id": "turn-1"}},
+            "codexThreads": {"42": {"thread_id": "thread-1", "turn_id": "turn-1"}},
         },
         now_epoch=200.0,
     )
@@ -74,6 +75,17 @@ def test_engine_scheduler_restores_legacy_shapes_and_snapshots():
     assert payload["retry_queue"][0]["due_in_ms"] == 0
     assert payload["running"][0]["running_for_ms"] == 100000
     assert payload["codex_threads"]["42"]["thread_id"] == "thread-1"
+
+    restored_zero = restore_scheduler_state(
+        {
+            "retryQueue": [{"issueId": "zero-retry", "dueAtEpoch": 0.0}],
+            "running": [{"issueId": "zero-running", "startedAtEpoch": 0.0, "heartbeatAtEpoch": 0.0}],
+        },
+        now_epoch=200.0,
+    )
+    assert restored_zero.retry_entries["zero-retry"]["due_at_epoch"] == 0.0
+    assert restored_zero.recovered_running[0]["started_at_epoch"] == 0.0
+    assert restored_zero.recovered_running[0]["heartbeat_at_epoch"] == 0.0
 
 
 def test_engine_work_items_and_lifecycle_helpers():
@@ -253,6 +265,49 @@ def test_engine_state_persists_scheduler_snapshot_in_sqlite(tmp_path):
     assert readonly == loaded
 
 
+def test_engine_state_preserves_zero_epoch_scheduler_values(tmp_path):
+    from engine.state import load_engine_scheduler_state, save_engine_scheduler_state
+
+    db_path = tmp_path / "runtime" / "state" / "daedalus.db"
+    save_engine_scheduler_state(
+        db_path,
+        workflow="issue-runner",
+        running_entries={
+            "ISSUE-0": {
+                "issue_id": "ISSUE-0",
+                "identifier": "DAE-0",
+                "started_at_epoch": 0.0,
+                "heartbeat_at_epoch": 0.0,
+            }
+        },
+        retry_entries={
+            "ISSUE-RETRY-0": {
+                "issue_id": "ISSUE-RETRY-0",
+                "identifier": "DAE-R0",
+                "due_at_epoch": 0.0,
+                "error": "immediate retry",
+            }
+        },
+        codex_threads={},
+        codex_totals={},
+        now_iso="2026-04-30T00:00:00Z",
+        now_epoch=120.0,
+    )
+
+    loaded = load_engine_scheduler_state(
+        db_path,
+        workflow="issue-runner",
+        now_iso="2026-04-30T00:00:10Z",
+        now_epoch=125.0,
+    )
+
+    assert loaded["running"][0]["started_at_epoch"] == 0.0
+    assert loaded["running"][0]["heartbeat_at_epoch"] == 0.0
+    assert loaded["running"][0]["running_for_ms"] == 125000
+    assert loaded["retry_queue"][0]["due_at_epoch"] == 0.0
+    assert loaded["retry_queue"][0]["due_in_ms"] == 0
+
+
 def test_engine_store_wraps_scheduler_state_and_doctor(tmp_path):
     from engine.store import EngineStore
 
@@ -356,10 +411,21 @@ def test_engine_store_tracks_event_ledger_and_doctor_orphans(tmp_path):
     checks = {check["name"]: check for check in store.doctor()}
 
     assert event["event_type"] == "issue_runner.tick.completed"
+    assert event["inserted"] is True
     assert event["work_id"] == "ISSUE-1"
     assert events[0]["event_id"] == event["event_id"]
     assert events[0]["payload"]["issue_id"] == "ISSUE-1"
     assert checks["engine-events"]["status"] == "pass"
+
+    duplicate = store.append_event(
+        event_id=event["event_id"],
+        event_type="changed",
+        payload={"run_id": run["run_id"], "issue_id": "ISSUE-2"},
+    )
+    assert duplicate["inserted"] is False
+    assert duplicate["event_type"] == "issue_runner.tick.completed"
+    assert duplicate["work_id"] == "ISSUE-1"
+    assert len(store.events_for_run(run["run_id"])) == 1
 
     clock.update({"iso": "2026-04-30T00:00:01Z", "epoch": 101.0})
     orphaned = store.append_event(event_type="runtime.error", payload={"run_id": "missing-run"})
@@ -367,6 +433,93 @@ def test_engine_store_tracks_event_ledger_and_doctor_orphans(tmp_path):
 
     assert checks["engine-events"]["status"] == "warn"
     assert orphaned["event_id"] in checks["engine-events"]["items"]
+
+
+def test_engine_run_and_event_ids_are_workflow_scoped_after_schema_migration(tmp_path):
+    from engine.store import EngineStore
+
+    db_path = tmp_path / "runtime" / "state" / "daedalus.db"
+    db_path.parent.mkdir(parents=True)
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.executescript(
+            """
+            CREATE TABLE engine_runs (
+              workflow TEXT NOT NULL,
+              run_id TEXT PRIMARY KEY,
+              mode TEXT NOT NULL,
+              status TEXT NOT NULL,
+              started_at TEXT NOT NULL,
+              started_at_epoch REAL NOT NULL,
+              completed_at TEXT,
+              completed_at_epoch REAL,
+              selected_count INTEGER NOT NULL DEFAULT 0,
+              completed_count INTEGER NOT NULL DEFAULT 0,
+              error TEXT,
+              metadata_json TEXT
+            );
+
+            CREATE TABLE engine_events (
+              workflow TEXT NOT NULL,
+              event_id TEXT PRIMARY KEY,
+              run_id TEXT,
+              work_id TEXT,
+              event_type TEXT NOT NULL,
+              severity TEXT NOT NULL DEFAULT 'info',
+              created_at TEXT NOT NULL,
+              created_at_epoch REAL NOT NULL,
+              payload_json TEXT
+            );
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    clock = {"iso": "2026-04-30T00:00:00Z", "epoch": 100.0}
+    issue_runner = EngineStore(
+        db_path=db_path,
+        workflow="issue-runner",
+        now_iso=lambda: clock["iso"],
+        now_epoch=lambda: clock["epoch"],
+    )
+    change_delivery = EngineStore(
+        db_path=db_path,
+        workflow="change-delivery",
+        now_iso=lambda: clock["iso"],
+        now_epoch=lambda: clock["epoch"],
+    )
+
+    issue_run = issue_runner.start_run(mode="tick", run_id="shared-run")
+    change_run = change_delivery.start_run(mode="tick", run_id="shared-run")
+    issue_event = issue_runner.append_event(
+        event_id="shared-event",
+        event_type="issue.event",
+        payload={"run_id": issue_run["run_id"]},
+    )
+    change_event = change_delivery.append_event(
+        event_id="shared-event",
+        event_type="change.event",
+        payload={"run_id": change_run["run_id"]},
+    )
+
+    assert issue_run["workflow"] == "issue-runner"
+    assert change_run["workflow"] == "change-delivery"
+    assert issue_event["inserted"] is True
+    assert change_event["inserted"] is True
+    assert issue_runner.get_run("shared-run")["workflow"] == "issue-runner"
+    assert change_delivery.get_run("shared-run")["workflow"] == "change-delivery"
+    assert issue_runner.events_for_run("shared-run")[0]["event_type"] == "issue.event"
+    assert change_delivery.events_for_run("shared-run")[0]["event_type"] == "change.event"
+
+    conn = sqlite3.connect(db_path)
+    try:
+        run_pk = [row[1] for row in conn.execute("PRAGMA table_info(engine_runs)") if row[5]]
+        event_pk = [row[1] for row in conn.execute("PRAGMA table_info(engine_events)") if row[5]]
+    finally:
+        conn.close()
+    assert run_pk == ["workflow", "run_id"]
+    assert event_pk == ["workflow", "event_id"]
 
 
 def test_engine_store_filters_and_prunes_events(tmp_path):
@@ -472,3 +625,195 @@ def test_engine_store_lease_lifecycle_and_stale_status(tmp_path):
     assert released_status["stale"] is True
     assert "lease-released" in released_status["stale_reasons"]
     assert "heartbeat-old" in released_status["stale_reasons"]
+
+
+def test_engine_lease_acquire_allows_only_one_contender_for_expired_lease(tmp_path):
+    from engine.leases import acquire_engine_lease, init_engine_leases
+
+    db_path = tmp_path / "runtime" / "state" / "daedalus.db"
+    db_path.parent.mkdir(parents=True)
+    seed = sqlite3.connect(db_path)
+    try:
+        init_engine_leases(seed)
+        seed.execute(
+            """
+            INSERT INTO leases (
+              lease_id, lease_scope, lease_key, owner_instance_id, owner_role,
+              acquired_at, expires_at, released_at, release_reason, metadata_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL)
+            """,
+            (
+                "lease:runtime:primary",
+                "runtime",
+                "primary",
+                "old-owner",
+                "Workflow_Orchestrator",
+                "2026-04-30T00:00:00Z",
+                "2026-04-30T00:00:01Z",
+            ),
+        )
+        seed.commit()
+    finally:
+        seed.close()
+
+    barrier = threading.Barrier(2)
+
+    class ContendedAcquireConnection(sqlite3.Connection):
+        def execute(self, sql, parameters=(), /):
+            normalized = sql.lstrip()
+            waits_before_first_write = normalized.startswith("INSERT OR IGNORE INTO leases")
+            waits_before_legacy_read = normalized.startswith(
+                "SELECT owner_instance_id, expires_at, released_at FROM leases"
+            )
+            if not getattr(self, "_lease_barrier_waited", False) and (
+                waits_before_first_write or waits_before_legacy_read
+            ):
+                self._lease_barrier_waited = True
+                barrier.wait(timeout=5)
+            return super().execute(sql, parameters)
+
+    results: list[dict] = []
+    errors: list[str] = []
+
+    def acquire(owner: str) -> None:
+        conn = sqlite3.connect(db_path, timeout=5, factory=ContendedAcquireConnection)
+        conn.execute("PRAGMA busy_timeout = 5000")
+        try:
+            results.append(
+                acquire_engine_lease(
+                    conn,
+                    lease_scope="runtime",
+                    lease_key="primary",
+                    owner_instance_id=owner,
+                    owner_role="Workflow_Orchestrator",
+                    now_iso="2026-04-30T00:02:00Z",
+                    ttl_seconds=60,
+                )
+            )
+            conn.commit()
+        except Exception as exc:
+            errors.append(f"{owner}: {type(exc).__name__}: {exc}")
+        finally:
+            conn.close()
+
+    threads = [threading.Thread(target=acquire, args=(owner,)) for owner in ("owner-a", "owner-b")]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=10)
+
+    assert errors == []
+    assert len(results) == 2
+    acquired = [result for result in results if result["acquired"]]
+    blocked = [result for result in results if not result["acquired"]]
+    assert len(acquired) == 1
+    assert len(blocked) == 1
+    assert blocked[0]["owner_instance_id"] == acquired[0]["owner_instance_id"]
+
+    final = sqlite3.connect(db_path)
+    try:
+        row = final.execute(
+            "SELECT owner_instance_id, released_at FROM leases WHERE lease_scope=? AND lease_key=?",
+            ("runtime", "primary"),
+        ).fetchone()
+    finally:
+        final.close()
+    assert row == (acquired[0]["owner_instance_id"], None)
+
+
+def test_engine_lease_release_cannot_release_new_owner_after_reclaim(tmp_path):
+    from engine.leases import acquire_engine_lease, init_engine_leases, release_engine_lease
+
+    db_path = tmp_path / "runtime" / "state" / "daedalus.db"
+    db_path.parent.mkdir(parents=True)
+    seed = sqlite3.connect(db_path)
+    try:
+        init_engine_leases(seed)
+        seed.execute(
+            """
+            INSERT INTO leases (
+              lease_id, lease_scope, lease_key, owner_instance_id, owner_role,
+              acquired_at, expires_at, released_at, release_reason, metadata_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL)
+            """,
+            (
+                "lease:runtime:primary",
+                "runtime",
+                "primary",
+                "owner-a",
+                "Workflow_Orchestrator",
+                "2026-04-30T00:00:00Z",
+                "2026-04-30T00:00:01Z",
+            ),
+        )
+        seed.commit()
+    finally:
+        seed.close()
+
+    release_ready = threading.Event()
+    release_continue = threading.Event()
+
+    class DelayedReleaseConnection(sqlite3.Connection):
+        def execute(self, sql, parameters=(), /):
+            if sql.lstrip().startswith("UPDATE leases") and "release_reason" in sql:
+                release_ready.set()
+                assert release_continue.wait(timeout=5)
+            return super().execute(sql, parameters)
+
+    release_result: dict[str, dict] = {}
+    errors: list[str] = []
+
+    def release_stale_owner() -> None:
+        conn = sqlite3.connect(db_path, timeout=5, factory=DelayedReleaseConnection)
+        conn.execute("PRAGMA busy_timeout = 5000")
+        try:
+            release_result["value"] = release_engine_lease(
+                conn,
+                lease_scope="runtime",
+                lease_key="primary",
+                owner_instance_id="owner-a",
+                now_iso="2026-04-30T00:02:00Z",
+                release_reason="shutdown",
+            )
+            conn.commit()
+        except Exception as exc:
+            errors.append(f"release: {type(exc).__name__}: {exc}")
+        finally:
+            conn.close()
+
+    thread = threading.Thread(target=release_stale_owner)
+    thread.start()
+    assert release_ready.wait(timeout=5)
+    try:
+        conn = sqlite3.connect(db_path, timeout=5)
+        try:
+            acquired = acquire_engine_lease(
+                conn,
+                lease_scope="runtime",
+                lease_key="primary",
+                owner_instance_id="owner-b",
+                owner_role="Workflow_Orchestrator",
+                now_iso="2026-04-30T00:02:00Z",
+                ttl_seconds=60,
+            )
+            conn.commit()
+        finally:
+            conn.close()
+    finally:
+        release_continue.set()
+    thread.join(timeout=10)
+
+    assert errors == []
+    assert acquired["acquired"] is True
+    assert release_result["value"]["released"] is False
+    assert release_result["value"]["owner_instance_id"] == "owner-b"
+
+    final = sqlite3.connect(db_path)
+    try:
+        row = final.execute(
+            "SELECT owner_instance_id, released_at FROM leases WHERE lease_scope=? AND lease_key=?",
+            ("runtime", "primary"),
+        ).fetchone()
+    finally:
+        final.close()
+    assert row == ("owner-b", None)

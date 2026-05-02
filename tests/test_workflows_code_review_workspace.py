@@ -288,10 +288,12 @@ def test_workspace_exposes_full_wrapper_facade(tmp_path):
 
     # Session + repair helpers
     for name in (
-        "_codex_model_for_issue", "_coder_agent_name_for_model",
+        "_codex_model_for_issue", "_implementation_actor_name_for_model",
         "_actor_labels_payload", "_ensure_acpx_session", "_run_acpx_prompt",
         "_implementation_actor_for_status", "_run_implementation_stage",
         "_show_actor_session", "_close_actor_session",
+        "_record_implementation_runtime_result", "_record_implementation_runtime_progress",
+        "_interrupt_active_implementation_turn",
         "_prepare_lane_worktree", "decide_lane_session_action",
         "render_lane_memo", "build_acp_session_strategy",
         "build_session_nudge_payload", "should_nudge_session",
@@ -351,10 +353,8 @@ def test_workspace_lane_operator_attention_reasons(tmp_path):
 def test_workspace_exposes_runtime_accessor_with_named_profiles(tmp_path):
     """make_workspace instantiates runtimes from the (bridged) config.
 
-    In Phase 3 the runtime configs are derived from the old JSON shape's
-    sessionPolicy / reviewPolicy; Phase 4 will swap the source to YAML
-    runtimes: section. Either way, ws.runtime('acpx-codex') must return
-    an object implementing the Runtime protocol.
+    The private JSON-shape config still gets a runtime profile for tests and
+    local diagnostics. The hard default is now codex-app-server.
     """
     import importlib
     import sys
@@ -392,15 +392,13 @@ def test_workspace_exposes_runtime_accessor_with_named_profiles(tmp_path):
 
     assert hasattr(ws, "runtime"), "workspace must expose `runtime(name)` accessor"
 
-    acpx = ws.runtime("acpx-codex")
-    claude = ws.runtime("claude-cli")
+    codex = ws.runtime("codex-app-server")
 
-    # Duck-type: both respond to the protocol's four methods.
-    for r in (acpx, claude):
-        assert callable(getattr(r, "ensure_session", None))
-        assert callable(getattr(r, "run_prompt", None))
-        assert callable(getattr(r, "assess_health", None))
-        assert callable(getattr(r, "close_session", None))
+    # Duck-type: responds to the protocol's four core methods.
+    assert callable(getattr(codex, "ensure_session", None))
+    assert callable(getattr(codex, "run_prompt", None))
+    assert callable(getattr(codex, "assess_health", None))
+    assert callable(getattr(codex, "close_session", None))
 
 
 def test_workspace_runtime_accessor_errors_on_unknown_name(tmp_path):
@@ -436,7 +434,7 @@ def test_workspace_runtime_accessor_errors_on_unknown_name(tmp_path):
         ws.runtime("nonexistent-runtime")
     assert "nonexistent-runtime" in str(exc.value)
     # Error message names the known runtime profiles
-    assert "acpx-codex" in str(exc.value) or "claude-cli" in str(exc.value)
+    assert "codex-app-server" in str(exc.value)
 
 
 def test_workspace_from_yaml_exposes_same_surface_as_legacy_json(tmp_path):
@@ -691,7 +689,7 @@ def test_workspace_records_change_delivery_codex_threads_and_totals(tmp_path):
     cfg["storage"]["scheduler"] = "memory/workflow-scheduler.json"
     ws = make_workspace(workspace_root=tmp_path, config=cfg)
 
-    metrics = ws._record_coder_runtime_result(
+    metrics = ws._record_implementation_runtime_result(
         issue={"number": 224},
         session_name="lane-224",
         runtime_name="coder-runtime",
@@ -724,7 +722,7 @@ def test_workspace_records_progress_and_interrupts_active_codex_turn(tmp_path):
     cfg["storage"]["scheduler"] = "memory/workflow-scheduler.json"
     ws = make_workspace(workspace_root=tmp_path, config=cfg)
 
-    ws._record_coder_runtime_progress(
+    ws._record_implementation_runtime_progress(
         issue_number=224,
         session_name="lane-224",
         runtime_name="coder-runtime",
@@ -749,7 +747,7 @@ def test_workspace_records_progress_and_interrupts_active_codex_turn(tmp_path):
             return True
 
     ws.runtime = lambda _name: FakeRuntime()
-    result = ws._interrupt_active_coder_turn(issue_number=224, reason="operator-interrupt")
+    result = ws._interrupt_active_implementation_turn(issue_number=224, reason="operator-interrupt")
 
     scheduler = json.loads((tmp_path / "memory" / "workflow-scheduler.json").read_text(encoding="utf-8"))
     entry = scheduler["codex_threads"]["lane:224"]
@@ -776,7 +774,7 @@ def test_workspace_ensure_coder_session_resumes_persisted_codex_thread(tmp_path)
     cfg["actors"]["implementer-high-effort"]["runtime"] = "coder-runtime"
     cfg["actors"]["reviewer"]["runtime"] = "reviewer-runtime"
     ws = make_workspace(workspace_root=tmp_path, config=cfg)
-    ws._record_coder_runtime_result(
+    ws._record_implementation_runtime_result(
         issue={"number": 224},
         session_name="lane-224",
         runtime_name="coder-runtime",
