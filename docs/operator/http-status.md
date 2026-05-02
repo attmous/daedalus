@@ -2,7 +2,7 @@
 
 Symphony §13.7. Optional localhost HTTP server that exposes workflow state,
 recent events, and a manual refresh hook. Useful for dashboards, scripted
-health checks, and live debugging without grepping `daedalus-events.jsonl`.
+health checks, and live debugging without grepping `sprints-events.jsonl`.
 
 ## Enable it
 
@@ -46,7 +46,7 @@ SQLite plus JSONL/status projections. It never writes workflow state itself —
 
 ### `GET /api/v1/state`
 
-Conforms to Symphony §13.7 / Daedalus spec §6.4:
+Conforms to Symphony §13.7 / Sprints spec §6.4:
 
 ```json
 {
@@ -103,8 +103,8 @@ Shells out the workflow's CLI entry point (resolved via `workflow_cli_argv()` so
 
 ## Where this lives in code
 
-- Server entrypoint: `daedalus/workflows/change_delivery/server/__init__.py`
-- Shared workflow-aware routes: `daedalus/workflows/change_delivery/server/routes.py`
-- Shared workflow-aware read views: `daedalus/workflows/change_delivery/server/views.py`
-- Refresh hook: `daedalus/workflows/change_delivery/server/refresh.py`
-- HTML: `daedalus/workflows/change_delivery/server/html.py`
+- Server entrypoint: `sprints/workflows/change_delivery/server/__init__.py`
+- Shared workflow-aware routes: `sprints/workflows/change_delivery/server/routes.py`
+- Shared workflow-aware read views: `sprints/workflows/change_delivery/server/views.py`
+- Refresh hook: `sprints/workflows/change_delivery/server/refresh.py`
+- HTML: `sprints/workflows/change_delivery/server/html.py`

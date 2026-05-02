@@ -1,10 +1,8 @@
-# Daedalus
+# Sprints
 
 <div align="center">
 
-![Daedalus banner](assets/daedalus-banner.gif)
-
-**Durable SDLC automation engine for Hermes-Agent.**
+**Hermes Sprints: durable SDLC automation for Hermes Agent.**
 
 [![Python](https://img.shields.io/badge/python-3.10%2B-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-4CAF50?style=flat-square)](LICENSE)
@@ -12,12 +10,12 @@
 
 </div>
 
-Daedalus is a control plane for agentic software work. It turns issues into
+Sprints is a control plane for agentic software work. It turns issues into
 supervised workflow runs, dispatches agents through runtime adapters, persists
 state, reconciles failures, and gives operators a live surface for the loop.
 
-During bootstrap, the Daedalus plugin generates a `WORKFLOW.md` file in the
-repository you want Daedalus to operate on. That file is your repo-local
+During bootstrap, the Sprints plugin generates a `WORKFLOW.md` file in the
+repository you want Sprints to operate on. That file is your repo-local
 workflow contract: it defines policy and configuration, but it is not the
 scheduler. The scheduler is the plugin, workflow package, state store, leases, tracker clients, runtime adapters, and observability around it.
 
@@ -30,20 +28,20 @@ scheduler. The scheduler is the plugin, workflow package, state store, leases, t
 | Durable runtime state | Persists leases, running work, retries, thread mappings, audit history, status, and health in SQLite, JSON, and JSONL. |
 | Workflow loop | Runs workflow ticks, reconciles stalled work, and resumes eligible runs. |
 | Runtime flexibility | Dispatches through runtime profiles for hosted agents, CLI agents, Codex app-server, or custom commands. |
-| Operator surface | Exposes `/daedalus`, `/workflow`, watch output, and optional HTTP status. |
+| Operator surface | Exposes `/sprints`, `/workflow`, watch output, and optional HTTP status. |
 | Bundled workflow engine | Ships `issue-runner` and `change-delivery`, with shared tracker, runtime, config, and observability primitives. |
 
 ## Quick Start
 
 ```bash
 sudo apt install python3-yaml python3-jsonschema
-hermes plugins install attmous/daedalus --enable
+hermes plugins install attmous/sprints --enable
 
 cd /path/to/your/repo
-hermes daedalus bootstrap
+hermes sprints bootstrap
 $EDITOR WORKFLOW.md
-hermes daedalus codex-app-server up
-hermes daedalus validate
+hermes sprints codex-app-server up
+hermes sprints validate
 hermes
 ```
 
@@ -57,7 +55,7 @@ a Hermes runtime profile for a role instead.
 For the opinionated change-delivery workflow:
 
 ```bash
-hermes daedalus bootstrap --workflow change-delivery
+hermes sprints bootstrap --workflow change-delivery
 ```
 
 For manual scaffold paths, pip installs, and every lower-level command,
@@ -76,12 +74,12 @@ hermes
 Inside Hermes Agent:
 
 ```bash
-# Daedalus engine commands
-/daedalus status                            # show workflow state, workflow root, and important paths
-/daedalus doctor                            # run health checks across config, state, and integrations
-/daedalus validate                          # validate WORKFLOW.md, schema, and preflight
-/daedalus watch                             # render a live operator view
-/daedalus events --limit 20                 # inspect the durable engine event ledger
+# Sprints engine commands
+/sprints status                            # show workflow state, workflow root, and important paths
+/sprints doctor                            # run health checks across config, state, and integrations
+/sprints validate                          # validate WORKFLOW.md, schema, and preflight
+/sprints watch                             # render a live operator view
+/sprints events --limit 20                 # inspect the durable engine event ledger
 
 # Workflow package commands
 /workflow issue-runner status               # show selected issues, runs, retries, and scheduler state
@@ -120,8 +118,8 @@ how to use it. See the full [WORKFLOW.md guide](docs/workflows/workflow-contract
 | Workflow contract | `WORKFLOW.md` or `WORKFLOW-<name>.md`; YAML front matter plus Markdown policy text. |
 | Workflow root | Durable instance data under `~/.hermes/workflows/<owner>-<repo>-<workflow-type>`. |
 | Workflow package | The installed Python implementation that decides the lifecycle for a selected issue. |
-| Tracker | The system Daedalus reads issues from and writes status back to. |
-| Code host | The system Daedalus uses for branches, pull requests, review threads, checks, and merge operations. |
+| Tracker | The system Sprints reads issues from and writes status back to. |
+| Code host | The system Sprints uses for branches, pull requests, review threads, checks, and merge operations. |
 | Issue | The unit of work selected from a tracker. Workflows should model issues, not one tracker vendor. |
 | Runtime | The adapter that runs an agent or command against a workspace. |
 | Workspace | The isolated checkout/path where the agent does work for an issue. |
@@ -204,9 +202,7 @@ flowchart LR
 | Runtime adapters | Supported | Codex app-server, ACPX Codex, Claude CLI, Hermes agent, custom commands. |
 
 Stable public boundaries are tracked in [docs/public-contract.md](docs/public-contract.md).
-Readiness and generic-surface guardrails are tracked in
-[docs/harness-engineering.md](docs/harness-engineering.md). For the product
-boundary between Daedalus, Hermes Agent, and Hermes Kanban, see
+For the product boundary between Sprints, Hermes Agent, and Hermes Kanban, see
 [docs/positioning.md](docs/positioning.md).
 
 ## Documentation
@@ -214,19 +210,13 @@ boundary between Daedalus, Hermes Agent, and Hermes Kanban, see
 | Doc | Purpose |
 |---|---|
 | [Installation](docs/operator/installation.md) | Full install, bootstrap, service, and troubleshooting path. |
-| [Positioning](docs/positioning.md) | Daedalus vs. Hermes Agent vs. Hermes Kanban, and why Kanban is an optional tracker rather than the engine. |
+| [Positioning](docs/positioning.md) | Sprints vs. Hermes Agent vs. Hermes Kanban, and why Kanban is an optional tracker rather than the engine. |
 | [WORKFLOW.md guide](docs/workflows/workflow-contract.md) | Workflow contract structure and examples. |
 | [Bundled workflows](docs/workflows/README.md) | Workflow comparison and templates. |
 | [Architecture](docs/architecture.md) | Engine/workflow boundary and durable runtime model. |
 | [Operator cheat sheet](docs/operator/cheat-sheet.md) | Day-2 commands and debugging. |
 | [Symphony conformance](docs/symphony-conformance.md) | Symphony alignment and remaining gaps. |
 | [Security](docs/security.md) | Trust model, shell/runtime posture, and secrets. |
-
-## Name
-
-Daedalus built the labyrinth, kept the thread, and understood the risk of
-unchecked flight. The project uses the name as a reminder: build the workflow
-maze, keep recovery paths visible, and put limits around autonomy.
 
 ## License
 

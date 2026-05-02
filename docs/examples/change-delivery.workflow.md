@@ -114,7 +114,7 @@ lane-selection:
 
 # Workflow Policy
 
-Daedalus runs the `change-delivery` workflow for the repository configured above.
+Sprints runs the `change-delivery` workflow for the repository configured above.
 
 Shared rules:
 

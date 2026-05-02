@@ -9,11 +9,10 @@ from pathlib import Path
 # ── paths ────────────────────────────────────────────────────────────────
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = ROOT / "assets"
-OUT_PATH = ASSETS / "daedalus-banner.gif"
+OUT_PATH = ASSETS / "sprints-banner.gif"
 
-# Right-side hero — the "iuvat evasisse" engraving (Daedalus flying
-# above the labyrinth, c. 1670s, public domain).
-BUST_SRC = ASSETS / "source" / "daedalus-emblem.jpg"
+# Right-side hero source art.
+BUST_SRC = ASSETS / "source" / "sprints-emblem.jpg"
 
 FONT_DISPLAY = ASSETS / "fonts" / "PlayfairDisplay.ttf"
 FONT_DISPLAY_ITALIC = ASSETS / "fonts" / "PlayfairDisplay-Italic.ttf"

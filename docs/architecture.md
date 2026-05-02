@@ -1,10 +1,10 @@
-# Daedalus Architecture
+# Sprints Architecture
 
 <div align="center">
 
-![Daedalus Architecture Diagram](assets/daedalus-architecture-diagram.svg)
+![Sprints Architecture Diagram](assets/sprints-architecture-diagram.svg)
 
-> **Daedalus is a durable orchestration runtime that runs repo-owned SDLC workflows with leases, persisted state, action/scheduler queues, role handoffs, retries, and operator tooling so agentic work can run continuously without turning into invisible cron-driven chaos.**
+> **Sprints is a durable orchestration runtime that runs repo-owned SDLC workflows with leases, persisted state, action/scheduler queues, role handoffs, retries, and operator tooling so agentic work can run continuously without turning into invisible cron-driven chaos.**
 
 </div>
 
@@ -17,7 +17,7 @@
 | **What is it?** | A plugin that turns fragile cron-loop automation into explicit, durable 24/7 workflow orchestration. |
 | **What problem does it solve?** | Agentic SDLC breaks because policy is buried in prompts, state is scattered, failures are logged but not modeled, and handoffs are implicit. |
 | **How?** | Leases. Workflow-specific durable state. JSON/JSONL audit history. Shadow/active execution where supported. Workflow packages with explicit contracts. |
-| **Who owns what?** | The **workflow package** decides *what* should happen. **Daedalus** decides *how* to orchestrate it durably. |
+| **Who owns what?** | The **workflow package** decides *what* should happen. **Sprints** decides *how* to orchestrate it durably. |
 
 ---
 
@@ -26,12 +26,12 @@
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                         EXTERNAL TRIGGERS                                   │
-│   Tracker Issue        Operator (/daedalus)    WORKFLOW.md (hot-reload)     │
+│   Tracker Issue        Operator (/sprints)    WORKFLOW.md (hot-reload)     │
 └─────────────────────────────────────────────────────────────────────────────┘
          │                       │                       │
          ▼                       ▼                       ▼
 ┌──────────────────────────────────────┐  ┌──────────────────────────────────────┐
-│     DAEDALUS ENGINE                  │  │    WORKFLOW PACKAGE                  │
+│     SPRINTS ENGINE                  │  │    WORKFLOW PACKAGE                  │
 │  ─────────────────────────────────   │  │  ─────────────────────────────────   │
 │  Runtime Loop                        │  │  Status / Read Model                 │
 │    Tick → Ingest → Derive → Dispatch │◄─┤  Policy Engine                       │
@@ -49,7 +49,7 @@
 │  Active Mode ──► execute · dispatch  │◄─┤    dispatch_turn                     │
 │                                      │  │    publish_pr                        │
 │  Operator Surfaces                   │  │    merge_pr                          │
-│    /daedalus status · doctor · watch │  │    run_hooks                         │
+│    /sprints status · doctor · watch │  │    run_hooks                         │
 │    shadow-report · active-gate       │  │                                      │
 └──────────────────────────────────────┘  └──────────────────────────────────────┘
          │                                           │
@@ -57,7 +57,7 @@
 ┌────────────────────────────┐              ┌────────────────────────────┐
 │  SUPERVISION               │              │  EXTERNAL                  │
 │  systemd service           │              │  GitHub API                │
-│  /daedalus watch (TUI)     │              │  Webhooks (Slack / HTTP)   │
+│  /sprints watch (TUI)     │              │  Webhooks (Slack / HTTP)   │
 │  HTTP status :8765         │              │  Tracker feedback          │
 └────────────────────────────┘              └────────────────────────────┘
 ```
@@ -66,7 +66,7 @@
 
 ## The Two Brains
 
-Daedalus has **two brains** that speak different languages. The boundary between them is the most important design decision in the system.
+Sprints has **two brains** that speak different languages. The boundary between them is the most important design decision in the system.
 
 ### Brain 1: The Workflow Package (Semantic)
 
@@ -92,11 +92,11 @@ Examples:
   and `code-host`, but those are distinct config boundaries.
 - `issue-runner` knows about tracker selection, isolated issue workspaces, lifecycle hooks, and one-agent execution.
 
-### Brain 2: Daedalus Runtime (Execution)
+### Brain 2: Sprints Runtime (Execution)
 
 > *"How do I orchestrate this durably?"*
 
-Daedalus is the **execution engine**. It knows about:
+Sprints is the **execution engine**. It knows about:
 - Leases and heartbeats
 - workflow-specific durable state stores
 - action queues / scheduler queues and idempotency keys
@@ -114,13 +114,13 @@ dispatch_repair_handoff
 
 ### Why two vocabularies?
 
-Because **policy changes faster than orchestration**. A workflow package can change its issue lifecycle, gate structure, or prompt strategy. Daedalus still has to guarantee that dispatch happens durably, survives crashes, and retries correctly.
+Because **policy changes faster than orchestration**. A workflow package can change its issue lifecycle, gate structure, or prompt strategy. Sprints still has to guarantee that dispatch happens durably, survives crashes, and retries correctly.
 
 ---
 
 ## The Five Guarantees
 
-Daedalus exists to provide five guarantees that fragile cron-loop automation cannot:
+Sprints exists to provide five guarantees that fragile cron-loop automation cannot:
 
 ### 1. Exactly-One Ownership (Leases)
 
@@ -158,9 +158,9 @@ This prevents:
 
 | Layer | Storage | Purpose |
 |---|---|---|
-| **Runtime DB** | `runtime/state/daedalus/daedalus.db` | Engine work items, running work, retries, runtime sessions, token totals, plus `change-delivery` lanes/actions/reviews/failures |
+| **Runtime DB** | `runtime/state/sprints/sprints.db` | Engine work items, running work, retries, runtime sessions, token totals, plus `change-delivery` lanes/actions/reviews/failures |
 | **Scheduler JSON** | `memory/workflow-scheduler.json` | Generated operator snapshot of scheduler state for file-oriented tooling |
-| **Runtime JSONL** | `runtime/memory/daedalus-events.jsonl` | Daedalus orchestration events |
+| **Runtime JSONL** | `runtime/memory/sprints-events.jsonl` | Sprints orchestration events |
 | **Workflow JSONL** | `memory/workflow-audit.jsonl` | workflow-specific audit trail |
 | **Lane files** | `.lane-state.json` | `change-delivery` lane-local handoff artifacts |
 | **Lane memos** | `.lane-memo.md` | human-readable handoff notes |
@@ -199,7 +199,7 @@ Lost workers never block forward motion.
 
 ## Bundled Workflows
 
-Daedalus does not ship one universal lifecycle. It ships a generic engine plus
+Sprints does not ship one universal lifecycle. It ships a generic engine plus
 bundled workflow packages.
 
 | Workflow | Shape | Best for | Docs |
@@ -207,7 +207,7 @@ bundled workflow packages.
 | `change-delivery` | issue -> actor implementation -> gates -> PR -> merge | SDLC automation with code-host gates | [`workflows/change-delivery.md`](workflows/change-delivery.md) |
 | `issue-runner` | tracker issue -> workspace -> hooks -> prompt -> one agent run | generic tracker-driven automation | [`workflows/issue-runner.md`](workflows/issue-runner.md) |
 
-The workflow package owns the lifecycle. Daedalus owns the durable execution
+The workflow package owns the lifecycle. Sprints owns the durable execution
 machinery around it.
 
 That means:
@@ -273,16 +273,16 @@ Each tick:
 
 ## Operator Surfaces
 
-Daedalus exposes tooling instead of forcing DB archaeology.
+Sprints exposes tooling instead of forcing DB archaeology.
 
 | Surface | Command | What It Answers |
 |---|---|---|
-| **Status** | `/daedalus status` | Runtime row, lane count, paths, freshness |
-| **Doctor** | `/daedalus doctor` | Full health check across all subsystems |
-| **Watch** | `/daedalus watch` | Live TUI: lanes + alerts + events |
-| **Shadow Report** | `/daedalus shadow-report` | Diff shadow plan vs active reality |
-| **Active Gate** | `/daedalus active-gate-status` | What's blocking promotion to active |
-| **Service** | `/daedalus service-status` | systemd health snapshot |
+| **Status** | `/sprints status` | Runtime row, lane count, paths, freshness |
+| **Doctor** | `/sprints doctor` | Full health check across all subsystems |
+| **Watch** | `/sprints watch` | Live TUI: lanes + alerts + events |
+| **Shadow Report** | `/sprints shadow-report` | Diff shadow plan vs active reality |
+| **Active Gate** | `/sprints active-gate-status` | What's blocking promotion to active |
+| **Service** | `/sprints service-status` | systemd health snapshot |
 | **HTTP** | `GET localhost:8765/api/v1/state` | JSON snapshot for dashboards |
 
 ---
@@ -290,11 +290,11 @@ Daedalus exposes tooling instead of forcing DB archaeology.
 ## Repository Anatomy
 
 ```
-daedalus/
+sprints/
 ├── __init__.py              # Plugin registration
 ├── plugin.yaml              # Plugin manifest
 ├── schemas.py               # CLI/slash parser schema
-├── daedalus_cli.py          # Public CLI facade
+├── sprints_cli.py          # Public CLI facade
 ├── cli/                     # Command implementation + human renderers
 ├── engine/                  # Stateful SQLite engine, leases, scheduler, events
 ├── observe/                 # Watch frame rendering + read-only aggregation
@@ -316,10 +316,10 @@ The supported community shape keeps code, policy, and state separated:
 
 | Layer | Owner | Role |
 |---|---|---|
-| **Plugin** | `~/.hermes/plugins/daedalus` | engine, workflow packages, shared runtimes/trackers/code hosts |
+| **Plugin** | `~/.hermes/plugins/sprints` | engine, workflow packages, shared runtimes/trackers/code hosts |
 | **Repo contract** | `WORKFLOW.md` / `WORKFLOW-<workflow>.md` | workflow policy and operator config |
 | **Workflow root** | `~/.hermes/workflows/<owner>-<repo>-<workflow-type>` | durable runtime data and workspace-local state |
-| **Daedalus service** | systemd user unit | recurring dispatcher/supervisor |
+| **Sprints service** | systemd user unit | recurring dispatcher/supervisor |
 | **Operator surfaces** | Hermes slash/CLI, watch, HTTP | inspection, diagnosis, manual override |
 
 Manual ticks remain useful for debugging, but the service loop is the supported long-running path.
@@ -338,7 +338,7 @@ That means:
 - Humans observe or intervene without becoming the scheduler
 - The system runs 24/7 without degrading into prompt spaghetti
 
-**Daedalus is the control plane for that future.**
+**Sprints is the control plane for that future.**
 
 ---
 
@@ -362,4 +362,4 @@ That means:
 
 ## Architecture in One Sentence
 
-**Daedalus is a durable orchestration runtime that runs repo-owned SDLC workflows with leases, persisted state, action/scheduler queues, role handoffs, retries, and operator tooling so agentic work can run continuously without turning into invisible cron-driven chaos.**
+**Sprints is a durable orchestration runtime that runs repo-owned SDLC workflows with leases, persisted state, action/scheduler queues, role handoffs, retries, and operator tooling so agentic work can run continuously without turning into invisible cron-driven chaos.**

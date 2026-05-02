@@ -3,9 +3,9 @@
 
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Daedalus — The durable thread for your agents' workflows</title>
-<meta name="description" content="Daedalus automates the SDLC with agents, driven by labeled GitHub issues. A Hermes plugin.">
-<link rel="icon" type="image/svg+xml" href="assets/daedalus-icon.svg">
+<title>Sprints — Agentic software work in motion</title>
+<meta name="description" content="Hermes Sprints automates SDLC workflows with agents, repo-owned workflow policy, durable state, and operator controls.">
+<link rel="icon" type="image/svg+xml" href="assets/sprints-icon.svg">
 <meta name="color-scheme" content="dark">
 
 <style>
@@ -302,8 +302,8 @@
     color: var(--fg);
     font-weight: 500;
   }
-  /* Three-myth pill row that anchors the tagline */
-  .hero__myths {
+  /* Three-pillar row that anchors the tagline */
+  .hero__pillars {
     list-style: none;
     margin: 18px auto 0;
     padding: 0;
@@ -312,7 +312,7 @@
     flex-wrap: wrap;
     justify-content: center;
   }
-  .hero__myths li {
+  .hero__pillars li {
     display: inline-flex;
     align-items: center;
     gap: 7px;
@@ -325,12 +325,12 @@
     color: var(--fg);
     line-height: 1;
   }
-  .hero__myths-num {
+  .hero__pillars-num {
     font-size: 10.5px;
     color: var(--accent-strong);
     letter-spacing: 0.04em;
   }
-  .hero__myths-name { letter-spacing: 0.02em; }
+  .hero__pillars-name { letter-spacing: 0.02em; }
 
   .hero__ctas {
     margin-top: 18px;
@@ -496,8 +496,8 @@
   }
 
 
-  /* ─── Three myths grid (section 3) ──────────────────────────────────── */
-  .myths {
+  /* ─── Three-column grid (section 3) ──────────────────────────────────── */
+  .pillars {
     margin-top: 0;
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -507,9 +507,9 @@
     border-radius: 10px;
     overflow: hidden;
   }
-  @media (max-width: 980px) { .myths { grid-template-columns: 1fr; } }
+  @media (max-width: 980px) { .pillars { grid-template-columns: 1fr; } }
 
-  .myth {
+  .pillar {
     background: var(--bg);
     padding: 16px 18px;
     display: flex;
@@ -520,7 +520,7 @@
     color: inherit;
     position: relative;
   }
-  .myth:hover { background: var(--bg-elev); }
+  .pillar:hover { background: var(--bg-elev); }
 
   /* ─── Install (section 4) ───────────────────────────────────────────── */
   .install-grid {
@@ -815,7 +815,7 @@
   <!-- TOP: full-width banner -->
   <div class="banner-row">
     <div class="hero__banner-wrap">
-      <img class="hero__banner" src="assets/daedalus-banner.gif" alt="Daedalus — Agents that fly. Workflows that don't melt. A Hermes Agent plugin · reads issues, writes PRs." width="1200" height="400">
+      <img class="hero__banner" src="assets/sprints-banner.gif" alt="Hermes Sprints — agentic software work in motion" width="1200" height="400">
     </div>
   </div>
 
@@ -830,7 +830,7 @@
             <span>$ bash</span>
             <button class="codeblock__copy" type="button" data-copy-target="install-snippet">Copy</button>
           </div>
-<pre id="install-snippet" class="typewriter" aria-label="Daedalus install commands"><span class="tw-line"><span class="tok-c"># one-liner: clone, install, launch</span></span><span class="tw-line"><span class="tok-k">curl</span> -fsSL <span class="tok-s">https://raw.githubusercontent.com/attmous/daedalus/main/scripts/bootstrap.sh</span> | <span class="tok-k">bash</span></span><span class="tw-line"><span class="tok-k">hermes</span></span></pre>
+<pre id="install-snippet" class="typewriter" aria-label="Sprints install commands"><span class="tw-line"><span class="tok-c"># one-liner: clone, install, launch</span></span><span class="tw-line"><span class="tok-k">curl</span> -fsSL <span class="tok-s">https://raw.githubusercontent.com/attmous/sprints/main/scripts/bootstrap.sh</span> | <span class="tok-k">bash</span></span><span class="tw-line"><span class="tok-k">hermes</span></span></pre>
         </div>
 
         <aside class="install-aside">
@@ -840,14 +840,14 @@
             <li>
               <div class="cmd-row">
                 <svg class="cmd-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1.5 8h2.5l1.5-3.5 2.5 7 1.5-3.5h2.5l1-2 1 2H14.5"/></svg>
-                <span class="cmd-name">/daedalus status</span>
+                <span class="cmd-name">/sprints status</span>
               </div>
               <span class="cmd-desc">What's running, what's wedged.</span>
             </li>
             <li>
               <div class="cmd-row">
                 <svg class="cmd-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 5v6M5 8h6"/></svg>
-                <span class="cmd-name">/daedalus doctor</span>
+                <span class="cmd-name">/sprints doctor</span>
               </div>
               <span class="cmd-desc">Diagnostic. JSON.</span>
             </li>
@@ -877,23 +877,24 @@
       <div class="hero__copy" data-cc-id="cc-3">
 
         <h1 class="hero__tagline" data-cc-id="cc-2" style="">
-          Three myths, one engine
+          Hermes Sprints
         </h1>
 
 
         <p class="hero__subtitle" data-cc-id="cc-6" style="">
-          Daedalus built the Labyrinth. Gave Theseus a way out. Warned Icarus.
-          <br><strong data-cc-id="cc-5" style="">This one does all three.</strong>
+          Turn issues into supervised agent runs with repo-owned policy,
+          durable state, and operator control.
+          <br><strong data-cc-id="cc-5" style="">Plan. Run. Review. Recover.</strong>
         </p>
 
-        <ul class="hero__myths" aria-label="The three myths">
-          <li><span class="hero__myths-num">01</span><span class="hero__myths-name">thread</span></li>
-          <li><span class="hero__myths-num">02</span><span class="hero__myths-name">labyrinth</span></li>
-          <li><span class="hero__myths-num">03</span><span class="hero__myths-name">wings</span></li>
+        <ul class="hero__pillars" aria-label="Sprints workflow pillars">
+          <li><span class="hero__pillars-num">01</span><span class="hero__pillars-name">plan</span></li>
+          <li><span class="hero__pillars-num">02</span><span class="hero__pillars-name">run</span></li>
+          <li><span class="hero__pillars-num">03</span><span class="hero__pillars-name">recover</span></li>
         </ul>
 
         <div class="hero__ctas">
-          <a class="btn btn--primary" href="https://github.com/attmous/daedalus" rel="noopener">
+          <a class="btn btn--primary" href="https://github.com/attmous/sprints" rel="noopener">
             View on GitHub
             <span class="arrow" aria-hidden="true">→</span>
           </a>
@@ -920,10 +921,10 @@
 
 <footer class="site-footer">
   <div class="container site-footer__inner">
-    <div class="footer__copy">© 2026 Daedalus by ATTmous · MIT</div>
+    <div class="footer__copy">© 2026 Sprints by ATTmous · MIT</div>
     <div class="footer__links">
-      <a href="https://github.com/attmous/daedalus" rel="noopener">GitHub</a>
-      <a href="https://github.com/attmous/daedalus/blob/main/assets/CREDITS.md" rel="noopener">Credits</a>
+      <a href="https://github.com/attmous/sprints" rel="noopener">GitHub</a>
+      <a href="https://github.com/attmous/sprints/blob/main/assets/CREDITS.md" rel="noopener">Credits</a>
     </div>
   </div>
 </footer>

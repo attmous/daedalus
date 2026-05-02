@@ -25,9 +25,9 @@ flowchart TD
   D --> F{now - baseline<br/>&gt; threshold?}
   E --> F
   F -- no --> G[lane is fresh - skip]
-  F -- yes --> H[emit daedalus.stall_detected]
+  F -- yes --> H[emit sprints.stall_detected]
   H --> I[terminate worker]
-  I --> J[emit daedalus.stall_terminated]
+  I --> J[emit sprints.stall_terminated]
   J --> K[queue retry with reason=stall_timeout]
 ```
 
@@ -46,15 +46,14 @@ stall:
 
 | Event | When |
 |---|---|
-| `daedalus.stall_detected` | The reconciler decides to terminate. |
-| `daedalus.stall_terminated` | The worker has been asked to stop and the lane is queued for retry. |
+| `sprints.stall_detected` | The reconciler decides to terminate. |
+| `sprints.stall_terminated` | The worker has been asked to stop and the lane is queued for retry. |
 
 The retry reason is always `stall_timeout` so it's distinguishable from regular failure-induced retries in audit logs.
 
 ## Where this lives in code
 
-- Pure decision function: `daedalus/workflows/stall.py::reconcile_stalls`
+- Pure decision function: `sprints/workflows/stall.py::reconcile_stalls`
 - Runtime hook: `Runtime.last_activity_ts()` — see [runtimes.md](runtimes.md)
-- Active service wiring: `daedalus/runtime.py`, `daedalus/workflows/issue_runner/workspace.py`
-- Schema: `daedalus/workflows/change_delivery/schema.yaml`, `daedalus/workflows/issue_runner/schema.yaml`
-- Tests: `tests/test_stall_detection.py`
+- Active service wiring: `sprints/runtime.py`, `sprints/workflows/issue_runner/workspace.py`
+- Schema: `sprints/workflows/change_delivery/schema.yaml`, `sprints/workflows/issue_runner/schema.yaml`

@@ -1,6 +1,6 @@
 # Leases & heartbeats
 
-The thread Theseus carried into the labyrinth. Daedalus uses leases to make sure exactly one runtime owns a lane at a time — and recovers automatically when an owner dies.
+Sprints uses leases to make sure exactly one runtime owns a lane at a time, and recovers automatically when an owner dies.
 
 ## What a lease guarantees
 
@@ -36,15 +36,15 @@ sequenceDiagram
 
 - Default TTL is configured per-instance via `--ttl-seconds` (typical: 60s).
 - A lease that's missed `> ttl` seconds of heartbeats is considered expired.
-- `daedalus doctor` reports expired leases as recoverable, not as errors.
+- `sprints doctor` reports expired leases as recoverable, not as errors.
 - When B claims a lease previously held by A, the action row's `current_action_id` is **not** automatically reset — the workflow package decides whether to resume or restart based on state.
 
 ## Split-brain check
 
-`daedalus/runtime.py::detect_split_brain()` scans for two non-expired leases on the same lane. This *should* be impossible (the UPDATE is atomic), but the check exists to catch clock skew across hosts. The cheat sheet shows how to trigger it manually.
+`sprints/runtime.py::detect_split_brain()` scans for two non-expired leases on the same lane. This *should* be impossible (the UPDATE is atomic), but the check exists to catch clock skew across hosts. The cheat sheet shows how to trigger it manually.
 
 ## Where this lives in code
 
-- Lease + heartbeat tables: `daedalus/runtime.py` (look for `acquire_lease`, `heartbeat`, `release_lease`)
-- Recovery: `daedalus/runtime.py::reconcile_leases()`
-- CLI surface: `daedalus/runtime.py heartbeat`, `daedalus/runtime.py iterate-active`
+- Lease + heartbeat tables: `sprints/runtime.py` (look for `acquire_lease`, `heartbeat`, `release_lease`)
+- Recovery: `sprints/runtime.py::reconcile_leases()`
+- CLI surface: `sprints/runtime.py heartbeat`, `sprints/runtime.py iterate-active`

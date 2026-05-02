@@ -1,6 +1,6 @@
 # Shadow → active
 
-Daedalus runs in one of two modes per instance. **Shadow** observes — it ticks, picks lanes, evaluates "what would happen next" — and writes to a separate shadow action queue. **Active** does the same evaluation but actually executes the next action against the real runtime.
+Sprints runs in one of two modes per instance. **Shadow** observes — it ticks, picks lanes, evaluates "what would happen next" — and writes to a separate shadow action queue. **Active** does the same evaluation but actually executes the next action against the real runtime.
 
 The promotion from shadow to active is gated by `active-gate-status` — an explicit operator step, not a config edit.
 
@@ -22,14 +22,14 @@ The shadow path exists so you can:
 
 - Stand up a new instance against a live workspace and watch it for a day before promoting it.
 - Diff "what would shadow do" vs "what active actually did" to catch policy regressions.
-- Keep a passive observer running for alerting (`daedalus/alerts.py`) without having two writers fight.
+- Keep a passive observer running for alerting (`sprints/alerts.py`) without having two writers fight.
 
 ## Promotion sequence
 
 ```mermaid
 sequenceDiagram
     participant op as Operator
-    participant rt as Daedalus runtime
+    participant rt as Sprints runtime
     participant gate as Active gate
     participant rwf as Workflow (real runtimes)
 
@@ -52,14 +52,14 @@ sequenceDiagram
 
 ## Operator commands that touch this
 
-- `daedalus/runtime.py active-gate-status` — what's blocking promotion
-- `daedalus/runtime.py iterate-shadow` / `iterate-active` — single tick in either mode
-- `daedalus/runtime.py run-shadow` / `run-active` — long-running loop; active mode supervises its worker iteration and keeps the lease fresh while actions run
-- `/daedalus shadow-report` — diff between shadow plan and active reality
+- `sprints/runtime.py active-gate-status` — what's blocking promotion
+- `sprints/runtime.py iterate-shadow` / `iterate-active` — single tick in either mode
+- `sprints/runtime.py run-shadow` / `run-active` — long-running loop; active mode supervises its worker iteration and keeps the lease fresh while actions run
+- `/sprints shadow-report` — diff between shadow plan and active reality
 
 ## Where this lives in code
 
-- Mode selection: `daedalus/runtime.py` (look for `Mode`, `iterate_shadow`, `iterate_active`)
-- Active gate: `daedalus/runtime.py::active_gate_status`
-- Service supervision: `daedalus/daedalus_cli.py` (systemd helpers)
-- Shadow reporting: `daedalus/cli/formatters.py`
+- Mode selection: `sprints/runtime.py` (look for `Mode`, `iterate_shadow`, `iterate_active`)
+- Active gate: `sprints/runtime.py::active_gate_status`
+- Service supervision: `sprints/sprints_cli.py` (systemd helpers)
+- Shadow reporting: `sprints/cli/formatters.py`

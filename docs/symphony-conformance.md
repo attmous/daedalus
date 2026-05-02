@@ -1,21 +1,21 @@
 # Symphony Conformance
 
-This note tracks Daedalus against the public `openai/symphony` draft spec as reviewed on **April 30, 2026**.
+This note tracks Sprints against the public `openai/symphony` draft spec as reviewed on **April 30, 2026**.
 
-The short version: Daedalus is already **Symphony-aligned** in architecture, but
+The short version: Sprints is already **Symphony-aligned** in architecture, but
 only **partially Symphony-compatible** at the contract and integration
 boundaries. The target is to make `issue-runner` the strict reference surface
 and keep `change-delivery` as the opinionated GitHub-first SDLC workflow.
 
 ## Positioning
 
-- Daedalus is a long-running workflow orchestrator with durable state, hot reload, isolated lane worktrees, recovery, and operator observability.
-- Daedalus is intentionally **tracker-neutral in contract shape** and **GitHub-first in production coverage** for the public release. The current Symphony draft is **Linear-first**, so Daedalus tracks that shape without making Linear the launch path.
-- Daedalus now uses a Symphony-style `WORKFLOW.md` as the native public contract for bundled workflows. `issue-runner` is the closer generic reference surface; `change-delivery` remains the richer GitHub-first SDLC workflow with separate `tracker` and `code-host` boundaries.
+- Sprints is a long-running workflow orchestrator with durable state, hot reload, isolated lane worktrees, recovery, and operator observability.
+- Sprints is intentionally **tracker-neutral in contract shape** and **GitHub-first in production coverage** for the public release. The current Symphony draft is **Linear-first**, so Sprints tracks that shape without making Linear the launch path.
+- Sprints now uses a Symphony-style `WORKFLOW.md` as the native public contract for bundled workflows. `issue-runner` is the closer generic reference surface; `change-delivery` remains the richer GitHub-first SDLC workflow with separate `tracker` and `code-host` boundaries.
 
 ## Status Matrix
 
-| Symphony concept | Daedalus status | Notes |
+| Symphony concept | Sprints status | Notes |
 |---|---|---|
 | `WORKFLOW.md` loader | Partial | Supported as a repo-owned public contract. Front matter maps to the selected workflow schema; `issue-runner` is the closer generic reference surface, while `change-delivery` still carries richer PR/review/merge semantics. |
 | Typed config + hot reload | Implemented | Bundled workflows load repo-owned `WORKFLOW.md`; `issue-runner` now keeps last-known-good config on invalid reloads. |
@@ -33,7 +33,7 @@ and keep `change-delivery` as the opinionated GitHub-first SDLC workflow.
 `issue-runner` is the workflow that should converge toward strict Symphony
 compatibility. Its public contract should keep the Symphony-shaped keys
 (`tracker`, `polling`, `workspace`, `hooks`, `agent`, `codex`) as the operator
-surface and move Daedalus-specific implementation details under `daedalus:`.
+surface and move Sprints-specific implementation details under `sprints:`.
 
 `change-delivery` should not be forced into that shape. It is the richer
 workflow with GitHub lane policy, review gates, PR publication, merge promotion,
@@ -41,17 +41,17 @@ and workflow-specific prompts.
 
 ## Important Differences
 
-Daedalus currently differs from the Symphony draft in four material ways:
+Sprints currently differs from the Symphony draft in four material ways:
 
 1. The default managed workflow is `issue-runner`, while `change-delivery` remains the opinionated GitHub-first SDLC workflow.
 2. Runtime adapters are still mixed: both bundled workflows can use Codex app-server, but non-Codex command runtimes remain CLI/session-oriented.
-3. `WORKFLOW.md` still maps into the current Daedalus schema rather than a tracker-agnostic Symphony config model.
+3. `WORKFLOW.md` still maps into the current Sprints schema rather than a tracker-agnostic Symphony config model.
 4. Long-running service paths have async supervision for `issue-runner` workers and `change-delivery` active iterations, but manual `tick` remains synchronous and command-style runtimes still have limited cancellation semantics.
 
 ## Recommended Next Gaps
 
-1. Make `issue-runner` accept a stricter Symphony-style contract with Daedalus
-   extensions isolated under `daedalus:`.
+1. Make `issue-runner` accept a stricter Symphony-style contract with Sprints
+   extensions isolated under `sprints:`.
 2. Add stronger cancellation semantics for command-style runtimes, including
    subprocess group termination where safe.
 3. Expand the opt-in `change-delivery` Codex app-server fixture smoke into a
@@ -62,4 +62,4 @@ Daedalus currently differs from the Symphony draft in four material ways:
 See [release-readiness.md](release-readiness.md) for the launch scorecard and
 hardening gates.
 
-Until those land, Daedalus should be described as **Symphony-inspired and partially compatible**, not as a strict implementation of the current spec.
+Until those land, Sprints should be described as **Symphony-inspired and partially compatible**, not as a strict implementation of the current spec.

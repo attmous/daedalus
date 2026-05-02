@@ -1,1 +1,0 @@
-"""Daedalus operator observability surfaces."""

@@ -2,7 +2,7 @@
 
 Status: current after package flattening.
 
-Daedalus now keeps only the public package surfaces that are still used by the
+Sprints now keeps only the public package surfaces that are still used by the
 plugin runtime and direct CLI execution.
 
 ## Retained Public Packages
@@ -14,11 +14,11 @@ plugin runtime and direct CLI execution.
 
 ## Removed Compatibility Shims
 
-- `daedalus.operator`
-- `daedalus.integrations`
-- `daedalus.code_hosts`
-- `daedalus.trackers.feedback`
-- `daedalus.trackers.local_json`
+- `sprints.operator`
+- `sprints.integrations`
+- `sprints.code_hosts`
+- `sprints.trackers.feedback`
+- `sprints.trackers.local_json`
 - legacy workflow packages: `issue_runner` and `change_delivery`
 
 New code should import the concrete current modules directly. Do not recreate

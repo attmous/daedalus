@@ -1,5 +1,3 @@
 PyYAML
 jsonschema
 rich
-pytest
-pytest-cov

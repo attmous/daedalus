@@ -1,8 +1,8 @@
 # WORKFLOW.md Guide
 
-Daedalus uses a repo-owned workflow contract to keep workflow policy close to
+Sprints uses a repo-owned workflow contract to keep workflow policy close to
 the code being automated. Bootstrap writes this file into the target repository,
-not into the Daedalus plugin repository.
+not into the Sprints plugin repository.
 
 ## Where It Lives
 
@@ -25,7 +25,7 @@ The workflow root stores runtime data separately under:
 ~/.hermes/workflows/<owner>-<repo>-<workflow-type>/
 ```
 
-Bootstrap writes a pointer at `./.hermes/daedalus/workflow-root` in the target
+Bootstrap writes a pointer at `./.hermes/sprints/workflow-root` in the target
 repo so Hermes commands can find the workflow root from that checkout.
 
 ## File Shape
@@ -78,8 +78,8 @@ Each workflow validates this section against its own schema before dispatch.
 Validate it explicitly after every config edit:
 
 ```bash
-hermes daedalus validate
-hermes daedalus validate --service-mode active --format json
+hermes sprints validate
+hermes sprints validate --service-mode active --format json
 ```
 
 The validator checks:
@@ -101,19 +101,19 @@ Use `configure-runtime` when you want the plugin to update the YAML front matter
 for a known runtime shape instead of editing role bindings by hand:
 
 ```bash
-hermes daedalus configure-runtime --runtime hermes-final --role agent
-hermes daedalus configure-runtime --runtime hermes-chat --role reviewer
-hermes daedalus configure-runtime --runtime codex-app-server --role implementer
+hermes sprints configure-runtime --runtime hermes-final --role agent
+hermes sprints configure-runtime --runtime hermes-chat --role reviewer
+hermes sprints configure-runtime --runtime codex-app-server --role implementer
 ```
 
 Built-in presets are `codex-app-server`, `hermes-final`, and `hermes-chat`.
 `issue-runner` supports `agent`; `change-delivery` supports the actor names in
 `actors:` such as `implementer`, `implementer-high-effort`, `reviewer`, and
 `all`.
-Run `hermes daedalus validate` and `hermes daedalus doctor` after changing a
+Run `hermes sprints validate` and `hermes sprints doctor` after changing a
 binding. Doctor reports each role-to-runtime binding and whether the required
 CLI or external Codex service appears reachable. Use
-`hermes daedalus runtime-matrix --execute` when you want to run a tiny prompt
+`hermes sprints runtime-matrix --execute` when you want to run a tiny prompt
 through the configured role runtimes without touching trackers or code hosts.
 
 ## Markdown Body
@@ -135,4 +135,4 @@ hot reload to keep the last known good config if a bad edit lands.
 
 For production, start from the same examples and fill in tracker credentials,
 real runtime profiles, retention limits, hooks, gates, and tracker feedback
-settings before running `hermes daedalus service-up`.
+settings before running `hermes sprints service-up`.

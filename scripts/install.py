@@ -6,12 +6,12 @@ import shutil
 import sys
 from pathlib import Path
 
-PLUGIN_NAME = "daedalus"
-# All plugin payload lives under ``daedalus/`` in the repo. The install
+PLUGIN_NAME = "sprints"
+# All plugin payload lives under ``sprints/`` in the repo. The install
 # script copies the *contents* of that directory into the destination
 # plugin root — keeping the source layout cleanly separated from
 # operator scripts and dev material at the repo root.
-PAYLOAD_ROOT = "daedalus"
+PAYLOAD_ROOT = "sprints"
 PAYLOAD_ITEMS = [
     "__init__.py",
     "plugin.yaml",
@@ -21,7 +21,7 @@ PAYLOAD_ITEMS = [
     "runtimes",
     "schemas.py",
     "trackers",
-    "daedalus_cli.py",
+    "sprints_cli.py",
     "workflows",
     "skills",
 ]
@@ -31,7 +31,7 @@ def _check_runtime_deps() -> None:
     """Fail early if the supported host python/runtime deps are missing."""
     if sys.version_info < (3, 10):
         raise RuntimeError(
-            "daedalus plugin requires python3 >= 3.10 on the host "
+            "sprints plugin requires python3 >= 3.10 on the host "
             "(see docs/operator/installation.md)"
         )
     missing = []
@@ -45,7 +45,7 @@ def _check_runtime_deps() -> None:
         missing.append("jsonschema (apt: python3-jsonschema)")
     if missing:
         raise RuntimeError(
-            "daedalus plugin requires the following python modules on the host: "
+            "sprints plugin requires the following python modules on the host: "
             + ", ".join(missing)
             + " (see docs/operator/installation.md)"
         )
@@ -104,7 +104,7 @@ def install_plugin(*, repo_root: Path, hermes_home: Path | None = None, destinat
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Install the daedalus plugin into a Hermes plugins directory.")
+    parser = argparse.ArgumentParser(description="Install the sprints plugin into a Hermes plugins directory.")
     parser.add_argument("--hermes-home", help="Hermes home directory. Default: ~/.hermes")
     parser.add_argument("--destination", help="Explicit plugin destination directory. Overrides --hermes-home.")
     parser.add_argument("--repo-root", default=str(Path(__file__).resolve().parents[1]), help="Source repository root. Default: this repository root.")

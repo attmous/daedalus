@@ -3,7 +3,7 @@
 Frame layers (bottom → top):
     1. Parchment
     2. Constellation (animated draw-in)
-    3. Engraved Daedalus emblem (right-side hero)
+    3. Right-side hero source art
     4. Floating code overlays (staggered fade-in)
     5. Right-margin editorial vignettes
     6. Left-side title block (caduceus + wordmark + animated flow line)

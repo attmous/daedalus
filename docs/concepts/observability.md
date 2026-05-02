@@ -1,6 +1,6 @@
 # Observability
 
-Daedalus exposes three operator-facing observability surfaces: the **TUI watch
+Sprints exposes three operator-facing observability surfaces: the **TUI watch
 frame**, the **HTTP status server**, and **tracker feedback**. All three read
 from durable workflow state, but they serve different consumption patterns.
 
@@ -8,13 +8,13 @@ from durable workflow state, but they serve different consumption patterns.
 
 | Surface | Use case | Live? | Writable? |
 |---|---|---|---|
-| `/daedalus watch` | Human operator in terminal | Yes | No |
+| `/sprints watch` | Human operator in terminal | Yes | No |
 | HTTP status server | Dashboard and scripted health checks | On request | No |
 | `tracker-feedback` | Public issue timeline updates | Event-driven | Yes |
 
 ## TUI Watch
 
-`/daedalus watch` renders active work, alerts, and recent engine events. The
+`/sprints watch` renders active work, alerts, and recent engine events. The
 frame is assembled from workflow-aware projections:
 
 - `change-delivery`: active lane state from the engine DB and workflow ledger.
@@ -62,8 +62,8 @@ selection rules.
 
 ## Where This Lives
 
-- TUI frame renderer: `daedalus/observe/watch.py`
-- Watch source aggregation: `daedalus/observe/sources.py`
-- HTTP status server: `daedalus/workflows/change_delivery/server/`
-- Tracker clients and feedback helper: `daedalus/trackers/`
-- Event writer/indexer: `daedalus/engine/`
+- TUI frame renderer: `sprints/observe/watch.py`
+- Watch source aggregation: `sprints/observe/sources.py`
+- HTTP status server: `sprints/workflows/change_delivery/server/`
+- Tracker clients and feedback helper: `sprints/trackers/`
+- Event writer/indexer: `sprints/engine/`

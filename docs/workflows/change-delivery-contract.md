@@ -71,12 +71,12 @@ or depend on that view.
 
 ## Runtime Binding
 
-`hermes daedalus configure-runtime` binds runtime presets to actor names:
+`hermes sprints configure-runtime` binds runtime presets to actor names:
 
 ```bash
-hermes daedalus configure-runtime --runtime codex-app-server --role implementer
-hermes daedalus configure-runtime --runtime hermes-chat --role reviewer
-hermes daedalus configure-runtime --runtime codex-app-server --role all
+hermes sprints configure-runtime --runtime codex-app-server --role implementer
+hermes sprints configure-runtime --runtime hermes-chat --role reviewer
+hermes sprints configure-runtime --runtime codex-app-server --role all
 ```
 
 The runtime matrix reports the same actor names, so every configured actor can

@@ -1,4 +1,4 @@
-# Daedalus installation
+# Sprints installation
 
 This is the supported community install path for the first public release.
 The default managed path is for the bundled `issue-runner` workflow. Use
@@ -14,7 +14,7 @@ The default managed path is for the bundled `issue-runner` workflow. Use
 - the host CLIs required by the runtimes named in `WORKFLOW.md`
 
 The bundled templates default runtime-backed stages to `codex-app-server`.
-Start the shared listener with `hermes daedalus codex-app-server up`, or edit
+Start the shared listener with `hermes sprints codex-app-server up`, or edit
 `WORKFLOW.md` / run `configure-runtime` if a stage should use Hermes Agent
 instead.
 
@@ -26,7 +26,7 @@ but it is deferred until the GitHub adapter is hardened further.
 
 ## Bundled workflows
 
-Daedalus currently ships two workflow packages:
+Sprints currently ships two workflow packages:
 
 - `change-delivery`
   This is the opinionated issue-to-PR SDLC workflow. Its default production
@@ -40,38 +40,38 @@ Daedalus currently ships two workflow packages:
 
 ```bash
 sudo apt install python3-yaml python3-jsonschema
-hermes plugins install attmous/daedalus --enable
+hermes plugins install attmous/sprints --enable
 ```
 
 The plugin source of truth is:
 
 ```text
-~/.hermes/plugins/daedalus
+~/.hermes/plugins/sprints
 ```
 
-Daedalus also ships a standard Hermes pip plugin entry point. If you install it
+Sprints also ships a standard Hermes pip plugin entry point. If you install it
 as a Python package instead of through `hermes plugins install`, Hermes will
 discover it on the next startup and you must enable it explicitly:
 
 ```bash
 python3 -m pip install .
-hermes plugins enable daedalus
+hermes plugins enable sprints
 ```
 
 ## Bootstrap a workflow root
 
 ```bash
 cd /path/to/your/repo
-hermes daedalus bootstrap
+hermes sprints bootstrap
 $EDITOR WORKFLOW.md
-hermes daedalus codex-app-server up
-hermes daedalus validate
-hermes daedalus service-up
+hermes sprints codex-app-server up
+hermes sprints validate
+hermes sprints service-up
 ```
 
 This bootstraps the generic `issue-runner` workflow by default. To bootstrap
 the opinionated SDLC workflow instead, run
-`hermes daedalus bootstrap --workflow change-delivery`.
+`hermes sprints bootstrap --workflow change-delivery`.
 
 `bootstrap`:
 
@@ -81,8 +81,8 @@ the opinionated SDLC workflow instead, run
 - writes or promotes the repo-owned workflow contract
 - creates a dedicated bootstrap branch
 - commits the workflow contract changes
-- writes `./.hermes/daedalus/workflow-root` in the repo checkout so later
-  Daedalus commands can resolve the workflow root automatically
+- writes `./.hermes/sprints/workflow-root` in the repo checkout so later
+  Sprints commands can resolve the workflow root automatically
 
 ```text
 ~/.hermes/workflows/<owner>-<repo>-<workflow-type>/
@@ -93,7 +93,7 @@ the opinionated SDLC workflow instead, run
 If you want explicit control over the target root or slug:
 
 ```bash
-hermes daedalus scaffold-workflow \
+hermes sprints scaffold-workflow \
   --workflow-root ~/.hermes/workflows/your-org-your-repo-issue-runner \
   --repo-slug your-org/your-repo
 ```
@@ -107,7 +107,7 @@ That creates the same supported instance layout:
 If you want the opinionated change-delivery workflow instead:
 
 ```bash
-hermes daedalus scaffold-workflow \
+hermes sprints scaffold-workflow \
   --workflow change-delivery \
   --workflow-root ~/.hermes/workflows/your-org-your-repo-change-delivery \
   --repo-slug your-org/your-repo
@@ -119,7 +119,7 @@ The first workflow in a repo is written to:
 /path/to/repo/WORKFLOW.md
 ```
 
-If the repo later carries multiple workflows, Daedalus promotes the contracts
+If the repo later carries multiple workflows, Sprints promotes the contracts
 to:
 
 ```text
@@ -127,7 +127,7 @@ to:
 /path/to/repo/WORKFLOW-issue-runner.md
 ```
 
-Promotion is fail-safe. If `WORKFLOW.md` exists but is not a Daedalus contract,
+Promotion is fail-safe. If `WORKFLOW.md` exists but is not a Sprints contract,
 bootstrap stops and leaves the file unchanged. If a target named contract
 already exists, bootstrap also stops instead of overwriting user edits.
 
@@ -159,7 +159,7 @@ the workflow policy contract. `change-delivery` composes it into actor prompts;
 
 The bundled workflow templates bind runtime-backed stages to
 `codex-app-server` by default. Start the shared Codex listener with
-`hermes daedalus codex-app-server up`, or use `configure-runtime` to bind a
+`hermes sprints codex-app-server up`, or use `configure-runtime` to bind a
 stage to Hermes Agent instead.
 
 For common runtime choices, use the preset command instead of hand-editing the
@@ -167,10 +167,10 @@ runtime block:
 
 ```bash
 # default issue-runner role
-hermes daedalus configure-runtime --runtime hermes-final --role agent
+hermes sprints configure-runtime --runtime hermes-final --role agent
 
 # change-delivery implementer actor backed by the shared Codex listener
-hermes daedalus configure-runtime --runtime codex-app-server --role implementer
+hermes sprints configure-runtime --runtime codex-app-server --role implementer
 ```
 
 `configure-runtime` edits the repo-owned `WORKFLOW.md` contract, writes the
@@ -180,8 +180,8 @@ does not start external services.
 To inspect the resulting role-to-runtime matrix:
 
 ```bash
-hermes daedalus runtime-matrix
-hermes daedalus runtime-matrix --execute
+hermes sprints runtime-matrix
+hermes sprints runtime-matrix --execute
 ```
 
 Use `--execute` only after the referenced local CLIs or shared Codex service are
@@ -191,9 +191,9 @@ hosts.
 ## Bring it up
 
 ```bash
-hermes daedalus validate
-hermes daedalus doctor
-hermes daedalus service-up
+hermes sprints validate
+hermes sprints doctor
+hermes sprints service-up
 ```
 
 Run `validate` after editing `WORKFLOW.md`. It checks the contract file,
@@ -220,11 +220,11 @@ If your workflow contract uses an external `codex-app-server` runtime, bring up
 the shared Codex listener once:
 
 ```bash
-hermes daedalus codex-app-server up
+hermes sprints codex-app-server up
 ```
 
 Then point the workflow runtime at `ws://127.0.0.1:4500`.
-Use `hermes daedalus codex-app-server doctor` for the full operator check:
+Use `hermes sprints codex-app-server doctor` for the full operator check:
 managed service state, readiness, auth posture, and persisted Codex thread
 mappings. If the listener is not loopback-only, pass one of the supported auth
 flags during `install` or `up`, for example `--ws-token-file
@@ -238,8 +238,8 @@ local issue. Before wiring GitHub or another tracker, run the service loop once
 in the foreground:
 
 ```bash
-hermes daedalus service-loop --max-iterations 2 --interval-seconds 1 --json
-hermes daedalus status --format json
+hermes sprints service-loop --max-iterations 2 --interval-seconds 1 --json
+hermes sprints status --format json
 ```
 
 This exercises the same engine path as the user service: it selects the local
@@ -252,22 +252,22 @@ If you want to inspect or script each step separately, the lower-level commands
 remain available:
 
 ```bash
-hermes daedalus init \
+hermes sprints init \
   --workflow-root ~/.hermes/workflows/your-org-your-repo-change-delivery
 
-hermes daedalus doctor \
+hermes sprints doctor \
   --workflow-root ~/.hermes/workflows/your-org-your-repo-change-delivery \
   --format json
 
-hermes daedalus service-install \
+hermes sprints service-install \
   --workflow-root ~/.hermes/workflows/your-org-your-repo-change-delivery \
   --service-mode active
 
-hermes daedalus service-enable \
+hermes sprints service-enable \
   --workflow-root ~/.hermes/workflows/your-org-your-repo-change-delivery \
   --service-mode active
 
-hermes daedalus service-start \
+hermes sprints service-start \
   --workflow-root ~/.hermes/workflows/your-org-your-repo-change-delivery \
   --service-mode active
 ```
@@ -282,8 +282,8 @@ hermes
 Then use:
 
 ```text
-/daedalus status
-/daedalus doctor
+/sprints status
+/sprints doctor
 /workflow change-delivery status
 ```
 
@@ -297,29 +297,29 @@ For the bundled generic workflow:
 ```
 
 To validate the GitHub-backed tracker path against a disposable live issue, see
-[github-smoke.md](github-smoke.md).
+run `hermes sprints doctor` and inspect tracker diagnostics.
 
 ## Plugin state
 
 Hermes plugins are opt-in. `hermes plugins install ... --enable` is the
 supported path because it installs the repo and enables the plugin in one step.
 
-If you install Daedalus by some other method, enable it explicitly:
+If you install Sprints by some other method, enable it explicitly:
 
 ```bash
-hermes plugins enable daedalus
+hermes plugins enable sprints
 ```
 
 `HERMES_ENABLE_PROJECT_PLUGINS=true` is only for project-local plugins under
-`./.hermes/plugins/`. It is not required for a global `~/.hermes/plugins/daedalus`
+`./.hermes/plugins/`. It is not required for a global `~/.hermes/plugins/sprints`
 install.
 
 ## Manage the plugin
 
 ```bash
 hermes plugins list
-hermes plugins update daedalus
-hermes plugins disable daedalus
+hermes plugins update sprints
+hermes plugins disable sprints
 ```
 
 ## Local-dev fallback
@@ -328,8 +328,8 @@ If you want to install straight from a local checkout instead of the Hermes
 plugin manager:
 
 ```bash
-git clone https://github.com/attmous/daedalus.git
-cd daedalus
+git clone https://github.com/attmous/sprints.git
+cd sprints
 ./scripts/install.sh
-hermes plugins enable daedalus
+hermes plugins enable sprints
 ```

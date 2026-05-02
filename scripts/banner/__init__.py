@@ -1,4 +1,4 @@
-"""Daedalus README banner generator.
+"""Sprints README banner generator.
 
 Public surface::
 

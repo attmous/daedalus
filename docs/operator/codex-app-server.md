@@ -1,15 +1,15 @@
 # Codex app-server Operations
 
-Daedalus can use Codex app-server in two service shapes.
+Sprints can use Codex app-server in two service shapes.
 
 ## Managed Mode
 
-Managed mode means Daedalus owns a systemd user unit for the shared listener.
+Managed mode means Sprints owns a systemd user unit for the shared listener.
 Use this when the workflow host should start the listener automatically.
 
 ```bash
-hermes daedalus codex-app-server up
-hermes daedalus codex-app-server doctor
+hermes sprints codex-app-server up
+hermes sprints codex-app-server doctor
 ```
 
 The default listener is `ws://127.0.0.1:4500`. If the unit was installed with a
@@ -18,16 +18,16 @@ different `--listen` value, `doctor` reads it from the unit file.
 Use logs when the service is installed but not active:
 
 ```bash
-hermes daedalus codex-app-server logs --lines 100
+hermes sprints codex-app-server logs --lines 100
 ```
 
 ## External Mode
 
-External mode means another process owns the listener. Daedalus only connects
+External mode means another process owns the listener. Sprints only connects
 to its WebSocket endpoint.
 
 ```bash
-hermes daedalus codex-app-server doctor \
+hermes sprints codex-app-server doctor \
   --mode external \
   --endpoint ws://127.0.0.1:4500
 ```
@@ -41,7 +41,7 @@ Loopback listeners do not require WebSocket auth. Non-loopback listeners should
 declare one auth mode:
 
 ```bash
-hermes daedalus codex-app-server up \
+hermes sprints codex-app-server up \
   --ws-token-file /absolute/path/to/codex-app-server.token
 ```
 
@@ -50,7 +50,7 @@ configured token/shared-secret file is missing.
 
 ## Thread Mapping Checks
 
-Daedalus persists Codex thread mappings in the shared engine SQLite state:
+Sprints persists Codex thread mappings in the shared engine SQLite state:
 `issue-runner` stores `issue_id -> thread_id`, and `change-delivery` stores
 `lane:<issue-number> -> thread_id`. The generated scheduler snapshot is:
 

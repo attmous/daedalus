@@ -1,4 +1,4 @@
-# Daedalus Engine
+# Sprints Engine
 
 The engine is the durable runtime layer shared by workflow packages. A workflow
 decides what an issue means and what should happen next; the engine provides the
@@ -20,11 +20,11 @@ mechanics that make that decision safe to run unattended.
 | SQLite store | Source of truth for engine execution state: work items, running work, retries, runtime sessions, token totals, and workflow-specific tables. |
 | Scheduler snapshot | Generated JSON view of worker, retry, Codex thread, token, and rate-limit state for operator tools that still consume files. |
 | Retry and recovery | Tracks attempts, due times, errors, restart recovery, and operator-attention thresholds. |
-| Observability | Feeds `/daedalus status`, `/daedalus doctor`, `/daedalus watch`, and optional HTTP status. |
+| Observability | Feeds `/sprints status`, `/sprints doctor`, `/sprints watch`, and optional HTTP status. |
 
 ## Current Shared Code
 
-The first shared engine package lives in `daedalus/engine/` and is installed as
+The first shared engine package lives in `sprints/engine/` and is installed as
 the plugin-local `engine` package:
 
 | Module | Shared Primitive |

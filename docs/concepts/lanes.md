@@ -1,6 +1,6 @@
 # Lanes
 
-A **lane** is the unit of work Daedalus orchestrates. One GitHub issue (with a configured label) becomes one lane. The lane carries the issue through `shadow → active → coding → review → merge` and out the other side.
+A **lane** is the unit of work Sprints orchestrates. One GitHub issue (with a configured label) becomes one lane. The lane carries the issue through `shadow → active → coding → review → merge` and out the other side.
 
 ## State machine
 
@@ -40,7 +40,7 @@ States with no outgoing arrows in this diagram (other than terminal `merged` / `
 | `issue_number` | int | GitHub issue number. The friendly form `#42` is what humans use. |
 | `issue_url` | string | Full URL — for clicking from the dashboard. |
 | `workflow_state` | enum | One of the states above. Owned by `WORKFLOW.md` policy and persisted as agentic state. |
-| `lane_status` | enum | `running` / `retrying` / `merged` / `closed` / `archived`. Owned by Daedalus. |
+| `lane_status` | enum | `running` / `retrying` / `merged` / `closed` / `archived`. Owned by Sprints. |
 | `active_actor_id` | string \| null | Lease holder for the next action, or `null` when idle. |
 | `current_action_id` | string \| null | Running action row, or `null`. |
 | `created_at` / `updated_at` | timestamp | Standard auditing. |
@@ -101,8 +101,8 @@ Each lane is bound to a **workspace** (a temporary directory under `/tmp/`). The
 
 ## Where this lives in code
 
-- Schema: `daedalus/workflows/change_delivery/migrations.py` (lanes table)
-- Selection config: `daedalus/workflows/change_delivery/lane_selection.py`
-- Selection logic: `daedalus/workflows/change_delivery/lane_selection.py` + `workspace.py`
-- State transitions: `daedalus/workflows/change_delivery/workflow.py` + `dispatch.py`
-- Read views: `daedalus/workflows/change_delivery/server/views.py`
+- Schema: `sprints/workflows/change_delivery/migrations.py` (lanes table)
+- Selection config: `sprints/workflows/change_delivery/lane_selection.py`
+- Selection logic: `sprints/workflows/change_delivery/lane_selection.py` + `workspace.py`
+- State transitions: `sprints/workflows/change_delivery/workflow.py` + `dispatch.py`
+- Read views: `sprints/workflows/change_delivery/server/views.py`

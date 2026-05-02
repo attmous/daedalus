@@ -1,6 +1,6 @@
 # Public contract
 
-This document defines the stability boundary for the first public Daedalus release.
+This document defines the stability boundary for the first public Sprints release.
 
 ## Stable surfaces
 
@@ -11,17 +11,17 @@ These are the surfaces we should treat as `v1` public contract:
   - `WORKFLOW-<workflow>.md` when a repo carries multiple workflows
   - bootstrap promotion from `WORKFLOW.md` to named contracts must not
     overwrite existing named contracts
-- `hermes plugins install attmous/daedalus --enable`
-- the `hermes_agent.plugins` entry point name `daedalus`
-- `hermes daedalus bootstrap`
-- `hermes daedalus scaffold-workflow`
-- `hermes daedalus service-up`
-- `hermes daedalus init`
-- `hermes daedalus service-*`
-- `/daedalus ...` operator commands
+- `hermes plugins install attmous/sprints --enable`
+- the `hermes_agent.plugins` entry point name `sprints`
+- `hermes sprints bootstrap`
+- `hermes sprints scaffold-workflow`
+- `hermes sprints service-up`
+- `hermes sprints init`
+- `hermes sprints service-*`
+- `/sprints ...` operator commands
 - `/workflow <name> ...` workflow commands
 - the workflow root naming convention: `~/.hermes/workflows/<owner>-<repo>-<workflow-type>`
-- the repo-local workflow pointer written by `bootstrap`: `./.hermes/daedalus/workflow-root`
+- the repo-local workflow pointer written by `bootstrap`: `./.hermes/sprints/workflow-root`
 - the workflow-root contract pointer written under runtime state
 
 Changes to those surfaces should be documented, tested, and treated as compatibility-sensitive.
@@ -30,9 +30,9 @@ Changes to those surfaces should be documented, tested, and treated as compatibi
 
 These are not public compatibility promises yet:
 
-- SQLite schema details in `runtime/state/daedalus/daedalus.db`
+- SQLite schema details in `runtime/state/sprints/sprints.db`
 - event payload internals beyond documented operator output
-- placeholder-only source tree under `daedalus/projects/**` (not shipped in the
+- placeholder-only source tree under `sprints/projects/**` (not shipped in the
   public plugin payload)
 - experimental skills and local migration helpers
 
@@ -40,9 +40,9 @@ We can refactor those freely as long as the stable surfaces above keep working.
 
 ## Restructure guardrails
 
-The implementation source of truth is `daedalus/`. Repo-root compatibility
+The implementation source of truth is `sprints/`. Repo-root compatibility
 packages are not part of the public contract; direct imports should use the
-installed plugin layout or the `daedalus.<package>` package path.
+installed plugin layout or the `sprints.<package>` package path.
 
 ## Bundled workflows
 

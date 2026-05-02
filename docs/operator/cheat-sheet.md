@@ -1,6 +1,6 @@
-# Daedalus Operator Cheat Sheet
+# Sprints Operator Cheat Sheet
 
-> **When confused, trust GitHub + live derived status first, Daedalus DB second, stale ledger prose last.**
+> **When confused, trust GitHub + live derived status first, Sprints DB second, stale ledger prose last.**
 
 This doc is for the 3am debugging session. Everything here is copy-paste ready.
 It is specifically written for the opinionated `change-delivery` workflow.
@@ -11,13 +11,13 @@ It is specifically written for the opinionated `change-delivery` workflow.
 
 | What You Need | Command / Query |
 |:---|:---|
-| **Check status** | `/daedalus status` |
-| **Full health check** | `/daedalus doctor` |
-| **Validate config** | `/daedalus validate` |
-| **Live dashboard** | `/daedalus watch` |
-| **Event retention posture** | `/daedalus events stats` |
-| **Service health** | `systemctl --user status daedalus-active@<profile>.service` |
-| **Recent logs** | `journalctl --user -u daedalus-active@<profile>.service -n 200` |
+| **Check status** | `/sprints status` |
+| **Full health check** | `/sprints doctor` |
+| **Validate config** | `/sprints validate` |
+| **Live dashboard** | `/sprints watch` |
+| **Event retention posture** | `/sprints events stats` |
+| **Service health** | `systemctl --user status sprints-active@<profile>.service` |
+| **Recent logs** | `journalctl --user -u sprints-active@<profile>.service -n 200` |
 | **Lane actions (SQL)** | `select action_id, action_type, status, retry_count from lane_actions where lane_id='lane:220' order by requested_at desc;` |
 | **Lane state (SQL)** | `select lane_id, workflow_state, review_state, current_head_sha from lanes where lane_id='lane:220';` |
 
@@ -27,7 +27,7 @@ It is specifically written for the opinionated `change-delivery` workflow.
 
 ```
 ┌──────────────┐    ┌──────────────┐    ┌──────────────┐
-│   GitHub     │───►│ Workflow pkg │───►│   Daedalus   │
+│   GitHub     │───►│ Workflow pkg │───►│   Sprints   │
 │   (truth)    │    │   (policy)   │    │   (runtime)  │
 └──────────────┘    └──────────────┘    └──────────────┘
        │                    │                    │
@@ -44,7 +44,7 @@ It is specifically written for the opinionated `change-delivery` workflow.
 |:---|:---|:---|
 | **GitHub** | `gh issue view 220`, `gh pr view 42` | Labels, head, draft, review threads |
 | **Workflow** | `/workflow change-delivery status --json` | `nextAction`, `health`, `derivedReviewLoopState` |
-| **Daedalus** | `/daedalus doctor` | Runtime freshness, ownership, action compatibility, failures |
+| **Sprints** | `/sprints doctor` | Runtime freshness, ownership, action compatibility, failures |
 
 ---
 
@@ -53,60 +53,60 @@ It is specifically written for the opinionated `change-delivery` workflow.
 ### Slash Commands (Inside Hermes)
 
 ```text
-/daedalus status              # Runtime row, lane count, paths, freshness
-/daedalus doctor              # Full health check across all subsystems
-/daedalus validate            # Validate WORKFLOW.md, schema, and preflight rules
-/daedalus watch               # Live TUI: lanes + alerts + events
-/daedalus events stats        # Event counts plus retention limit posture
-/daedalus shadow-report       # Diff shadow plan vs active reality
-/daedalus active-gate-status  # What's blocking promotion to active
-/daedalus service-status      # systemd health snapshot
+/sprints status              # Runtime row, lane count, paths, freshness
+/sprints doctor              # Full health check across all subsystems
+/sprints validate            # Validate WORKFLOW.md, schema, and preflight rules
+/sprints watch               # Live TUI: lanes + alerts + events
+/sprints events stats        # Event counts plus retention limit posture
+/sprints shadow-report       # Diff shadow plan vs active reality
+/sprints active-gate-status  # What's blocking promotion to active
+/sprints service-status      # systemd health snapshot
 ```
 
 ### Workflow CLI (Direct)
 
 ```bash
 # Status
-python3 ~/.hermes/plugins/daedalus/workflows/__main__.py \
+python3 ~/.hermes/plugins/sprints/workflows/__main__.py \
   --workflow-root ~/.hermes/workflows/<owner>-<repo>-<workflow-type> \
   status --json
 
 # Tick (manual dispatch)
-python3 ~/.hermes/plugins/daedalus/workflows/__main__.py \
+python3 ~/.hermes/plugins/sprints/workflows/__main__.py \
   --workflow-root ~/.hermes/workflows/<owner>-<repo>-<workflow-type> \
   tick --json
 
 # Implementation turn
-python3 ~/.hermes/plugins/daedalus/workflows/__main__.py \
+python3 ~/.hermes/plugins/sprints/workflows/__main__.py \
   --workflow-root ~/.hermes/workflows/<owner>-<repo>-<workflow-type> \
   dispatch-implementation-turn --json
 
 # internal review
-python3 ~/.hermes/plugins/daedalus/workflows/__main__.py \
+python3 ~/.hermes/plugins/sprints/workflows/__main__.py \
   --workflow-root ~/.hermes/workflows/<owner>-<repo>-<workflow-type> \
   dispatch-internal-review --json
 ```
 
-### Daedalus Runtime (Direct)
+### Sprints Runtime (Direct)
 
 ```bash
 # Status
-python3 ~/.hermes/plugins/daedalus/runtime.py \
+python3 ~/.hermes/plugins/sprints/runtime.py \
   status --workflow-root ~/.hermes/workflows/<owner>-<repo>-<workflow-type> \
   --json
 
 # Doctor
-python3 ~/.hermes/plugins/daedalus/runtime.py \
+python3 ~/.hermes/plugins/sprints/runtime.py \
   doctor --workflow-root ~/.hermes/workflows/<owner>-<repo>-<workflow-type> \
   --json
 
 # Shadow report
-python3 ~/.hermes/plugins/daedalus/runtime.py \
+python3 ~/.hermes/plugins/sprints/runtime.py \
   shadow-report --workflow-root ~/.hermes/workflows/<owner>-<repo>-<workflow-type> \
   --json
 
 # Active actions for a lane
-python3 ~/.hermes/plugins/daedalus/runtime.py \
+python3 ~/.hermes/plugins/sprints/runtime.py \
   request-active-actions \
   --workflow-root ~/.hermes/workflows/<owner>-<repo>-<workflow-type> \
   --lane-id lane:220 --json
@@ -117,16 +117,16 @@ python3 ~/.hermes/plugins/daedalus/runtime.py \
 ```bash
 # Check service
 systemctl --user status \
-  daedalus-active@<owner>-<repo>-<workflow-type>.service --no-pager
+  sprints-active@<owner>-<repo>-<workflow-type>.service --no-pager
 
 # View logs
 journalctl --user -u \
-  daedalus-active@<owner>-<repo>-<workflow-type>.service \
+  sprints-active@<owner>-<repo>-<workflow-type>.service \
   -n 200 --no-pager
 
 # Restart
 systemctl --user restart \
-  daedalus-active@<owner>-<repo>-<workflow-type>.service
+  sprints-active@<owner>-<repo>-<workflow-type>.service
 ```
 
 ---
@@ -135,14 +135,14 @@ systemctl --user restart \
 
 | File | Purpose |
 |:---|:---|
-| `~/.hermes/workflows/<profile>/runtime/state/daedalus/daedalus.db` | `change-delivery` runtime state (SQLite) |
-| `~/.hermes/workflows/<profile>/runtime/memory/daedalus-events.jsonl` | Daedalus runtime event history |
+| `~/.hermes/workflows/<profile>/runtime/state/sprints/sprints.db` | `change-delivery` runtime state (SQLite) |
+| `~/.hermes/workflows/<profile>/runtime/memory/sprints-events.jsonl` | Sprints runtime event history |
 | `~/.hermes/workflows/<profile>/memory/workflow-status.json` | Workflow status projection |
 | `~/.hermes/workflows/<profile>/memory/workflow-health.json` | Workflow health projection |
 | `~/.hermes/workflows/<profile>/memory/workflow-scheduler.json` | Generated scheduler snapshot; SQLite remains the source of truth |
 | `/tmp/issue-<N>/.lane-state.json` | Lane-local handoff state |
 | `/tmp/issue-<N>/.lane-memo.md` | Lane-local handoff notes |
-| `~/.config/systemd/user/daedalus-active@<profile>.service` | Service unit file |
+| `~/.config/systemd/user/sprints-active@<profile>.service` | Service unit file |
 
 ---
 
@@ -209,7 +209,7 @@ Orchestrator ──► Implementer ──► Reviewer ──► Publish ──�
      └─► restart session (if stale)
 ```
 
-| Step | Workflow Action | Daedalus Action |
+| Step | Workflow Action | Sprints Action |
 |:---|:---|:---|
 | 1. Orchestrator → Implementer | `dispatch-implementation-turn` | `dispatch_implementation_turn` |
 | 2. Implementer → Reviewer | `run_internal_review` | `request_internal_review` |
@@ -240,7 +240,7 @@ Orchestrator ──► Implementer ──► Reviewer ──► Publish ──�
 
 ## Common Failure Signatures
 
-### A. Workflow says `run_internal_review`, Daedalus returns `[]`
+### A. Workflow says `run_internal_review`, Sprints returns `[]`
 
 **Likely cause:** Failed active `request_internal_review` for the same head wedged the idempotency key.
 
@@ -284,7 +284,7 @@ order by requested_at desc;
 - Is the implementation actor session stale?
 - Did a repair handoff already go out?
 - Is the local head ahead of PR head?
-- Are you looking at workflow-derived truth or Daedalus runtime truth?
+- Are you looking at workflow-derived truth or Sprints runtime truth?
 
 ---
 
@@ -328,14 +328,14 @@ where lane_id='lane:220';
 ### Show recent events
 ```bash
 # Query the durable SQLite engine event ledger
-hermes daedalus events \
+hermes sprints events \
   --workflow-root ~/.hermes/workflows/<profile> \
   --limit 50 \
   --json
 
 # Filter by run or work item
-hermes daedalus events --workflow-root ~/.hermes/workflows/<profile> --run-id <run_id>
-hermes daedalus events --workflow-root ~/.hermes/workflows/<profile> --work-id ISSUE-123
+hermes sprints events --workflow-root ~/.hermes/workflows/<profile> --run-id <run_id>
+hermes sprints events --workflow-root ~/.hermes/workflows/<profile> --work-id ISSUE-123
 ```
 
 ---
@@ -344,14 +344,14 @@ hermes daedalus events --workflow-root ~/.hermes/workflows/<profile> --work-id I
 
 ### Show configured webhooks
 ```bash
-python3 ~/.hermes/plugins/daedalus/workflows/__main__.py \
+python3 ~/.hermes/plugins/sprints/workflows/__main__.py \
   --workflow-root ~/.hermes/workflows/<profile> \
   status --json | jq '.webhooks'
 ```
 
 ### Test a webhook manually
 ```bash
-python3 ~/.hermes/plugins/daedalus/workflows/__main__.py \
+python3 ~/.hermes/plugins/sprints/workflows/__main__.py \
   --workflow-root ~/.hermes/workflows/<profile> \
   dispatch-test-webhook --event action=test
 ```
@@ -362,7 +362,7 @@ python3 ~/.hermes/plugins/daedalus/workflows/__main__.py \
 
 ### Check if a bad WORKFLOW.md edit is being ignored
 ```bash
-/daedalus doctor
+/sprints doctor
 ```
 Look for `config_reload_failed` in the event tail or doctor output.
 
@@ -396,8 +396,8 @@ Tracker feedback is configured in `WORKFLOW.md` under `tracker-feedback`.
 | Doc | What It Covers |
 |:---|:---|
 | [Operator Guide](./README.md) | Landing page for all operator docs |
-| [Slash Commands](./slash-commands.md) | Complete catalog of `/daedalus` commands |
+| [Slash Commands](./slash-commands.md) | Complete catalog of `/sprints` commands |
 | [HTTP Status Surface](./http-status.md) | JSON health snapshots for dashboards |
 | [Installation](./installation.md) | First-time setup |
-| [Architecture Overview](../architecture.md) | How Daedalus works internally |
+| [Architecture Overview](../architecture.md) | How Sprints works internally |
 | [Concepts](../concepts/README.md) | Leases, lanes, actions, failures, etc. |

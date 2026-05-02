@@ -5,7 +5,7 @@ It is the shared replacement for workflow-specific GitHub comment settings.
 
 ## Why It Exists
 
-- Operators get visible progress on the issue without opening Daedalus logs.
+- Operators get visible progress on the issue without opening Sprints logs.
 - GitHub, `local-json`, and future trackers use one workflow-facing contract.
 - Workflow behavior stays repo-owned in `WORKFLOW.md`.
 - `change-delivery` can keep issue feedback under `tracker` while PR/merge
@@ -33,8 +33,8 @@ tracker-feedback:
 `merge-and-promote`, and operator-attention events.
 
 `comment-mode: append` writes a new tracker comment for every included event.
-`comment-mode: upsert` keeps one current Daedalus comment per workflow event
-and updates it on later runs; the durable audit trail still lives in Daedalus
+`comment-mode: upsert` keeps one current Sprints comment per workflow event
+and updates it on later runs; the durable audit trail still lives in Sprints
 SQLite/events.
 
 ## Tracker Behavior
@@ -53,7 +53,7 @@ failed feedback publishes is a future hardening slice.
 
 ## Code Pointers
 
-- Shared helper: `daedalus/trackers/feedback.py`
-- Tracker adapters: `daedalus/trackers/github.py`, `daedalus/trackers/local_json.py`
-- `issue-runner` wiring: `daedalus/workflows/issue_runner/workspace.py`
-- `change-delivery` wiring: `daedalus/workflows/change_delivery/workspace.py`
+- Shared helper: `sprints/trackers/feedback.py`
+- Tracker adapters: `sprints/trackers/github.py`, `sprints/trackers/local_json.py`
+- `issue-runner` wiring: `sprints/workflows/issue_runner/workspace.py`
+- `change-delivery` wiring: `sprints/workflows/change_delivery/workspace.py`

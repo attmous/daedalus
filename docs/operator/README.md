@@ -1,6 +1,6 @@
-# Daedalus Operator Guide
+# Sprints Operator Guide
 
-> **Day-to-day operations, installation, and troubleshooting for humans who run Daedalus.**
+> **Day-to-day operations, installation, and troubleshooting for humans who run Sprints.**
 >
 > This section is for the person staring at a terminal wondering why a lane hasn't moved in three hours.
 
@@ -10,7 +10,7 @@
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────┐
-│                       DAEDALUS OPERATOR MAP                                │
+│                       SPRINTS OPERATOR MAP                                │
 ├────────────────────────────────────────────────────────────────────────────┤
 │                                                                            │
 │  ┌──────────────────┐      ┌──────────────────┐      ┌──────────────────┐  │
@@ -31,11 +31,11 @@
 
 ## Installation
 
-**First time setting up Daedalus?** Start here.
+**First time setting up Sprints?** Start here.
 
 | Doc | What It Covers | Read This If... |
 |:---|:---|:---|
-| [**Installation**](./installation.md) | Community install path, prerequisites, plugin setup, systemd service registration, first-run verification. | ...you are installing Daedalus on a new machine or rebuilding after a migration. |
+| [**Installation**](./installation.md) | Community install path, prerequisites, plugin setup, systemd service registration, first-run verification. | ...you are installing Sprints on a new machine or rebuilding after a migration. |
 
 **The narrative arc:** *Install* → *Configure* → *Verify* → *Start service* → *Confirm health*.
 
@@ -43,13 +43,12 @@
 
 ## Day-to-Day Operations
 
-**Running Daedalus daily?** These are your tools.
+**Running Sprints daily?** These are your tools.
 
 | Doc | What It Covers | Read This If... |
 |:---|:---|:---|
-| [**Slash Commands**](./slash-commands.md) | Complete catalog of `/daedalus` commands plus workflow-specific `/workflow <name> ...` surfaces for both bundled workflows. | ...you need to check what's happening or poke the system into action. |
-| [**HTTP Status Surface**](./http-status.md) | Optional localhost HTTP server (`:8765`) exposing JSON health snapshots for dashboards and external monitoring. | ...you want to monitor Daedalus without SSHing into the box. |
-| [**Codex app-server Smoke Tests**](./codex-app-server-smoke.md) | Fake CI harness and opt-in real Codex app-server smoke for start/resume behavior. | ...you changed Codex runtime/service behavior or want local production confidence. |
+| [**Slash Commands**](./slash-commands.md) | Complete catalog of `/sprints` commands plus workflow-specific `/workflow <name> ...` surfaces for both bundled workflows. | ...you need to check what's happening or poke the system into action. |
+| [**HTTP Status Surface**](./http-status.md) | Optional localhost HTTP server (`:8765`) exposing JSON health snapshots for dashboards and external monitoring. | ...you want to monitor Sprints without SSHing into the box. |
 
 **The narrative arc:** *Check status* → *Watch live* → *Diagnose* → *Fix* → *Confirm*.
 
@@ -73,13 +72,13 @@ execution state for both workflows also lives in SQLite. The JSON files under
 
 ## Start Here
 
-**Installing Daedalus for the first time?**
+**Installing Sprints for the first time?**
 
 1. [**Installation**](./installation.md) — get it running
 2. [**Slash Commands**](./slash-commands.md) — learn the basics
 3. [**Cheat Sheet**](./cheat-sheet.md) — bookmark for emergencies
 
-**Operating Daedalus day-to-day?**
+**Operating Sprints day-to-day?**
 
 - [**Slash Commands**](./slash-commands.md) — your primary interface
 - [**Cheat Sheet**](./cheat-sheet.md) — keep open for quick SQL and debugging
@@ -96,10 +95,10 @@ execution state for both workflows also lives in SQLite. The JSON files under
 ## How These Connect
 
 ```
-[Installation] ──► Daedalus is running
+[Installation] ──► Sprints is running
        │
        ▼
-[Slash Commands] ──► /daedalus status / doctor / watch
+[Slash Commands] ──► /sprints status / doctor / watch
        │
        ▼
 [HTTP Status] ──► localhost:8765 for dashboards
@@ -117,6 +116,6 @@ Workflow run is healthy again, operator goes back to sleep
 
 | Doc | What It Covers |
 |---|---|
-| [Architecture Overview](../architecture.md) | The big picture — how Daedalus works internally |
+| [Architecture Overview](../architecture.md) | The big picture — how Sprints works internally |
 | [Concepts](../concepts/README.md) | The mental model — leases, lanes, actions, failures, etc. |
-| [Contributing](../contributing.md) | How to contribute to Daedalus |
+| [Contributing](../contributing.md) | How to contribute to Sprints |

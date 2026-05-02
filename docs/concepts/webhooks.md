@@ -1,12 +1,12 @@
 # Webhooks
 
-Webhooks are **pluggable outbound subscribers** for audit events. When something happens in a lane (dispatch, review, merge, operator attention), Daedalus can fan out the event to any number of configured webhooks — Slack, HTTP JSON endpoint, or a no-op disabled stub.
+Webhooks are **pluggable outbound subscribers** for audit events. When something happens in a lane (dispatch, review, merge, operator attention), Sprints can fan out the event to any number of configured webhooks — Slack, HTTP JSON endpoint, or a no-op disabled stub.
 
 ---
 
 ## Why webhooks
 
-The event log (`daedalus-events.jsonl`) is great for post-hoc analysis, but real-time notifications need a push mechanism. Webhooks bridge that gap without coupling the workflow to any specific chat platform.
+The event log (`sprints-events.jsonl`) is great for post-hoc analysis, but real-time notifications need a push mechanism. Webhooks bridge that gap without coupling the workflow to any specific chat platform.
 
 ---
 
@@ -24,7 +24,7 @@ webhooks:
 
   - name: "http-json"
     kind: http-json
-    url: "https://my-monitoring.example.com/daedalus"
+    url: "https://my-monitoring.example.com/sprints"
     enabled: true
     # No event-globs = match all events
 
@@ -117,9 +117,8 @@ This is the same contract used by `workspace._make_audit_fn`.
 
 ## Where this lives in code
 
-- Protocol + factory: `daedalus/workflows/change_delivery/webhooks/__init__.py`
-- Slack implementation: `daedalus/workflows/change_delivery/webhooks/slack_incoming.py`
-- HTTP JSON implementation: `daedalus/workflows/change_delivery/webhooks/http_json.py`
-- Disabled stub: `daedalus/workflows/change_delivery/webhooks/disabled.py`
-- Fan-out: `daedalus/workflows/change_delivery/webhooks/__init__.py::compose_audit_subscribers`
-- Tests: `tests/test_webhooks_phase_c.py`, `tests/test_webhooks_schema.py`
+- Protocol + factory: `sprints/workflows/change_delivery/webhooks/__init__.py`
+- Slack implementation: `sprints/workflows/change_delivery/webhooks/slack_incoming.py`
+- HTTP JSON implementation: `sprints/workflows/change_delivery/webhooks/http_json.py`
+- Disabled stub: `sprints/workflows/change_delivery/webhooks/disabled.py`
+- Fan-out: `sprints/workflows/change_delivery/webhooks/__init__.py::compose_audit_subscribers`

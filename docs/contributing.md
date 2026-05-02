@@ -1,6 +1,6 @@
-# Contributing to Daedalus
+# Contributing to Sprints
 
-So you want to hack on Daedalus? Welcome. This doc covers how to run tests, add a new runtime, add a workflow stage, and keep the docs in sync.
+So you want to hack on Sprints? This doc covers the current lightweight contributor path, adding a new runtime, adding workflow mechanics, and keeping docs in sync.
 
 ---
 
@@ -8,72 +8,32 @@ So you want to hack on Daedalus? Welcome. This doc covers how to run tests, add 
 
 ```bash
 # Clone
-git clone https://github.com/attmous/daedalus.git
-cd daedalus
+git clone https://github.com/attmous/sprints.git
+cd sprints
 
-# Install contributor/test deps
+# Install contributor deps
 python3 -m pip install -r requirements-dev.txt
 
 # Install (into your Hermes home)
 ./scripts/install.sh
 
-# Run tests
-pytest
-
-# Run one test file
-pytest tests/test_stall_detection.py -v
-
-# Run with coverage
-pytest --cov=daedalus --cov-report=term-missing
-```
-
-The public onboarding path should stay green too:
-
-```bash
-pytest tests/test_public_onboarding_smoke.py -v
-pytest tests/test_official_plugin_layout.py -v
-pytest tests/test_pip_plugin_packaging.py -v
+# Verify syntax/importability
+python3 -m compileall sprints
 ```
 
 If you touch files loaded at runtime via `Path(__file__).parent` — prompts,
 skills, workflow templates, or `plugin.yaml` — keep the package metadata in
-`pyproject.toml` / `MANIFEST.in` and the packaging test green. `daedalus/projects/**`
+`pyproject.toml` / `MANIFEST.in` aligned. `sprints/projects/**`
 is placeholder-only in the public repo and is intentionally not shipped in the
 public plugin payload.
 
 ---
 
-## Test conventions
-
-### File naming
-
-- `test_<module_name>.py` — unit tests for a single module
-- `test_<feature>_phase_<letter>.py` — integration tests for a feature phase
-- `test_workflows_change_delivery_<topic>.py` — workflow-specific tests
-
-### Test categories
-
-| Category | Count | Example |
-|---|---|---|
-| Unit tests | ~40 | `test_config_snapshot.py`, `test_stall_detection.py` |
-| Integration tests | ~25 | `test_external_reviewer_phase_b.py` |
-| Formatter tests | ~10 | `test_formatters_shadow_report.py` |
-| Schema tests | ~8 | `test_workflow_change_delivery_schema.py` |
-
-### Running the full suite
-
-```bash
-pytest -x  # stop on first failure
-pytest -n auto  # parallel (requires pytest-xdist)
-```
-
----
-
 ## Adding a new runtime
 
-1. **Implement the Protocol** in `daedalus/runtimes/your_runtime.py`:
+1. **Implement the Protocol** in `sprints/runtimes/your_runtime.py`:
    ```python
-   from daedalus.runtimes import register
+   from sprints.runtimes import register
 
    @register("your-kind")
    class YourRuntime:
@@ -84,7 +44,7 @@ pytest -n auto  # parallel (requires pytest-xdist)
        def last_activity_ts(self) -> float | None: ...
    ```
 
-2. **Add to schema** in `daedalus/workflows/change_delivery/schema.yaml`:
+2. **Add to schema** in `sprints/workflows/change_delivery/schema.yaml`:
    ```yaml
    runtimes:
      your-runtime:
@@ -92,9 +52,7 @@ pytest -n auto  # parallel (requires pytest-xdist)
        timeout-seconds: 1200
    ```
 
-3. **Add tests** in `tests/test_workflows_change_delivery_runtimes_your_runtime.py`.
-
-4. **Document** in `docs/concepts/runtimes.md`.
+3. **Document** in `docs/concepts/runtimes.md`.
 
 ---
 
@@ -104,12 +62,11 @@ The current change-delivery workflow has stages: `implementing` → `awaiting_pr
 
 To add a new stage:
 
-1. **Add the state** to the workflow state machine in `daedalus/workflows/change_delivery/workflow.py`.
-2. **Add the transition logic** in `daedalus/workflows/change_delivery/dispatch.py`.
-3. **Add the action type** in `daedalus/workflows/change_delivery/actions.py`.
-4. **Update the schema** in `daedalus/workflows/change_delivery/migrations.py` (if new DB columns needed).
-5. **Add tests** in `tests/test_workflows_change_delivery_actions.py`.
-6. **Document** in `docs/concepts/lanes.md` and `docs/concepts/actions.md`.
+1. **Add the state** to the workflow state machine in `sprints/workflows/change_delivery/workflow.py`.
+2. **Add the transition logic** in `sprints/workflows/change_delivery/dispatch.py`.
+3. **Add the action type** in `sprints/workflows/change_delivery/actions.py`.
+4. **Update the schema** in `sprints/workflows/change_delivery/migrations.py` (if new DB columns needed).
+5. **Document** in `docs/concepts/lanes.md` and `docs/concepts/actions.md`.
 
 ---
 
@@ -122,7 +79,7 @@ Every code change that affects operator-facing behavior must update docs:
 | New slash command | `docs/operator/slash-commands.md`, `docs/operator/cheat-sheet.md` |
 | New concept | `docs/concepts/<new-concept>.md`, `docs/architecture.md` |
 | Schema change | `docs/concepts/lanes.md`, `docs/concepts/actions.md` |
-| Config change | `daedalus/workflows/change_delivery/workflow.template.md`, `docs/examples/change-delivery.workflow.md`, `docs/concepts/hot-reload.md`, `docs/operator/cheat-sheet.md` |
+| Config change | `sprints/workflows/change_delivery/workflow.template.md`, `docs/examples/change-delivery.workflow.md`, `docs/concepts/hot-reload.md`, `docs/operator/cheat-sheet.md` |
 | Rename/refactor | Relevant docs that describe the current public structure |
 
 ---
@@ -140,5 +97,5 @@ Every code change that affects operator-facing behavior must update docs:
 
 - Read the operator cheat sheet: `docs/operator/cheat-sheet.md`
 - Check the architecture doc: `docs/architecture.md`
-- Run `/daedalus doctor` inside Hermes
-- Open an issue with the output of `/daedalus status --format json`
+- Run `/sprints doctor` inside Hermes
+- Open an issue with the output of `/sprints status --format json`

@@ -1,10 +1,4 @@
-"""Right-side hero image: load + chroma-key the engraved Daedalus emblem.
-
-The vendored source (``assets/source/daedalus-emblem.jpg``) is a 17th-c.
-line engraving — black ink on near-white paper. We drop the paper to
-transparency via inverted luminance and tint the ink toward our editorial
-INK colour so the emblem sits naturally on the parchment.
-"""
+"""Right-side hero image: load + chroma-key the banner source art."""
 from __future__ import annotations
 
 from PIL import Image, ImageFilter

@@ -13,7 +13,7 @@ Or::
 
     /usr/bin/python3 -m scripts.banner
 
-Both write to ``assets/daedalus-banner.gif``.
+Both write to ``assets/sprints-banner.gif``.
 """
 from __future__ import annotations
 

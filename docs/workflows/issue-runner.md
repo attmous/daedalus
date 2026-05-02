@@ -27,8 +27,8 @@ For each eligible tracker issue:
 ## Default template
 
 - Public example: [`docs/examples/issue-runner.workflow.md`](../examples/issue-runner.workflow.md)
-- Bundled payload template: [`daedalus/workflows/issue_runner/workflow.template.md`](/home/radxa/WS/daedalus/daedalus/workflows/issue_runner/workflow.template.md)
-- Sample tracker file: [`daedalus/workflows/issue_runner/issues.template.json`](/home/radxa/WS/daedalus/daedalus/workflows/issue_runner/issues.template.json)
+- Bundled payload template: [`sprints/workflows/issue_runner/workflow.template.md`](/home/radxa/WS/sprints/sprints/workflows/issue_runner/workflow.template.md)
+- Sample tracker file: [`sprints/workflows/issue_runner/issues.template.json`](/home/radxa/WS/sprints/sprints/workflows/issue_runner/issues.template.json)
 
 ## Key config blocks
 
@@ -42,7 +42,7 @@ For each eligible tracker issue:
 The issue execution stage uses the shared runtime stage dispatcher. Hermes can
 run directly through `mode: final` (`hermes -z`) or `mode: chat`
 (`hermes chat --quiet -q`). Command overrides receive rendered `{prompt_path}`
-and `{result_path}` placeholders; writing JSON to `{result_path}` lets Daedalus
+and `{result_path}` placeholders; writing JSON to `{result_path}` lets Sprints
 record command runtime metadata and token/rate-limit metrics. Prompt-native
 runtimes such as `codex-app-server` receive the prompt through
 `run_prompt_result`.
@@ -108,7 +108,7 @@ tracker-feedback:
 ```
 
 Use `comment-mode: upsert` for public tracker issues where you want one current
-Daedalus status comment per event instead of an append-only issue timeline.
+Sprints status comment per event instead of an append-only issue timeline.
 
 `issue-runner` composes the shared `trackers/` clients with workflow-specific
 eligibility, ordering, retry, and workspace policy.
@@ -118,10 +118,10 @@ before returning. `run` is the service path: it dispatches eligible workers,
 returns to the polling loop, reconciles completed workers on later iterations,
 and requests cancellation when a running issue enters a terminal tracker state.
 
-Scheduler state is persisted in `runtime/state/daedalus/daedalus.db` so
+Scheduler state is persisted in `runtime/state/sprints/sprints.db` so
 continuation retries, failure backoff, running-worker recovery, aggregate Codex
 token totals, and Codex `issue_id -> thread_id` mappings survive loop restarts.
-Daedalus also writes `storage.scheduler` (default:
+Sprints also writes `storage.scheduler` (default:
 `memory/workflow-scheduler.json`) as a generated operator snapshot. When a
 mapped thread exists, the Codex app-server adapter resumes it with
 `thread/resume` before starting the next turn. `status` also includes runtime
@@ -136,13 +136,13 @@ Use either:
 
 ```bash
 cd /path/to/repo
-hermes daedalus bootstrap
+hermes sprints bootstrap
 ```
 
 or the explicit scaffold path:
 
 ```bash
-hermes daedalus scaffold-workflow \
+hermes sprints scaffold-workflow \
   --workflow issue-runner \
   --workflow-root ~/.hermes/workflows/<owner>-<repo>-issue-runner \
   --repo-slug <owner>/<repo>
@@ -158,9 +158,9 @@ Then edit:
 Then bring it up:
 
 ```bash
-hermes daedalus codex-app-server up
-hermes daedalus validate
-hermes daedalus service-up
+hermes sprints codex-app-server up
+hermes sprints validate
+hermes sprints service-up
 ```
 
 For direct workflow operations:
@@ -185,12 +185,11 @@ shared engine SQLite state plus the `issue-runner` status/audit projections.
 - Linear is experimental and deferred. GitHub is the supported public tracker path for this workflow.
 - Managed service mode is `active` only. `shadow` remains specific to `change-delivery`.
 - The bundled Codex app-server adapter supports managed stdio, warm external WebSocket transports, durable thread resume across ticks, and cooperative in-flight cancellation in the supervised `run` loop.
-- Cancellation is cooperative. Codex app-server turns are interrupted when Daedalus requests cancellation; command-style runtimes may only observe cancellation before they start or after they exit.
+- Cancellation is cooperative. Codex app-server turns are interrupted when Sprints requests cancellation; command-style runtimes may only observe cancellation before they start or after they exit.
 
 ## Related docs
 
 - [Architecture](../architecture.md)
 - [Runtimes](../concepts/runtimes.md)
 - [Hot-reload](../concepts/hot-reload.md)
-- [GitHub smoke test](../operator/github-smoke.md)
 - [Symphony conformance](../symphony-conformance.md)

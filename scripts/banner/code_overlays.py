@@ -32,7 +32,7 @@ AGENTS_BLOCK = [
 # Middle — GitHub-native lane state. Repo + issue ref say "real GitHub".
 GITHUB_BLOCK = [
     [('{', INK), ('"repo"', CYAN), (': ', INK),
-     ('"attmous/daedalus"', INK), (',', INK)],
+     ('"attmous/sprints"', INK), (',', INK)],
     [(' "issue"', CYAN), (': ', INK), ('#42', CYAN_BRIGHT), (',', INK),
      ('  "label"', CYAN), (': ', INK), ('"active-lane"', INK), (',', INK)],
     [(' "state"', CYAN), (': ', INK),

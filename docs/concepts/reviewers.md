@@ -1,6 +1,6 @@
 # Reviewers
 
-Daedalus treats review as workflow gates, not as fixed bot names. In
+Sprints treats review as workflow gates, not as fixed bot names. In
 `change-delivery`, an `agent-review` gate can run any configured actor in a
 fresh context before publish, while a `pr-comment-approval` gate can wait for
 registered PR commenters or reactions before merge. The goal is simple: no code
@@ -159,10 +159,9 @@ limit 1;
 
 ## Where this lives in code
 
-- Review policy: `daedalus/workflows/change_delivery/reviews.py`
-- Reviewer implementations: `daedalus/workflows/change_delivery/reviewers/`
-- Review dispatch: `daedalus/workflows/change_delivery/dispatch.py`
-- Findings parsing: `daedalus/workflows/change_delivery/reviews.py` (look for `_extract_json_object`, `SEVERITY_BADGE_RE`)
-- Repair handoff: `daedalus/workflows/change_delivery/actions.py`
-- Review state schema: `daedalus/workflows/change_delivery/migrations.py`
-- Tests: `tests/test_workflows_change_delivery_reviews.py`, `tests/test_external_reviewer_phase_b.py`
+- Review policy: `sprints/workflows/change_delivery/reviews.py`
+- Reviewer implementations: `sprints/workflows/change_delivery/reviewers/`
+- Review dispatch: `sprints/workflows/change_delivery/dispatch.py`
+- Findings parsing: `sprints/workflows/change_delivery/reviews.py` (look for `_extract_json_object`, `SEVERITY_BADGE_RE`)
+- Repair handoff: `sprints/workflows/change_delivery/actions.py`
+- Review state schema: `sprints/workflows/change_delivery/migrations.py`

@@ -6,7 +6,7 @@ Now takes the Image object too, because the inline icons are PNG-embedded
 Layout:
 
     ┌────────────────────────────────────────────────────────────┐
-    │ ☤    Daedalus              [code] [bust]                  │
+    │ ☤    Sprints              [code] [bust]                  │
     │      ─                                                     │
     │      Agents that fly.                                      │
     │      Workflows that don't melt.                            │
@@ -45,7 +45,7 @@ def draw(im: Image.Image, *, frame: int) -> None:
     y = config.TITLE_Y
 
     # Wordmark
-    d.text((x, y), "Daedalus",
+    d.text((x, y), "Sprints",
            font=typography.title(), fill=(*config.INK, 255))
 
     # Subtitle — two lines, second in cyan

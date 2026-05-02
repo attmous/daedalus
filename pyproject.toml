@@ -3,9 +3,9 @@ requires = ["setuptools>=66", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "hermes-plugin-daedalus"
+name = "hermes-plugin-sprints"
 version = "0.3.0"
-description = "Daedalus workflow engine and operator control surface."
+description = "Sprints workflow engine and operator control surface."
 readme = "README.md"
 requires-python = ">=3.10"
 license = {file = "LICENSE"}
@@ -27,18 +27,18 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/attmous/daedalus"
-Repository = "https://github.com/attmous/daedalus"
-Documentation = "https://github.com/attmous/daedalus/tree/main/docs"
+Homepage = "https://github.com/attmous/sprints"
+Repository = "https://github.com/attmous/sprints"
+Documentation = "https://github.com/attmous/sprints/tree/main/docs"
 
 [project.entry-points."hermes_agent.plugins"]
-daedalus = "daedalus"
+sprints = "sprints"
 
 [tool.setuptools]
 include-package-data = true
 
 [tool.setuptools.exclude-package-data]
-daedalus = ["projects/*", "projects/**/*"]
+sprints = ["projects/*", "projects/**/*"]
 
 [tool.setuptools.packages.find]
-include = ["daedalus*"]
+include = ["sprints*"]

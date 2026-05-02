@@ -1,6 +1,6 @@
 # Actions
 
-An **action** is the atomic unit of work `change-delivery` queues, executes, and tracks in SQLite. The workflow package decides *what should happen*; Daedalus decides *how to orchestrate it durably* by translating workflow semantic actions into execution actions.
+An **action** is the atomic unit of work `change-delivery` queues, executes, and tracks in SQLite. The workflow package decides *what should happen*; Sprints decides *how to orchestrate it durably* by translating workflow semantic actions into execution actions.
 
 This page describes the `change-delivery` action queue. `issue-runner` uses shared engine running-worker and retry entries instead of the `lane_actions` table.
 
@@ -8,7 +8,7 @@ This page describes the `change-delivery` action queue. `issue-runner` uses shar
 
 ## Two vocabularies
 
-| Workflow semantic action | Daedalus execution action |
+| Workflow semantic action | Sprints execution action |
 |---|---|
 | `run_internal_review` | `request_internal_review` |
 | `publish_ready_pr` | `publish_pr` |
@@ -17,7 +17,7 @@ This page describes the `change-delivery` action queue. `issue-runner` uses shar
 | `restart_actor_session` | `restart_actor_session` |
 | `dispatch_repair_handoff` | `dispatch_repair_handoff` |
 
-That translation boundary is deliberate. The workflow package speaks **workflow semantics**; Daedalus speaks **execution semantics**.
+That translation boundary is deliberate. The workflow package speaks **workflow semantics**; Sprints speaks **execution semantics**.
 
 ---
 
@@ -109,7 +109,7 @@ This prevents:
 Shadow rows are written so the operator can diff:
 
 ```bash
-/daedalus shadow-report
+/sprints shadow-report
 ```
 
 This compares shadow plan vs active reality to catch policy regressions.
@@ -161,9 +161,8 @@ where lane_id='lane:220'
 
 ## Where this lives in code
 
-- Action dispatch: `daedalus/runtime.py` (look for `request_active_action`, `iterate_active`)
-- Idempotency: `daedalus/runtime.py` (look for `action_idempotency_key`, `can_requeue`)
-- Shadow vs active: `daedalus/runtime.py` (look for `Mode.SHADOW`, `Mode.ACTIVE`)
-- Action execution: `daedalus/workflows/change_delivery/dispatch.py`
-- Action primitives: `daedalus/workflows/change_delivery/actions.py`
-- Tests: `tests/test_workflows_change_delivery_actions.py`, `tests/test_stall_detection.py`
+- Action dispatch: `sprints/runtime.py` (look for `request_active_action`, `iterate_active`)
+- Idempotency: `sprints/runtime.py` (look for `action_idempotency_key`, `can_requeue`)
+- Shadow vs active: `sprints/runtime.py` (look for `Mode.SHADOW`, `Mode.ACTIVE`)
+- Action execution: `sprints/workflows/change_delivery/dispatch.py`
+- Action primitives: `sprints/workflows/change_delivery/actions.py`

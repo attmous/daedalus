@@ -23,12 +23,12 @@ of the default generic `issue-runner` workflow.
 
 - GitHub is your tracker or you want the first-class GitHub PR system
 - you want built-in review and merge gates
-- you want the most complete Daedalus operator surface today
+- you want the most complete Sprints operator surface today
 
 ## Default template
 
 - Public example: [`docs/examples/change-delivery.workflow.md`](../examples/change-delivery.workflow.md)
-- Bundled payload template: [`daedalus/workflows/change_delivery/workflow.template.md`](/home/radxa/WS/daedalus/daedalus/workflows/change_delivery/workflow.template.md)
+- Bundled payload template: [`sprints/workflows/change_delivery/workflow.template.md`](/home/radxa/WS/sprints/sprints/workflows/change_delivery/workflow.template.md)
 
 ## Key config blocks
 
@@ -89,14 +89,14 @@ actors:
     runtime: hermes-review
 ```
 
-When `codex-app-server` is selected, Daedalus stores
+When `codex-app-server` is selected, Sprints stores
 `lane:<issue-number> -> thread_id` plus token/rate-limit totals in
-`runtime/state/daedalus/daedalus.db`, writes `memory/workflow-scheduler.json`
+`runtime/state/sprints/sprints.db`, writes `memory/workflow-scheduler.json`
 as a generated operator snapshot, and resumes that thread on later ticks.
-During supervised active service runs, Daedalus also records the active `turn_id`.
+During supervised active service runs, Sprints also records the active `turn_id`.
 If the active lane disappears, changes, the lease is lost, or the service is
 interrupted, the runtime requests `turn/interrupt` and marks the scheduler
-thread entry as `canceling`. Operators can see those entries in `/daedalus
+thread entry as `canceling`. Operators can see those entries in `/sprints
 watch` and the HTTP state payload under `runtime_sessions`.
 
 ## Operator path
@@ -105,11 +105,11 @@ Onboarding:
 
 ```bash
 cd /path/to/repo
-hermes daedalus bootstrap --workflow change-delivery
+hermes sprints bootstrap --workflow change-delivery
 $EDITOR /path/to/repo/WORKFLOW.md
-hermes daedalus codex-app-server up
-hermes daedalus validate
-hermes daedalus service-up
+hermes sprints codex-app-server up
+hermes sprints validate
+hermes sprints service-up
 ```
 
 Common workflow commands:
@@ -124,10 +124,10 @@ Common workflow commands:
 ## Runtime behavior
 
 Manual ticks remain synchronous: `/workflow change-delivery tick` and
-`/daedalus iterate-active` run one action inline and return the final result.
+`/sprints iterate-active` run one action inline and return the final result.
 
-The long-running active service path is supervised. `/daedalus run-active`
-dispatches one active iteration into an in-process worker, keeps the Daedalus
+The long-running active service path is supervised. `/sprints run-active`
+dispatches one active iteration into an in-process worker, keeps the Sprints
 lease fresh while the worker runs, reconciles completed workers before shutdown,
 and persists action completion/failure in the runtime DB. This prevents a fast
 completed action from being marked as synthetic restart failure after a bounded

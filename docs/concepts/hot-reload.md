@@ -13,7 +13,7 @@ flowchart TD
   C -- no --> D[reuse last ConfigSnapshot]
   C -- yes --> E[parse + validate]
   E -- ok --> F[swap AtomicRef → new snapshot]
-  E -- ParseError or<br/>ValidationError or<br/>OSError or<br/>UnicodeDecodeError --> G[keep last known good<br/>emit daedalus.config_reload_failed]
+  E -- ParseError or<br/>ValidationError or<br/>OSError or<br/>UnicodeDecodeError --> G[keep last known good<br/>emit sprints.config_reload_failed]
   D --> H[continue tick]
   F --> H
   G --> H
@@ -55,9 +55,8 @@ flowchart LR
 
 ## Where this lives in code
 
-- `ConfigSnapshot` + `AtomicRef`: `daedalus/workflows/config_snapshot.py`
-- Watcher: `daedalus/workflows/config_watcher.py`
-- `change-delivery` watcher policy: `daedalus/workflows/change_delivery/config_watcher.py`
-- Preflight: `daedalus/workflows/change_delivery/preflight.py`, `daedalus/workflows/issue_runner/preflight.py`
-- Gating: `daedalus/workflows/__init__.py::run_cli` reads `PREFLIGHT_GATED_COMMANDS`
-- Tests: `tests/test_config_snapshot.py`, `tests/test_config_watcher.py`, `tests/test_workflows_preflight_cli_integration.py`
+- `ConfigSnapshot` + `AtomicRef`: `sprints/workflows/config_snapshot.py`
+- Watcher: `sprints/workflows/config_watcher.py`
+- `change-delivery` watcher policy: `sprints/workflows/change_delivery/config_watcher.py`
+- Preflight: `sprints/workflows/change_delivery/preflight.py`, `sprints/workflows/issue_runner/preflight.py`
+- Gating: `sprints/workflows/__init__.py::run_cli` reads `PREFLIGHT_GATED_COMMANDS`

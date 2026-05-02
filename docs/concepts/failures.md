@@ -1,6 +1,6 @@
 # Failures
 
-Daedalus models failures as **first-class runtime state**, not as log lines to grep later. When an active `change-delivery` action fails, the system persists enough context to decide — automatically or with operator guidance — what happens next.
+Sprints models failures as **first-class runtime state**, not as log lines to grep later. When an active `change-delivery` action fails, the system persists enough context to decide — automatically or with operator guidance — what happens next.
 
 This page documents the `change-delivery` SQLite action/failure model. Shared engine retry/backoff state now lives in SQLite for both workflows; `memory/workflow-scheduler.json` is a generated scheduler snapshot.
 
@@ -117,7 +117,7 @@ escalation:
 
 When `retry_count == max_retries`, the lane transitions to `operator_attention_required`. The operator can:
 
-- `/daedalus analyze-failure --failure-id <id>` — see full context
+- `/sprints analyze-failure --failure-id <id>` — see full context
 - `/workflow change-delivery tick` — force another attempt (bypasses retry budget)
 - Edit the issue / PR to unblock the lane manually
 - `/workflow change-delivery pause` — stop processing this lane
@@ -157,8 +157,7 @@ group by lane_id;
 
 ## Where this lives in code
 
-- Failure tracking: `daedalus/runtime.py` (look for `record_failure`, `resolve_failure`, `retry_eligible`)
-- Action queue: `daedalus/runtime.py` (look for `request_active_action`, `action_idempotency_key`)
-- Retry logic: `daedalus/workflows/change_delivery/dispatch.py`
-- Operator surface: `daedalus/daedalus_cli.py` (`analyze-failure` command)
-- Tests: `tests/test_workflows_change_delivery_actions.py`, `tests/test_stall_detection.py`
+- Failure tracking: `sprints/runtime.py` (look for `record_failure`, `resolve_failure`, `retry_eligible`)
+- Action queue: `sprints/runtime.py` (look for `request_active_action`, `action_idempotency_key`)
+- Retry logic: `sprints/workflows/change_delivery/dispatch.py`
+- Operator surface: `sprints/sprints_cli.py` (`analyze-failure` command)

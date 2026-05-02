@@ -53,7 +53,7 @@ These reasons are:
 - Stored in `lanes.operator_attention_reason` (SQLite)
 - Emitted in the `operator-attention-transition` audit event
 - Published through tracker feedback when `operator-attention-transition` is included
-- Shown in `/daedalus doctor` and `/daedalus status`
+- Shown in `/sprints doctor` and `/sprints status`
 
 ### Reason format
 
@@ -92,7 +92,7 @@ END,
 ```
 
 This means:
-- If Daedalus runtime state set operator attention due to an active action failure, the workflow read model cannot clear it.
+- If Sprints runtime state set operator attention due to an active action failure, the workflow read model cannot clear it.
 - If the workflow read model sets operator attention, that is respected.
 - If neither side sets it, the field is cleared.
 
@@ -142,8 +142,8 @@ When a lane is in operator attention, the operator can:
 | `/workflow change-delivery tick` | Force another attempt (bypasses retry budget). |
 | `/workflow change-delivery pause` | Stop processing the lane entirely. |
 | `/workflow change-delivery resume` | Resume normal processing. |
-| `/daedalus doctor` | See full context on why attention was triggered. |
-| `/daedalus analyze-failure --failure-id <id>` | Deep-dive a specific failure. |
+| `/sprints doctor` | See full context on why attention was triggered. |
+| `/sprints analyze-failure --failure-id <id>` | Deep-dive a specific failure. |
 
 ---
 
@@ -162,7 +162,7 @@ order by updated_at desc;
 
 ```sql
 select action, summary, extra, at
-from daedalus_events
+from sprints_events
 where lane_id = 'lane:220'
   and action in ('operator-attention-transition', 'operator-attention-recovered')
 order by at desc;
@@ -172,7 +172,7 @@ order by at desc;
 
 ```sql
 select count(*)
-from daedalus_events
+from sprints_events
 where action = 'operator-attention-transition'
   and date(at) = date('now');
 ```
@@ -181,10 +181,9 @@ where action = 'operator-attention-transition'
 
 ## Where this lives in code
 
-- Threshold logic: `daedalus/workflows/change_delivery/workspace.py` (`_lane_operator_attention_reasons`, `_lane_operator_attention_needed`)
-- Transition emission: `daedalus/workflows/change_delivery/orchestrator.py` (`emit_operator_attention_transition`)
-- Ingestion protection: `daedalus/runtime.py` (`ingest_legacy_status`, `ON CONFLICT DO UPDATE`)
-- Threshold config: `daedalus/workflows/change_delivery/workspace.py` (`lane_operator_attention_retry_threshold`, `lane_operator_attention_no_progress_threshold`)
-- Tracker feedback fanout: `daedalus/workflows/change_delivery/workspace.py`
-- Event taxonomy: `daedalus/workflows/change_delivery/event_taxonomy.py`
-- Tests: `tests/test_workflow_change_delivery_operator_attention_audit.py`
+- Threshold logic: `sprints/workflows/change_delivery/workspace.py` (`_lane_operator_attention_reasons`, `_lane_operator_attention_needed`)
+- Transition emission: `sprints/workflows/change_delivery/orchestrator.py` (`emit_operator_attention_transition`)
+- Ingestion protection: `sprints/runtime.py` (`ingest_legacy_status`, `ON CONFLICT DO UPDATE`)
+- Threshold config: `sprints/workflows/change_delivery/workspace.py` (`lane_operator_attention_retry_threshold`, `lane_operator_attention_no_progress_threshold`)
+- Tracker feedback fanout: `sprints/workflows/change_delivery/workspace.py`
+- Event taxonomy: `sprints/workflows/change_delivery/event_taxonomy.py`

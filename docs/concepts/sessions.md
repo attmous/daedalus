@@ -1,12 +1,12 @@
 # Sessions
 
-A **session** is the runtime's handle to a persistent or one-shot actor process. Daedalus tracks sessions per work item so it knows which actor owns which worktree, whether the session is still alive, and when it last did something useful.
+A **session** is the runtime's handle to a persistent or one-shot actor process. Sprints tracks sessions per work item so it knows which actor owns which worktree, whether the session is still alive, and when it last did something useful.
 
 ---
 
 ## Session model
 
-Sessions are owned by the **runtime adapter**, not by Daedalus directly. Daedalus asks the runtime: "do you have a session for lane X?" and the runtime answers yes/no/healthy/stale.
+Sessions are owned by the **runtime adapter**, not by Sprints directly. Sprints asks the runtime: "do you have a session for lane X?" and the runtime answers yes/no/healthy/stale.
 
 ### Session lifecycle
 
@@ -85,7 +85,7 @@ class SessionHealth:
 | Status | Meaning | Action |
 |---|---|---|
 | `healthy` | Session is responsive and recent. | Continue dispatching. |
-| `stale` | Session hasn't been active longer than the freshness threshold. | Emit `daedalus.stall_detected`, terminate, retry. |
+| `stale` | Session hasn't been active longer than the freshness threshold. | Emit `sprints.stall_detected`, terminate, retry. |
 | `unknown` | Runtime doesn't implement health checks. | Skip stall detection for this session. |
 
 ---
@@ -130,9 +130,8 @@ where can_continue = false
 
 ## Where this lives in code
 
-- Session protocol: `daedalus/workflows/change_delivery/sessions.py`
-- Shared runtime adapters: `daedalus/runtimes/{claude_cli,acpx_codex,hermes_agent,codex_app_server}.py`
-- Runtime adapters: `daedalus/runtimes/`
-- Health checks: `daedalus/workflows/change_delivery/health.py`
-- Stall detection: `daedalus/workflows/stall.py`
-- Tests: `tests/test_workflows_change_delivery_sessions.py`, `tests/test_workflows_change_delivery_session_runtime.py`
+- Session protocol: `sprints/workflows/change_delivery/sessions.py`
+- Shared runtime adapters: `sprints/runtimes/{claude_cli,acpx_codex,hermes_agent,codex_app_server}.py`
+- Runtime adapters: `sprints/runtimes/`
+- Health checks: `sprints/workflows/change_delivery/health.py`
+- Stall detection: `sprints/workflows/stall.py`

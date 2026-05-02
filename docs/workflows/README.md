@@ -1,6 +1,6 @@
 # Workflows
 
-Daedalus now ships one workflow: `agentic`.
+Sprints now ships one workflow: `agentic`.
 
 The engine, lease model, runtime adapters, and `WORKFLOW.md` contract are
 shared. Workflow policy lives in the repo-owned Markdown contract instead of
@@ -10,7 +10,7 @@ hardcoded Python lifecycle modules.
 
 | Workflow | Use it when... | Default template | Managed path |
 |---|---|---|---|
-| `agentic` | you want `WORKFLOW.md` to define stages, gates, actors, actions, and orchestrator policy while Python only executes mechanics | `daedalus/workflows/workflow.template.md` | yes |
+| `agentic` | you want `WORKFLOW.md` to define stages, gates, actors, actions, and orchestrator policy while Python only executes mechanics | `sprints/workflows/workflow.template.md` | yes |
 
 ## Agentic Workflow
 
@@ -23,6 +23,6 @@ belongs in `WORKFLOW.md`.
 
 ## Repo Contract Naming
 
-Daedalus uses `WORKFLOW.md` as the repo-owned agentic workflow contract. If
-`WORKFLOW.md` is a non-Daedalus file, rename it manually or choose a different
-repo before running `hermes daedalus bootstrap`.
+Sprints uses `WORKFLOW.md` as the repo-owned agentic workflow contract. If
+`WORKFLOW.md` is a non-Sprints file, rename it manually or choose a different
+repo before running `hermes sprints bootstrap`.

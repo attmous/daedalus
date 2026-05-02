@@ -1,8 +1,8 @@
 # Events
 
-Append-only history of what the runtime and workflows did. Daedalus stores
+Append-only history of what the runtime and workflows did. Sprints stores
 operator-facing events in the shared SQLite `engine_events` ledger and still
-writes JSONL audit tails such as `runtime/memory/daedalus-events.jsonl` and
+writes JSONL audit tails such as `runtime/memory/sprints-events.jsonl` and
 `memory/workflow-audit.jsonl` for compatibility and file-oriented debugging.
 
 These event streams are consumed by:
@@ -24,7 +24,7 @@ State is workflow-specific. **History is in events.** Never reconstruct current 
 
 ```json
 {
-  "type": "daedalus.turn_completed",
+  "type": "sprints.turn_completed",
   "lane_id": "01HF3Q…",
   "issue_number": 42,
   "actor_id": "coder-claude-1",
@@ -35,7 +35,7 @@ State is workflow-specific. **History is in events.** Never reconstruct current 
 
 ## Taxonomy (Symphony §10.4)
 
-Daedalus follows the Symphony event taxonomy with a `daedalus.*` prefix on orchestration events.
+Sprints follows the Symphony event taxonomy with a `sprints.*` prefix on orchestration events.
 
 ```mermaid
 flowchart LR
@@ -50,13 +50,13 @@ flowchart LR
     TX[turn_cancelled]
     TI[turn_input_required]
   end
-  subgraph "daedalus.* orchestration"
-    LD[daedalus.lane_discovered]
-    LP[daedalus.lane_promoted]
-    SD[daedalus.stall_detected]
-    ST[daedalus.stall_terminated]
-    DR[daedalus.dispatch_skipped]
-    HR[daedalus.config_reloaded]
+  subgraph "sprints.* orchestration"
+    LD[sprints.lane_discovered]
+    LP[sprints.lane_promoted]
+    SD[sprints.stall_detected]
+    ST[sprints.stall_terminated]
+    DR[sprints.dispatch_skipped]
+    HR[sprints.config_reloaded]
   end
 
   SS --> TS --> TC
@@ -72,17 +72,17 @@ flowchart LR
 | Layer | Bare name | Prefixed |
 |---|---|---|
 | Turn-level (model, runtime) | ✅ canonical | also accepted |
-| Lane-level (Daedalus orchestration) | accepted (alias window) | ✅ canonical |
+| Lane-level (Sprints orchestration) | accepted (alias window) | ✅ canonical |
 | Session-level | ✅ canonical | also accepted |
 
 `workflows.event_taxonomy.canonicalize(event_type)` resolves event names to the current canonical name.
 
 ## Event writer
 
-Runtime events are appended by `daedalus/runtime.py::append_daedalus_event`. The function:
+Runtime events are appended by `sprints/runtime.py::append_sprints_event`. The function:
 
 1. Builds the event dict with `type`, `lane_id`, `at`, and `payload`
-2. Atomically appends one JSON line to `runtime/memory/daedalus-events.jsonl`
+2. Atomically appends one JSON line to `runtime/memory/sprints-events.jsonl`
 3. Best-effort indexes the same event into SQLite `engine_events`
 4. Never lets observability indexing break workflow execution
 
@@ -100,8 +100,8 @@ retention:
 Apply it manually or from automation:
 
 ```bash
-hermes daedalus events stats --workflow-root ~/.hermes/workflows/<profile>
-hermes daedalus events prune --workflow-root ~/.hermes/workflows/<profile>
+hermes sprints events stats --workflow-root ~/.hermes/workflows/<profile>
+hermes sprints events prune --workflow-root ~/.hermes/workflows/<profile>
 ```
 
 The long-running service applies configured SQLite event retention automatically
@@ -110,7 +110,7 @@ one-off cleanup, emergency compaction, or testing a new retention policy before
 running the service.
 
 For JSONL tails, archive files normally if they grow too large. The next event
-write creates a fresh `daedalus-events.jsonl`.
+write creates a fresh `sprints-events.jsonl`.
 
 ### Event schema
 
@@ -118,7 +118,7 @@ All events share a common envelope:
 
 ```json
 {
-  "type": "daedalus.turn_completed",
+  "type": "sprints.turn_completed",
   "lane_id": "lane:220",
   "issue_number": 42,
   "actor_id": "coder-claude-1",
@@ -141,10 +141,10 @@ All events share a common envelope:
 Use the engine ledger first:
 
 ```bash
-hermes daedalus events stats --workflow-root ~/.hermes/workflows/<profile>
-hermes daedalus events --workflow-root ~/.hermes/workflows/<profile> --limit 50
-hermes daedalus events --workflow-root ~/.hermes/workflows/<profile> --run-id <run_id>
-hermes daedalus events --workflow-root ~/.hermes/workflows/<profile> --work-id ISSUE-123
+hermes sprints events stats --workflow-root ~/.hermes/workflows/<profile>
+hermes sprints events --workflow-root ~/.hermes/workflows/<profile> --limit 50
+hermes sprints events --workflow-root ~/.hermes/workflows/<profile> --run-id <run_id>
+hermes sprints events --workflow-root ~/.hermes/workflows/<profile> --work-id ISSUE-123
 ```
 
 The TUI watch frame and HTTP status server read recent events from SQLite and
@@ -152,9 +152,8 @@ fall back to bounded JSONL tailing when the ledger is empty or unavailable.
 
 ## Where this lives in code
 
-- Taxonomy constants: `daedalus/workflows/change_delivery/event_taxonomy.py`
-- Writer: `daedalus/runtime.py::append_daedalus_event`
-- Ledger: `daedalus/engine/state.py::engine_events_from_connection`
-- CLI: `hermes daedalus events`
-- Watch source aggregation: `daedalus/observe/sources.py`
-- AST regression test: `tests/test_event_taxonomy.py` ensures `daedalus/runtime.py` only emits known event types
+- Taxonomy constants: `sprints/workflows/change_delivery/event_taxonomy.py`
+- Writer: `sprints/runtime.py::append_sprints_event`
+- Ledger: `sprints/engine/state.py::engine_events_from_connection`
+- CLI: `hermes sprints events`
+- Watch source aggregation: `sprints/observe/sources.py`
