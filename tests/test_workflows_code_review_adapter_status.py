@@ -855,6 +855,48 @@ def test_apply_active_lane_ledger_transition_prepublish_routes_through_claude_fi
     assert ledger["approval"]["pendingReason"] == "open-review-findings"
 
 
+def test_apply_active_lane_ledger_transition_allows_advisory_only_prepublish_findings():
+    status_module = load_module("daedalus_workflows_change_delivery_status_advisory", "workflows/change_delivery/status.py")
+    ledger = _active_lane_baseline_ledger()
+    status_module.apply_active_lane_ledger_transition(
+        ledger,
+        active_lane={"number": 236},
+        open_pr=None,
+        implementation={
+            "branch": "issue-236",
+            "localHeadSha": "head123",
+            "commitsAhead": 1,
+            "laneState": {},
+        },
+        reviews={
+            "internalReview": {
+                "reviewScope": "local-prepublish",
+                "status": "completed",
+                "reviewedHeadSha": "head123",
+                "verdict": "PASS_WITH_FINDINGS",
+            },
+            "externalReview": {},
+        },
+        previous_internal_review={
+            "reviewScope": "local-prepublish",
+            "status": "completed",
+            "reviewedHeadSha": "head123",
+            "verdict": "PASS_WITH_FINDINGS",
+        },
+        publish_ready=False,
+        review_loop_state="findings_open",
+        merge_blocked=True,
+        merge_blockers=["internalReview-open-findings"],
+        now_iso="2026-05-02T17:00:00Z",
+        repair_brief={"forHeadSha": "head123", "mustFix": [], "shouldFix": [{"summary": "Future browser test"}]},
+        operator_attention_needed=False,
+    )
+
+    assert ledger["workflowState"] == "ready_to_publish"
+    assert ledger["reviewState"] == "ready_to_publish"
+    assert ledger["approval"]["pendingReason"] == "awaiting-publish"
+
+
 def test_derive_latest_progress_returns_approved_event_when_published_pr_is_clean():
     status_module = load_module("daedalus_workflows_change_delivery_status_dlp", "workflows/change_delivery/status.py")
 

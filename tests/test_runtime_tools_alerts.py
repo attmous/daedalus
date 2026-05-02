@@ -485,6 +485,43 @@ def test_derive_shadow_actions_dispatches_local_review_repair_handoff_when_sessi
     ]
 
 
+def test_derive_shadow_actions_skips_local_repair_handoff_for_advisory_only_findings(runtime_module):
+    actions = runtime_module.derive_shadow_actions_for_lane(
+        lane_row={
+            "lane_id": "lane:236",
+            "issue_number": 236,
+            "workflow_state": "pre_publish_review_findings",
+            "active_pr_number": None,
+            "current_head_sha": "head123",
+            "repair_brief_json": json.dumps(
+                {
+                    "forHeadSha": "head123",
+                    "mustFix": [],
+                    "shouldFix": [{"summary": "Future browser test"}],
+                }
+            ),
+        },
+        reviews=[
+            {
+                "reviewer_scope": "internal",
+                "status": "completed",
+                "verdict": "PASS_WITH_FINDINGS",
+                "review_scope": "local-prepublish",
+                "reviewed_head_sha": "head123",
+                "completed_at": "2026-05-02T04:31:16Z",
+            }
+        ],
+        actor_row={
+            "backend_identity": "lane-236",
+            "runtime_status": "healthy",
+            "session_action_recommendation": "continue-session",
+            "metadata_json": json.dumps({"sessionControl": {}}),
+        },
+    )
+
+    assert actions == []
+
+
 def test_derive_shadow_actions_skips_duplicate_local_review_repair_handoff(runtime_module):
     actions = runtime_module.derive_shadow_actions_for_lane(
         lane_row={

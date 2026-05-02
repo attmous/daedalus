@@ -143,6 +143,28 @@ def test_should_dispatch_internal_review_repair_handoff_allows_restart_session()
     assert result == {"shouldDispatch": True, "reason": None}
 
 
+def test_should_dispatch_internal_review_repair_handoff_skips_advisory_only_findings():
+    reviews_module = load_module("daedalus_workflows_change_delivery_reviews_test", "workflows/change_delivery/reviews.py")
+
+    result = reviews_module.should_dispatch_internal_review_repair_handoff(
+        lane_state={},
+        session_action={"action": "continue-session", "sessionName": "lane-224"},
+        internal_review={
+            "reviewScope": "local-prepublish",
+            "status": "completed",
+            "verdict": "PASS_WITH_FINDINGS",
+            "reviewedHeadSha": "head123",
+            "updatedAt": "2026-04-22T01:00:00Z",
+        },
+        repair_brief={"forHeadSha": "head123", "mustFix": [], "shouldFix": [{"summary": "Future browser test"}]},
+        workflow_state="pre_publish_review_findings",
+        current_head_sha="head123",
+        has_open_pr=False,
+    )
+
+    assert result == {"shouldDispatch": False, "reason": "repair-brief-advisory-only"}
+
+
 def test_should_dispatch_internal_review_repair_handoff_rejects_duplicate_handoff_for_same_review():
     reviews_module = load_module("daedalus_workflows_change_delivery_reviews_test", "workflows/change_delivery/reviews.py")
 

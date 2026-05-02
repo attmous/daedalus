@@ -705,12 +705,24 @@ def apply_active_lane_ledger_transition(
     else:
         local_candidate = has_local_candidate(local_head_sha, implementation.get("commitsAhead"))
         internal_review_current = current_inter_review_agent_matches_local_head(internal_review, local_head_sha)
-        single_pass_gate = single_pass_local_internal_review_gate_satisfied(
-            previous_internal_review or internal_review,
-            local_head_sha,
-            implementation.get("laneState"),
-            pass_with_findings_reviews=pass_with_findings_reviews,
+        repair_brief_current = bool((repair_brief or {}).get("forHeadSha") == local_head_sha)
+        repair_brief_has_must_fix = bool(repair_brief_current and (repair_brief or {}).get("mustFix"))
+        review_count = local_inter_review_agent_review_count(internal_review, implementation.get("laneState"))
+        advisory_pass_with_findings_gate = bool(
+            internal_review_current
+            and internal_review.get("verdict") == "PASS_WITH_FINDINGS"
+            and not repair_brief_has_must_fix
+            and review_count >= pass_with_findings_reviews
         )
+        single_pass_gate = (
+            single_pass_local_internal_review_gate_satisfied(
+                previous_internal_review or internal_review,
+                local_head_sha,
+                implementation.get("laneState"),
+                pass_with_findings_reviews=pass_with_findings_reviews,
+            )
+            and not repair_brief_has_must_fix
+        ) or advisory_pass_with_findings_gate
         ledger["workflowState"] = resolve_prepublish_workflow_state(
             local_candidate=local_candidate,
             single_pass_gate_satisfied=single_pass_gate,
@@ -725,7 +737,7 @@ def apply_active_lane_ledger_transition(
             "awaiting-local-review" if ledger["workflowState"] != "ready_to_publish" else "awaiting-publish"
         )
     ledger["repairBrief"] = repair_brief
-    if repair_brief is not None and not publish_ready:
+    if repair_brief is not None and not publish_ready and (repair_brief or {}).get("mustFix"):
         ledger["workflowState"] = "pre_publish_review_findings"
         ledger["reviewState"] = "pre_publish_review_findings"
         approval["pendingReason"] = "open-review-findings"

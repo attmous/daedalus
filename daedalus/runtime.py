@@ -1290,6 +1290,11 @@ def derive_shadow_actions_for_lane(*, lane_row: dict[str, Any], reviews: list[di
         and repair_brief.get("forHeadSha") == current_head_sha
         and (repair_brief.get("mustFix") or repair_brief.get("shouldFix"))
     )
+    has_required_repair_brief = bool(
+        current_head_sha
+        and repair_brief.get("forHeadSha") == current_head_sha
+        and repair_brief.get("mustFix")
+    )
     last_external_review_handoff = session_control.get("lastExternalReviewRepairHandoff") or {}
     last_internal_review_handoff = session_control.get("lastInternalReviewRepairHandoff") or {}
     internal_review_completed_at = (internal_review or {}).get("completed_at")
@@ -1356,7 +1361,7 @@ def derive_shadow_actions_for_lane(*, lane_row: dict[str, Any], reviews: list[di
         and current_head_sha
         and internal_review.get("reviewed_head_sha") == current_head_sha
         and internal_review.get("review_scope") == "local-prepublish"
-        and has_actionable_repair_brief
+        and has_required_repair_brief
         and actor_row.get("runtime_status") == "healthy"
         and actor_row.get("session_action_recommendation") in {"continue-session", "poke-session"}
         and actor_row.get("backend_identity")
@@ -1376,6 +1381,7 @@ def derive_shadow_actions_for_lane(*, lane_row: dict[str, Any], reviews: list[di
         and internal_review.get("status") == "completed"
         and internal_review.get("verdict") in {"PASS_WITH_FINDINGS", "REWORK"}
         and current_head_sha
+        and has_required_repair_brief
         and (
             actor_row.get("runtime_status") != "healthy"
             or actor_row.get("session_action_recommendation") not in {"continue-session", "poke-session"}

@@ -1301,8 +1301,9 @@ def should_dispatch_internal_review_repair_handoff(
         return {"shouldDispatch": False, "reason": "review-head-mismatch"}
     if (repair_brief or {}).get("forHeadSha") != current_head_sha:
         return {"shouldDispatch": False, "reason": "repair-brief-head-mismatch"}
-    if not ((repair_brief or {}).get("mustFix") or (repair_brief or {}).get("shouldFix")):
-        return {"shouldDispatch": False, "reason": "repair-brief-empty"}
+    if not (repair_brief or {}).get("mustFix"):
+        reason = "repair-brief-advisory-only" if (repair_brief or {}).get("shouldFix") else "repair-brief-empty"
+        return {"shouldDispatch": False, "reason": reason}
     last_handoff = ((lane_state or {}).get("sessionControl") or {}).get("lastInternalReviewRepairHandoff") or {}
     if (
         last_handoff.get("sessionName") == session_action.get("sessionName")
