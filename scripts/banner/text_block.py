@@ -51,13 +51,13 @@ def draw(im: Image.Image, *, frame: int) -> None:
     # Subtitle — two lines, second in cyan
     d.text(
         (x, y + config.OFFSET_SUBTITLE_1),
-        "Agents that fly.",
+        "Repo policy in motion.",
         font=typography.subtitle(),
         fill=(*config.INK, 255),
     )
     d.text(
         (x, y + config.OFFSET_SUBTITLE_2),
-        "Workflows that don't melt.",
+        "A Hermes-Agent plugin",
         font=typography.subtitle(),
         fill=(*config.CYAN, 255),
     )
@@ -66,7 +66,7 @@ def draw(im: Image.Image, *, frame: int) -> None:
     cap_font = typography.caption_serif_italic()
     d.text(
         (x, y + config.OFFSET_CAPTION_1),
-        "A Hermes Agent plugin  ·  Reads issues, writes PRs.",
+        "",
         font=cap_font,
         fill=(*config.INK, 255),
     )

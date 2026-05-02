@@ -25,7 +25,7 @@ from . import config, timeline, typography
 # Tokens rendered in sequence. The arrows are tokens too — that way a
 # fading-in arrow looks like the pipeline is *connecting* the stage that
 # just appeared to the next one.
-TOKENS = ["Issue", "→", "Code", "→", "Review", "→", "Merge"]
+TOKENS = ["issue", "->", "code", "->", "review", "->", "merge"]
 SPACING = 14  # px between tokens — gives the line breathing room
 
 

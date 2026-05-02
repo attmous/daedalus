@@ -1,5 +1,9 @@
 # Sprints
 
+<p align="center">
+  <img src="assets/sprints-banner.gif" alt="Hermes Sprints banner">
+</p>
+
 Hermes Sprints is a Hermes plugin for durable agentic workflow execution.
 
 Sprints writes a repo-owned `WORKFLOW.md`, dispatches actors through configured
