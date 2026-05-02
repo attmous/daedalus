@@ -71,6 +71,37 @@ assert "/daedalus/workflows/contract.py" in contract.__file__.replace("\\\\", "/
     assert completed.returncode == 0, completed.stderr + completed.stdout
 
 
+def test_repo_root_package_name_exposes_inner_daedalus_namespace():
+    script = """
+import importlib.util
+import sys
+from pathlib import Path
+
+root = Path.cwd()
+spec = importlib.util.spec_from_file_location(
+    "daedalus",
+    root / "__init__.py",
+    submodule_search_locations=[str(root)],
+)
+module = importlib.util.module_from_spec(spec)
+sys.modules["daedalus"] = module
+assert spec.loader is not None
+spec.loader.exec_module(module)
+
+import daedalus.operator.cli as cli
+
+assert "/daedalus/operator/cli.py" in cli.__file__.replace("\\\\", "/")
+"""
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+    )
+
+    assert completed.returncode == 0, completed.stderr + completed.stdout
+
+
 @pytest.mark.parametrize("package_name", ("workflows", "daedalus.workflows"))
 def test_bundled_workflows_remain_discoverable(package_name):
     package = importlib.import_module(package_name)
