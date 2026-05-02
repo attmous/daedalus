@@ -107,13 +107,13 @@ def register(kind: str):
 
 def _ensure_builtin_runtimes_registered() -> None:
     """Populate built-ins even if module reloading left decorator state stale."""
-    from . import acpx_codex
     from . import claude_cli
+    from . import codex_acpx
     from . import codex_app_server
     from . import hermes_agent
 
     builtins = {
-        "acpx-codex": getattr(acpx_codex, "AcpxCodexRuntime", None),
+        "acpx-codex": getattr(codex_acpx, "AcpxCodexRuntime", None),
         "claude-cli": getattr(claude_cli, "ClaudeCliRuntime", None),
         "codex-app-server": getattr(codex_app_server, "CodexAppServerRuntime", None),
         "hermes-agent": getattr(hermes_agent, "HermesAgentRuntime", None),
