@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 from typing import Mapping
 
-from workflows.contract import (
+from workflows.loader import (
     DEFAULT_WORKFLOW_MARKDOWN_FILENAME,
     find_workflow_contract_path,
     load_workflow_contract,

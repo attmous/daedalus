@@ -21,7 +21,7 @@ from typing import Any
 
 from engine.state import read_engine_events, read_engine_runs, read_engine_scheduler_state
 from engine.work_items import work_item_from_issue
-from workflows.contract import WorkflowContractError, load_workflow_contract
+from workflows.loader import WorkflowContractError, load_workflow_contract
 
 # Sibling-import boilerplate.
 try:

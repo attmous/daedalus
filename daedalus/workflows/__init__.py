@@ -1,48 +1,47 @@
 """Flat policy-driven workflow package for Daedalus."""
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any
-
-from workflows.cli import main as cli_main
-from workflows.config import AgenticConfig
-from workflows.contract import WorkflowContractError
-from workflows.registry import (
+from workflows.loader import (
+    CONFIG_SCHEMA_PATH,
+    NAME,
+    PREFLIGHT_GATED_COMMANDS,
+    SUPPORTED_SCHEMA_VERSIONS,
+    WORKFLOW,
+    AgenticWorkflow,
+    ActorPolicy,
+    ModuleWorkflow,
+    RuntimePresetError,
+    Workflow,
+    WorkflowContract,
+    WorkflowContractError,
+    WorkflowPolicy,
+    WorkflowPolicyError,
+    available_runtime_presets,
+    build_readiness_recommendations,
+    build_runtime_matrix_report,
+    configure_runtime_contract,
+    find_repo_workflow_contract_path,
+    find_workflow_contract_path,
     list_workflows,
+    load_config,
     load_workflow,
+    load_workflow_contract,
+    load_workflow_contract_file,
     load_workflow_object,
+    make_workspace,
+    render_workflow_markdown,
     run_cli,
+    runtime_availability_checks,
+    runtime_binding_checks,
+    runtime_capability_checks,
+    runtime_stage_checks,
+    validate_workflow_contract,
+    workflow_contract_pointer_path,
+    workflow_markdown_path,
+    workflow_named_markdown_path,
+    write_workflow_contract_pointer,
 )
-from workflows.workflow import ModuleWorkflow, Workflow
-from workflows.workflow_object import AgenticWorkflow
-
-NAME = "agentic"
-SUPPORTED_SCHEMA_VERSIONS = (1,)
-CONFIG_SCHEMA_PATH = Path(__file__).with_name("schema.yaml")
-PREFLIGHT_GATED_COMMANDS = frozenset()
-
-
-def load_config(*, workflow_root: Path, raw: dict[str, Any]) -> AgenticConfig:
-    return AgenticConfig.from_raw(raw=raw, workflow_root=workflow_root)
-
-
-def make_workspace(*, workflow_root: Path, config: object) -> AgenticConfig:
-    if isinstance(config, AgenticConfig):
-        return config
-    if isinstance(config, dict):
-        return AgenticConfig.from_raw(raw=config, workflow_root=workflow_root)
-    raise TypeError(f"unsupported agentic config object: {type(config).__name__}")
-
-
-WORKFLOW = AgenticWorkflow(
-    name=NAME,
-    schema_versions=SUPPORTED_SCHEMA_VERSIONS,
-    schema_path=CONFIG_SCHEMA_PATH,
-    preflight_gated_commands=PREFLIGHT_GATED_COMMANDS,
-    load_config_func=load_config,
-    make_workspace_func=make_workspace,
-    run_cli_func=cli_main,
-)
+from workflows.runner import main as cli_main
 
 __all__ = [
     "NAME",
@@ -52,7 +51,13 @@ __all__ = [
     "WORKFLOW",
     "Workflow",
     "ModuleWorkflow",
+    "AgenticWorkflow",
+    "WorkflowContract",
     "WorkflowContractError",
+    "WorkflowPolicy",
+    "WorkflowPolicyError",
+    "ActorPolicy",
+    "RuntimePresetError",
     "load_config",
     "make_workspace",
     "cli_main",
@@ -60,4 +65,22 @@ __all__ = [
     "load_workflow_object",
     "run_cli",
     "list_workflows",
+    "load_workflow_contract",
+    "load_workflow_contract_file",
+    "render_workflow_markdown",
+    "find_repo_workflow_contract_path",
+    "find_workflow_contract_path",
+    "workflow_contract_pointer_path",
+    "workflow_markdown_path",
+    "workflow_named_markdown_path",
+    "write_workflow_contract_pointer",
+    "validate_workflow_contract",
+    "build_readiness_recommendations",
+    "available_runtime_presets",
+    "configure_runtime_contract",
+    "runtime_stage_checks",
+    "runtime_binding_checks",
+    "runtime_capability_checks",
+    "runtime_availability_checks",
+    "build_runtime_matrix_report",
 ]

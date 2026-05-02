@@ -1,33 +1,26 @@
 # Daedalus Workflows
 
-`daedalus/workflows/` is now the flat implementation of the policy-driven
-`workflow: agentic` runtime.
+`daedalus/workflows/` is the flat implementation of `workflow: agentic`.
 
-There are no workflow subpackages. `issue_runner/` and `change_delivery/` were
-removed because their production policy lived in Python. Workflow intent now
-belongs in `WORKFLOW.md`; Python owns mechanics only.
+Workflow intent lives in `WORKFLOW.md`. Python owns the mechanics: loading the
+contract, typing front matter, dispatching actors/actions, applying
+orchestrator decisions, and writing state.
 
 ## Layout
 
 ```text
 workflows/
-|-- __init__.py              # exposes the agentic workflow object
+|-- __init__.py              # public workflow exports
 |-- __main__.py              # `python -m workflows --workflow-root <path> ...`
-|-- actions.py               # deterministic action execution
-|-- actors.py                # actor runtime dispatch
-|-- cli.py                   # validate, show, tick
+|-- loader.py                # WORKFLOW.md loading, policy parsing, validation, registry
 |-- config.py                # typed front matter config
-|-- contract.py              # WORKFLOW.md loader and policy chunk parser
-|-- gates.py                 # gate validation
-|-- orchestrator.py          # orchestrator decision schema
-|-- prompts.py               # prompt rendering
-|-- registry.py              # workflow dispatch
+|-- orchestrator.py          # orchestrator prompt + decision schema
+|-- runner.py                # tick mechanics, state persistence, status, stall hook
+|-- actors.py                # actor runtime dispatch
+|-- actions.py               # deterministic action execution
+|-- paths.py                 # workflow root and runtime path helpers
 |-- schema.yaml              # agentic config schema
-|-- stages.py                # stage mechanics
-|-- state.py                 # durable generic state
-|-- workflow.py              # workflow protocol
-|-- workflow.template.md     # minimal agentic template
-`-- workflow_object.py       # concrete agentic workflow object
+`-- workflow.template.md     # minimal agentic template
 ```
 
 ## Contract Shape
@@ -39,5 +32,5 @@ workflows/
 - `# Actor: <name>` sections for actor-specific policy and output shape.
 
 The orchestrator decides whether to run an actor, run an action, advance,
-retry, complete, or raise operator attention. The Python code validates and
-executes that decision.
+retry, complete, or raise operator attention. The runner validates and applies
+that decision.
