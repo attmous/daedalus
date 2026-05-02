@@ -42,3 +42,9 @@ not JSONL audit files.
 
 The engine stores neutral work IDs. Trackers may call them issues, tickets, PRs,
 or tasks, but the engine should stay tracker-neutral.
+
+## Deferred
+
+Retries are currently workflow-owned lane state mirrored into the engine
+scheduler snapshot. Later, move retry wakeups into the engine so due retries can
+drive workflow ticks instead of waiting for an external tick.

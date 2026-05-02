@@ -1,15 +1,20 @@
-"""Workflow execution mechanics, state persistence, status, and stall hooks."""
+"""Workflow execution mechanics, lane state, status, and stall hooks."""
 
 from __future__ import annotations
 
 import argparse
 import json
+import time
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 from typing import Any, Literal, Mapping, Protocol
 
 from workflows.actions import run_action
-from workflows.actors import build_actor_runtime
+from workflows.actors import (
+    actor_runtime_plan,
+    append_actor_skill_docs,
+    build_actor_runtime,
+)
 from workflows.config import WorkflowConfig, WorkflowConfigError
 from workflows.contracts import (
     WorkflowPolicy,
@@ -20,6 +25,36 @@ from workflows.orchestrator import (
     OrchestratorDecision,
     build_actor_prompt,
     build_orchestrator_prompt,
+    parse_orchestrator_decisions,
+)
+from workflows.lanes import (
+    active_lanes,
+    advance_lane,
+    apply_actor_output_status,
+    build_lane_status,
+    build_workflow_facts,
+    claim_new_lanes,
+    complete_lane,
+    lane_by_id,
+    lane_for_decision,
+    lane_mapping,
+    lane_retry_inputs,
+    lane_summary,
+    lane_stage,
+    reconcile_lanes,
+    record_actor_output,
+    record_actor_runtime_progress,
+    record_actor_runtime_result,
+    record_actor_runtime_start,
+    record_action_result,
+    queue_lane_retry,
+    release_lane,
+    save_scheduler_snapshot,
+    set_lane_operator_attention,
+    set_lane_status,
+    target_or_single,
+    validate_actor_capacity,
+    validate_decision_for_lane,
 )
 
 SPRINTS_STALL_DETECTED = "sprints.stall.detected"
@@ -30,19 +65,15 @@ _DEFAULT_TIMEOUT_MS = 300_000
 @dataclass
 class WorkflowState:
     workflow: str = ""
-    current_stage: str = ""
-    status: str = "running"
-    attempt: int = 1
-    stage_outputs: dict[str, Any] = field(default_factory=dict)
-    actor_outputs: dict[str, Any] = field(default_factory=dict)
-    action_results: dict[str, Any] = field(default_factory=dict)
+    status: str = "idle"
+    lanes: dict[str, dict[str, Any]] = field(default_factory=dict)
     orchestrator_decisions: list[dict[str, Any]] = field(default_factory=list)
-    pending_retry: dict[str, Any] | None = None
-    operator_attention: dict[str, Any] | None = None
+    idle_reason: str | None = None
 
     @classmethod
     def initial(cls, *, workflow: str, first_stage: str) -> "WorkflowState":
-        return cls(workflow=workflow, current_stage=first_stage)
+        del first_stage
+        return cls(workflow=workflow)
 
     @classmethod
     def from_dict(cls, raw: dict[str, Any]) -> "WorkflowState":
@@ -76,6 +107,25 @@ def main(workspace: object, argv: list[str]) -> int:
     subcommands = parser.add_subparsers(dest="command", required=True)
     subcommands.add_parser("validate")
     subcommands.add_parser("show")
+    status_parser = subcommands.add_parser("status")
+    status_parser.add_argument("--json", action="store_true")
+    lanes_parser = subcommands.add_parser("lanes")
+    lanes_parser.add_argument("lane_id", nargs="?")
+    lanes_parser.add_argument(
+        "--attention",
+        action="store_true",
+        help="Show only lanes requiring operator attention.",
+    )
+    retry_parser = subcommands.add_parser("retry")
+    retry_parser.add_argument("lane_id")
+    retry_parser.add_argument("--reason", default="operator requested retry")
+    retry_parser.add_argument("--target")
+    release_parser = subcommands.add_parser("release")
+    release_parser.add_argument("lane_id")
+    release_parser.add_argument("--reason", default="operator released lane")
+    complete_parser = subcommands.add_parser("complete")
+    complete_parser.add_argument("lane_id")
+    complete_parser.add_argument("--reason", default="operator completed lane")
     tick_parser = subcommands.add_parser("tick")
     tick_parser.add_argument("--orchestrator-output", default="")
     args = parser.parse_args(argv)
@@ -84,6 +134,23 @@ def main(workspace: object, argv: list[str]) -> int:
         return _validate(workspace)
     if args.command == "show":
         return _show(workspace)
+    if args.command == "status":
+        return _status(workspace)
+    if args.command == "lanes":
+        return _lanes(
+            workspace, lane_id=args.lane_id, attention_only=bool(args.attention)
+        )
+    if args.command == "retry":
+        return _operator_retry(
+            workspace,
+            lane_id=args.lane_id,
+            reason=args.reason,
+            target=args.target,
+        )
+    if args.command == "release":
+        return _operator_release(workspace, lane_id=args.lane_id, reason=args.reason)
+    if args.command == "complete":
+        return _operator_complete(workspace, lane_id=args.lane_id, reason=args.reason)
     if args.command == "tick":
         return _tick(workspace, orchestrator_output=args.orchestrator_output)
     raise RuntimeError(f"unhandled command {args.command}")
@@ -112,42 +179,49 @@ def append_audit(path: Path, event: dict[str, Any]) -> None:
 
 
 def actor_variables(
-    *, config: WorkflowConfig, state: WorkflowState, inputs: dict[str, Any]
+    *,
+    config: WorkflowConfig,
+    state: WorkflowState,
+    lane: dict[str, Any],
+    inputs: dict[str, Any],
 ) -> dict[str, Any]:
+    actor_outputs = lane_mapping(lane, "actor_outputs")
     return {
-        "workflow": state.to_dict(),
-        "config": config.raw,
-        "implementation": state.actor_outputs.get("implementer") or {},
-        "review": state.actor_outputs.get("reviewer") or {},
-        "pull_request": _action_output(state, "pull-request.create"),
-        "retry": inputs.get("retry") or {},
         **inputs,
+        "workflow": state.to_dict(),
+        "lane": lane,
+        "config": config.raw,
+        "issue": lane.get("issue") or {},
+        "implementation": actor_outputs.get("implementer") or {},
+        "review": actor_outputs.get("reviewer") or {},
+        "pull_request": lane.get("pull_request") or {},
+        "retry": lane.get("pending_retry") or inputs.get("retry") or {},
     }
 
 
 def action_variables(
-    *, config: WorkflowConfig, state: WorkflowState, inputs: dict[str, Any]
+    *,
+    config: WorkflowConfig,
+    state: WorkflowState,
+    lane: dict[str, Any],
+    inputs: dict[str, Any],
 ) -> dict[str, Any]:
+    actor_outputs = lane_mapping(lane, "actor_outputs")
     return {
+        **inputs,
         "workflow": state.to_dict(),
+        "lane": lane,
         "workflow_root": str(config.workflow_root),
         "config": config.raw,
-        "actor_outputs": state.actor_outputs,
-        "stage_outputs": state.stage_outputs,
-        "action_results": state.action_results,
-        "implementation": state.actor_outputs.get("implementer") or {},
-        "review": state.actor_outputs.get("reviewer") or {},
-        "pull_request": _action_output(state, "pull-request.create"),
-        **inputs,
+        "issue": lane.get("issue") or {},
+        "actor_outputs": actor_outputs,
+        "stage_outputs": lane_mapping(lane, "stage_outputs"),
+        "action_results": lane_mapping(lane, "action_results"),
+        "implementation": actor_outputs.get("implementer") or {},
+        "review": actor_outputs.get("reviewer") or {},
+        "pull_request": lane.get("pull_request") or {},
+        "retry": lane.get("pending_retry") or inputs.get("retry") or {},
     }
-
-
-def _action_output(state: WorkflowState, action_name: str) -> dict[str, Any]:
-    result = state.action_results.get(action_name)
-    if not isinstance(result, dict):
-        return {}
-    output = result.get("output")
-    return output if isinstance(output, dict) else {}
 
 
 def run_stage_actor(
@@ -155,58 +229,239 @@ def run_stage_actor(
     config: WorkflowConfig,
     policy: WorkflowPolicy,
     state: WorkflowState,
+    lane: dict[str, Any],
     actor_name: str,
     inputs: dict[str, Any],
 ) -> dict[str, Any]:
+    inputs = lane_retry_inputs(lane=lane, inputs=inputs)
+    stage_name = lane_stage(lane)
     actor = config.actors[actor_name]
     actor_policy = policy.actors.get(actor_name)
     if actor_policy is None:
         raise RuntimeError(f"missing actor policy section for {actor_name}")
+    lane_id = str(lane.get("lane_id") or "")
+    runtime_plan = actor_runtime_plan(
+        config=config,
+        actor=actor,
+        stage_name=stage_name,
+        lane_id=lane_id,
+        resume_session_id=_resume_session_id(lane),
+    )
     prompt = build_actor_prompt(
         actor_policy=actor_policy,
-        variables=actor_variables(config=config, state=state, inputs=inputs),
+        variables=actor_variables(config=config, state=state, lane=lane, inputs=inputs),
     )
-    raw_output = build_actor_runtime(config=config, actor=actor).run(
-        actor=actor, prompt=prompt, stage_name=state.current_stage
+    prompt = append_actor_skill_docs(config=config, actor=actor, prompt=prompt)
+    record_actor_runtime_start(
+        config=config,
+        lane=lane,
+        actor_name=actor_name,
+        stage_name=stage_name,
+        runtime_meta=_runtime_plan_meta(runtime_plan),
     )
+    set_lane_status(
+        config=config,
+        lane=lane,
+        status="running",
+        actor=actor_name,
+        reason=f"{actor_name} dispatched",
+    )
+    _persist_runtime_state(config=config, state=state)
+
+    def on_session_ready(session_handle: Any) -> None:
+        record_actor_runtime_progress(
+            config=config,
+            lane=lane,
+            runtime_meta={
+                **_runtime_plan_meta(runtime_plan),
+                **_session_handle_meta(session_handle),
+                "last_event": "session/ready",
+            },
+        )
+        _persist_runtime_state(config=config, state=state)
+
+    progress_checkpoint = {"at": 0.0, "thread_id": None, "turn_id": None}
+
+    def on_progress(progress: Any) -> None:
+        runtime_meta = {
+            **_runtime_plan_meta(runtime_plan),
+            **_runtime_result_meta(progress),
+        }
+        thread_id = str(runtime_meta.get("thread_id") or "")
+        turn_id = str(runtime_meta.get("turn_id") or "")
+        now = time.monotonic()
+        ids_changed = bool(
+            (thread_id and thread_id != progress_checkpoint["thread_id"])
+            or (turn_id and turn_id != progress_checkpoint["turn_id"])
+        )
+        if not ids_changed and now - float(progress_checkpoint["at"] or 0) < 5:
+            return
+        record_actor_runtime_progress(
+            config=config,
+            lane=lane,
+            runtime_meta=runtime_meta,
+        )
+        progress_checkpoint["at"] = now
+        progress_checkpoint["thread_id"] = thread_id or progress_checkpoint["thread_id"]
+        progress_checkpoint["turn_id"] = turn_id or progress_checkpoint["turn_id"]
+        _persist_runtime_state(config=config, state=state)
+
+    try:
+        runtime_result = build_actor_runtime(config=config, actor=actor).run(
+            actor=actor,
+            prompt=prompt,
+            stage_name=stage_name,
+            lane_id=lane_id,
+            resume_session_id=runtime_plan.resume_session_id,
+            on_session_ready=on_session_ready,
+            on_progress=on_progress,
+        )
+    except Exception as exc:
+        record_actor_runtime_result(
+            config=config,
+            lane=lane,
+            runtime_meta={
+                **_runtime_plan_meta(runtime_plan),
+                **_runtime_result_meta(getattr(exc, "result", None)),
+                "last_message": str(exc),
+            },
+            status="failed",
+        )
+        set_lane_operator_attention(
+            config=config,
+            lane=lane,
+            reason="actor_runtime_failed",
+            message=str(exc),
+            artifacts={"actor": actor_name, "stage": stage_name},
+        )
+        _persist_runtime_state(config=config, state=state)
+        raise
+    record_actor_runtime_result(
+        config=config,
+        lane=lane,
+        runtime_meta={
+            **_runtime_plan_meta(runtime_plan),
+            **_runtime_result_meta(runtime_result),
+        },
+        status="completed",
+    )
+    raw_output = runtime_result.output
     try:
         parsed = json.loads(raw_output)
     except json.JSONDecodeError as exc:
+        set_lane_status(
+            config=config,
+            lane=lane,
+            status="operator_attention",
+            reason=f"actor {actor_name} returned invalid JSON: {exc}",
+        )
+        _persist_runtime_state(config=config, state=state)
         raise RuntimeError(f"actor {actor_name} returned invalid JSON: {exc}") from exc
     if not isinstance(parsed, dict):
+        set_lane_status(
+            config=config,
+            lane=lane,
+            status="operator_attention",
+            reason=f"actor {actor_name} output was not an object",
+        )
+        _persist_runtime_state(config=config, state=state)
         raise RuntimeError(f"actor {actor_name} output must be a JSON object")
-    state.actor_outputs[actor_name] = parsed
-    state.stage_outputs[state.current_stage] = {
-        **dict(state.stage_outputs.get(state.current_stage) or {}),
-        "last_actor": actor_name,
-    }
+    record_actor_output(config=config, lane=lane, actor_name=actor_name, output=parsed)
+    apply_actor_output_status(
+        config=config, lane=lane, actor_name=actor_name, output=parsed
+    )
+    _persist_runtime_state(config=config, state=state)
     return parsed
+
+
+def _persist_runtime_state(*, config: WorkflowConfig, state: WorkflowState) -> None:
+    save_state(config.storage.state_path, state)
+    save_scheduler_snapshot(config=config, state=state)
+
+
+def _resume_session_id(lane: dict[str, Any]) -> str | None:
+    session = (
+        lane.get("runtime_session")
+        if isinstance(lane.get("runtime_session"), dict)
+        else {}
+    )
+    value = (
+        session.get("thread_id") or lane.get("thread_id") or session.get("session_id")
+    )
+    text = str(value or "").strip()
+    return text or None
+
+
+def _runtime_plan_meta(plan: Any) -> dict[str, Any]:
+    return {
+        "runtime_name": getattr(plan, "runtime_name", None),
+        "runtime_kind": getattr(plan, "runtime_kind", None),
+        "session_name": getattr(plan, "session_name", None),
+        "model": getattr(plan, "model", None),
+        "session_id": getattr(plan, "resume_session_id", None),
+        "thread_id": getattr(plan, "resume_session_id", None),
+    }
+
+
+def _session_handle_meta(session_handle: Any) -> dict[str, Any]:
+    return {
+        "session_id": getattr(session_handle, "session_id", None),
+        "thread_id": getattr(session_handle, "session_id", None),
+        "record_id": getattr(session_handle, "record_id", None),
+        "session_name": getattr(session_handle, "name", None),
+    }
+
+
+def _runtime_result_meta(result: Any) -> dict[str, Any]:
+    if result is None:
+        return {}
+    plan = getattr(result, "plan", None)
+    meta = _runtime_plan_meta(plan) if plan is not None else {}
+    for key, value in {
+        "session_id": getattr(result, "session_id", None),
+        "thread_id": getattr(result, "thread_id", None),
+        "turn_id": getattr(result, "turn_id", None),
+        "last_event": getattr(result, "last_event", None),
+        "last_message": getattr(result, "last_message", None),
+        "turn_count": getattr(result, "turn_count", None),
+        "tokens": getattr(result, "tokens", None),
+        "rate_limits": getattr(result, "rate_limits", None),
+        "prompt_path": str(getattr(result, "prompt_path", "") or "") or None,
+        "result_path": str(getattr(result, "result_path", "") or "") or None,
+        "command_argv": getattr(result, "command_argv", None),
+    }.items():
+        if value not in (None, "", [], {}):
+            meta[key] = value
+    return meta
 
 
 def apply_action_result(
     *,
     config: WorkflowConfig,
     state: WorkflowState,
+    lane: dict[str, Any],
     action_name: str,
     inputs: dict[str, Any],
 ) -> dict[str, Any]:
     result = run_action(
         config.actions[action_name],
-        action_variables(config=config, state=state, inputs=inputs),
+        action_variables(config=config, state=state, lane=lane, inputs=inputs),
     )
     payload = {"ok": result.ok, "output": result.output}
-    state.action_results[action_name] = payload
-    state.stage_outputs[state.current_stage] = {
-        **dict(state.stage_outputs.get(state.current_stage) or {}),
-        "last_action": action_name,
-    }
+    record_action_result(
+        config=config, lane=lane, action_name=action_name, result=payload
+    )
     return payload
 
 
-def validate_current_stage(config: WorkflowConfig, state: WorkflowState) -> None:
-    if state.current_stage not in config.stages:
-        raise RuntimeError(f"unknown current stage: {state.current_stage}")
-    validate_stage_gates(config, state.current_stage)
+def validate_state(config: WorkflowConfig, state: WorkflowState) -> None:
+    for lane in state.lanes.values():
+        stage_name = lane_stage(lane)
+        if stage_name not in config.stages:
+            raise RuntimeError(
+                f"lane {lane.get('lane_id')} references unknown stage: {stage_name}"
+            )
+        validate_stage_gates(config, stage_name)
 
 
 def validate_stage_gates(config: WorkflowConfig, stage_name: str) -> None:
@@ -257,14 +512,8 @@ def build_status(workflow_root: Path) -> dict[str, Any]:
         "contract_path": str(contract.source_path),
         "state_path": str(config.storage.state_path),
         "audit_log_path": str(config.storage.audit_log_path),
-        "current_stage": state.get("current_stage"),
-        "status": state.get("status"),
-        "running_count": 1 if state.get("status") == "running" else 0,
-        "retry_count": int(state.get("attempt") or 0),
+        **build_lane_status(config=config, state=state),
         "canceling_count": 0,
-        "total_tokens": 0,
-        "latest_runs": [],
-        "runtime_sessions": [],
     }
 
 
@@ -320,13 +569,144 @@ def _validate(config: WorkflowConfig) -> int:
         workflow=config.workflow_name,
         first_stage=config.first_stage,
     )
-    validate_current_stage(config, state)
+    validate_state(config, state)
     print(f"{config.workflow_name} workflow valid")
     return 0
 
 
 def _show(config: WorkflowConfig) -> int:
     print(json.dumps(config.raw, indent=2, sort_keys=True))
+    return 0
+
+
+def _status(config: WorkflowConfig) -> int:
+    state = load_state(
+        config.storage.state_path,
+        workflow=config.workflow_name,
+        first_stage=config.first_stage,
+    )
+    payload = {
+        "workflow": config.workflow_name,
+        "workflow_root": str(config.workflow_root),
+        "state_path": str(config.storage.state_path),
+        "audit_log_path": str(config.storage.audit_log_path),
+        **build_lane_status(config=config, state=state.to_dict()),
+    }
+    print(json.dumps(payload, indent=2, sort_keys=True))
+    return 0
+
+
+def _lanes(config: WorkflowConfig, *, lane_id: str | None, attention_only: bool) -> int:
+    state = load_state(
+        config.storage.state_path,
+        workflow=config.workflow_name,
+        first_stage=config.first_stage,
+    )
+    if lane_id:
+        print(json.dumps(lane_by_id(state, lane_id), indent=2, sort_keys=True))
+        return 0
+    lanes = [
+        lane_summary(lane)
+        for lane in state.lanes.values()
+        if isinstance(lane, dict)
+        and (
+            not attention_only or str(lane.get("status") or "") == "operator_attention"
+        )
+    ]
+    print(
+        json.dumps(
+            {
+                "workflow": config.workflow_name,
+                "workflow_root": str(config.workflow_root),
+                "attention_only": attention_only,
+                "lanes": lanes,
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
+def _operator_retry(
+    config: WorkflowConfig, *, lane_id: str, reason: str, target: str | None
+) -> int:
+    state = load_state(
+        config.storage.state_path,
+        workflow=config.workflow_name,
+        first_stage=config.first_stage,
+    )
+    lane = lane_by_id(state, lane_id)
+    status = str(lane.get("status") or "").strip()
+    if status == "running":
+        raise RuntimeError(f"lane {lane_id} is running; refusing duplicate work")
+    if status == "retry_queued":
+        raise RuntimeError(f"lane {lane_id} already has a queued retry")
+    if status in {"complete", "released"}:
+        raise RuntimeError(f"lane {lane_id} is terminal")
+    decision = OrchestratorDecision(
+        decision="retry",
+        stage=lane_stage(lane) or config.first_stage,
+        lane_id=lane_id,
+        target=target,
+        reason=reason,
+        inputs={"feedback": reason, "operator_requested": True},
+    )
+    result = queue_lane_retry(config=config, lane=lane, decision=decision)
+    _save_tick(
+        config=config,
+        state=state,
+        event="operator.retry",
+        extra={"lane_id": lane_id, "result": result},
+    )
+    return 0
+
+
+def _operator_release(config: WorkflowConfig, *, lane_id: str, reason: str) -> int:
+    state = load_state(
+        config.storage.state_path,
+        workflow=config.workflow_name,
+        first_stage=config.first_stage,
+    )
+    lane = lane_by_id(state, lane_id)
+    if str(lane.get("status") or "") == "running":
+        raise RuntimeError(f"lane {lane_id} is running; refusing release")
+    if str(lane.get("status") or "") in {"complete", "released"}:
+        raise RuntimeError(f"lane {lane_id} is already terminal")
+    release_lane(config=config, lane=lane, reason=reason)
+    _save_tick(
+        config=config,
+        state=state,
+        event="operator.release",
+        extra={"lane_id": lane_id, "reason": reason},
+    )
+    return 0
+
+
+def _operator_complete(config: WorkflowConfig, *, lane_id: str, reason: str) -> int:
+    state = load_state(
+        config.storage.state_path,
+        workflow=config.workflow_name,
+        first_stage=config.first_stage,
+    )
+    lane = lane_by_id(state, lane_id)
+    if str(lane.get("status") or "") == "running":
+        raise RuntimeError(f"lane {lane_id} is running; refusing completion")
+    if str(lane.get("status") or "") in {"complete", "released"}:
+        raise RuntimeError(f"lane {lane_id} is already terminal")
+    stage = config.stages.get(lane_stage(lane))
+    if stage is None or stage.next_stage != "done":
+        raise RuntimeError(
+            f"lane {lane_id} is at stage {lane_stage(lane)!r}; "
+            "operator completion is only allowed at a terminal handoff stage"
+        )
+    complete_lane(config=config, lane=lane, reason=reason)
+    _save_tick(
+        config=config,
+        state=state,
+        event="operator.complete",
+        extra={"lane_id": lane_id, "reason": reason},
+    )
     return 0
 
 
@@ -337,51 +717,79 @@ def _tick(config: WorkflowConfig, *, orchestrator_output: str) -> int:
         workflow=config.workflow_name,
         first_stage=config.first_stage,
     )
-    validate_current_stage(config, state)
-    if state.pending_retry and not orchestrator_output:
-        retry_result = _dispatch_pending_retry(
-            config=config, policy=policy, state=state
+    validate_state(config, state)
+    reconcile = reconcile_lanes(config=config, state=state)
+    intake = claim_new_lanes(config=config, state=state)
+    if not active_lanes(state):
+        state.status = "idle"
+        state.idle_reason = intake.get("reason") or "no active lanes"
+        _save_tick(
+            config=config,
+            state=state,
+            event="idle",
+            extra={"intake": intake, "reconcile": reconcile},
         )
-        save_state(config.storage.state_path, state)
-        append_audit(
-            config.storage.audit_log_path,
-            {
-                "event": f"{config.workflow_name}.retry",
-                "retry": retry_result,
-                "state": state.to_dict(),
-            },
-        )
-        print(json.dumps(state.to_dict(), indent=2, sort_keys=True))
         return 0
+
+    state.status = "running"
+    state.idle_reason = None
     output = _read_output_arg(orchestrator_output) or _run_orchestrator(
         config=config,
         policy=policy,
         state=state,
     )
-    decision = OrchestratorDecision.from_output(output)
-    _apply_decision(config=config, policy=policy, state=state, decision=decision)
+    decisions = parse_orchestrator_decisions(output)
+    results = _apply_decisions(
+        config=config, policy=policy, state=state, decisions=decisions
+    )
+    _save_tick(
+        config=config,
+        state=state,
+        event="tick",
+        extra={
+            "intake": intake,
+            "reconcile": reconcile,
+            "decisions": [decision.to_dict() for decision in decisions],
+            "results": results,
+        },
+    )
+    return 0
+
+
+def _save_tick(
+    *,
+    config: WorkflowConfig,
+    state: WorkflowState,
+    event: str,
+    extra: dict[str, Any] | None = None,
+) -> None:
     save_state(config.storage.state_path, state)
+    save_scheduler_snapshot(config=config, state=state)
     append_audit(
         config.storage.audit_log_path,
         {
-            "event": f"{config.workflow_name}.tick",
-            "decision": decision.to_dict(),
+            "event": f"{config.workflow_name}.{event}",
             "state": state.to_dict(),
+            **dict(extra or {}),
         },
     )
     print(json.dumps(state.to_dict(), indent=2, sort_keys=True))
-    return 0
 
 
 def _run_orchestrator(
     *, config: WorkflowConfig, policy: WorkflowPolicy, state: WorkflowState
 ) -> str:
     prompt = build_orchestrator_prompt(
-        config=config, policy=policy, state=state, facts={}
+        config=config,
+        policy=policy,
+        state=state,
+        facts=build_workflow_facts(config, state),
     )
     actor = config.actors[config.orchestrator_actor]
-    return build_actor_runtime(config=config, actor=actor).run(
-        actor=actor, prompt=prompt, stage_name=state.current_stage
+    return (
+        build_actor_runtime(config=config, actor=actor)
+        .run(actor=actor, prompt=prompt, stage_name="orchestrator")
+        .output
     )
 
 
@@ -393,141 +801,136 @@ def _read_output_arg(value: str) -> str:
     return value
 
 
+def _apply_decisions(
+    *,
+    config: WorkflowConfig,
+    policy: WorkflowPolicy,
+    state: WorkflowState,
+    decisions: list[OrchestratorDecision],
+) -> list[dict[str, Any]]:
+    planned = _plan_decisions(config=config, state=state, decisions=decisions)
+    dispatch_counts = {"implementer": 0, "reviewer": 0}
+    results: list[dict[str, Any]] = []
+    for decision, lane in planned:
+        state.orchestrator_decisions.append(decision.to_dict())
+        result = _apply_decision(
+            config=config,
+            policy=policy,
+            state=state,
+            lane=lane,
+            decision=decision,
+            dispatch_counts=dispatch_counts,
+        )
+        results.append(result)
+    return results
+
+
+def _plan_decisions(
+    *,
+    config: WorkflowConfig,
+    state: WorkflowState,
+    decisions: list[OrchestratorDecision],
+) -> list[tuple[OrchestratorDecision, dict[str, Any]]]:
+    planned: list[tuple[OrchestratorDecision, dict[str, Any]]] = []
+    seen_lanes: set[str] = set()
+    dispatch_counts: dict[str, int] = {}
+    for decision in decisions:
+        lane = lane_for_decision(state=state, decision=decision)
+        lane_id = str(lane.get("lane_id") or "").strip()
+        if not lane_id:
+            raise RuntimeError("orchestrator selected a lane without lane_id")
+        if lane_id in seen_lanes:
+            raise RuntimeError(
+                f"orchestrator returned multiple decisions for lane {lane_id}; "
+                "return at most one decision per lane per tick"
+            )
+        seen_lanes.add(lane_id)
+        validate_decision_for_lane(config=config, lane=lane, decision=decision)
+        if decision.decision == "run_actor":
+            actor_name = target_or_single(
+                target=decision.target,
+                values=config.stages[lane_stage(lane)].actors,
+                kind="actor",
+            )
+            validate_actor_capacity(
+                config=config, actor_name=actor_name, dispatch_counts=dispatch_counts
+            )
+            dispatch_counts[actor_name] = dispatch_counts.get(actor_name, 0) + 1
+        planned.append((decision, lane))
+    return planned
+
+
 def _apply_decision(
     *,
     config: WorkflowConfig,
     policy: WorkflowPolicy,
     state: WorkflowState,
+    lane: dict[str, Any],
     decision: OrchestratorDecision,
-) -> None:
-    if decision.decision != "retry" and decision.stage != state.current_stage:
-        raise RuntimeError(
-            f"orchestrator decision stage {decision.stage!r} does not match current stage {state.current_stage!r}"
-        )
-    if decision.decision == "retry" and decision.stage not in config.stages:
-        raise RuntimeError(f"retry target stage does not exist: {decision.stage}")
-    state.orchestrator_decisions.append(decision.to_dict())
+    dispatch_counts: dict[str, int],
+) -> dict[str, Any]:
     if decision.decision == "complete":
-        state.status = "complete"
-        state.pending_retry = None
-    elif decision.decision == "operator_attention":
-        state.status = "operator_attention"
-        state.operator_attention = {
+        complete_lane(config=config, lane=lane, reason=decision.reason or "completed")
+        return {"lane_id": lane["lane_id"], "decision": "complete"}
+    if decision.decision == "operator_attention":
+        lane["operator_attention"] = {
             "message": decision.operator_message,
             "reason": decision.reason,
         }
-    elif decision.decision == "retry":
-        state.attempt += 1
-        state.status = "running"
-        state.current_stage = decision.stage
-        state.pending_retry = {
-            "stage": decision.stage,
-            "target": decision.target,
-            "reason": decision.reason,
-            "inputs": decision.inputs,
-            "attempt": state.attempt,
-        }
-    elif decision.decision == "advance":
-        state.pending_retry = None
-        _advance(config=config, state=state, target=decision.target)
-    elif decision.decision == "run_actor":
-        state.pending_retry = None
-        actor_name = _target_or_single(
+        set_lane_status(
+            config=config,
+            lane=lane,
+            status="operator_attention",
+            reason=decision.reason or "operator attention",
+        )
+        return {"lane_id": lane["lane_id"], "decision": "operator_attention"}
+    if decision.decision == "retry":
+        return queue_lane_retry(config=config, lane=lane, decision=decision)
+    if decision.decision == "advance":
+        advance_lane(config=config, lane=lane, target=decision.target)
+        return {"lane_id": lane["lane_id"], "decision": "advance"}
+    if decision.decision == "run_actor":
+        actor_name = target_or_single(
             target=decision.target,
-            values=config.stages[state.current_stage].actors,
+            values=config.stages[lane_stage(lane)].actors,
             kind="actor",
         )
-        run_stage_actor(
-            config=config,
-            policy=policy,
-            state=state,
-            actor_name=actor_name,
-            inputs=decision.inputs,
+        validate_actor_capacity(
+            config=config, actor_name=actor_name, dispatch_counts=dispatch_counts
         )
-    elif decision.decision == "run_action":
-        state.pending_retry = None
-        action_name = _target_or_single(
-            target=decision.target,
-            values=config.stages[state.current_stage].actions,
-            kind="action",
-        )
-        apply_action_result(
-            config=config, state=state, action_name=action_name, inputs=decision.inputs
-        )
-    else:
-        raise RuntimeError(f"unhandled orchestrator decision {decision.decision}")
-
-
-def _dispatch_pending_retry(
-    *, config: WorkflowConfig, policy: WorkflowPolicy, state: WorkflowState
-) -> dict[str, Any]:
-    retry = state.pending_retry if isinstance(state.pending_retry, dict) else {}
-    stage_name = str(retry.get("stage") or state.current_stage)
-    if stage_name not in config.stages:
-        raise RuntimeError(f"pending retry stage does not exist: {stage_name}")
-    state.current_stage = stage_name
-    stage = config.stages[stage_name]
-    retry_inputs = retry.get("inputs") if isinstance(retry.get("inputs"), dict) else {}
-    inputs = {
-        **retry_inputs,
-        "attempt": int(retry.get("attempt") or state.attempt),
-        "retry": {
-            "stage": stage_name,
-            "target": retry.get("target"),
-            "reason": str(retry.get("reason") or ""),
-            "attempt": int(retry.get("attempt") or state.attempt),
-            "inputs": retry_inputs,
-        },
-    }
-    target = str(retry.get("target") or "").strip() or None
-    if target in stage.actors or (target is None and len(stage.actors) == 1):
-        actor_name = _target_or_single(
-            target=target, values=stage.actors, kind="actor"
-        )
+        dispatch_counts[actor_name] = dispatch_counts.get(actor_name, 0) + 1
         result = run_stage_actor(
             config=config,
             policy=policy,
             state=state,
+            lane=lane,
             actor_name=actor_name,
-            inputs=inputs,
+            inputs=decision.inputs,
         )
-        state.pending_retry = None
-        return {"kind": "actor", "target": actor_name, "result": result}
-    if target in stage.actions or (target is None and len(stage.actions) == 1):
-        action_name = _target_or_single(
-            target=target, values=stage.actions, kind="action"
+        return {
+            "lane_id": lane["lane_id"],
+            "decision": "run_actor",
+            "target": actor_name,
+            "result": result,
+        }
+    if decision.decision == "run_action":
+        inputs = lane_retry_inputs(lane=lane, inputs=decision.inputs)
+        action_name = target_or_single(
+            target=decision.target,
+            values=config.stages[lane_stage(lane)].actions,
+            kind="action",
         )
         result = apply_action_result(
-            config=config, state=state, action_name=action_name, inputs=inputs
+            config=config,
+            state=state,
+            lane=lane,
+            action_name=action_name,
+            inputs=inputs,
         )
-        state.pending_retry = None
-        return {"kind": "action", "target": action_name, "result": result}
-    raise RuntimeError(
-        f"pending retry target {target!r} is not declared on stage {stage_name!r}"
-    )
-
-
-def _advance(
-    *, config: WorkflowConfig, state: WorkflowState, target: str | None
-) -> None:
-    next_stage = target or config.stages[state.current_stage].next_stage
-    if not next_stage:
-        raise RuntimeError(f"stage {state.current_stage} has no next stage")
-    if next_stage == "done":
-        state.status = "complete"
-        return
-    if next_stage not in config.stages:
-        raise RuntimeError(f"unknown target stage: {next_stage}")
-    state.current_stage = next_stage
-
-
-def _target_or_single(*, target: str | None, values: tuple[str, ...], kind: str) -> str:
-    if target:
-        if target not in values:
-            raise RuntimeError(
-                f"orchestrator selected {kind} {target!r}, not declared on current stage"
-            )
-        return target
-    if len(values) == 1:
-        return values[0]
-    raise RuntimeError(f"orchestrator decision must target one {kind}")
+        return {
+            "lane_id": lane["lane_id"],
+            "decision": "run_action",
+            "target": action_name,
+            "result": result,
+        }
+    raise RuntimeError(f"unhandled orchestrator decision {decision.decision}")

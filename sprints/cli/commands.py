@@ -4,7 +4,7 @@ import io
 import json
 import shlex
 import subprocess
-from contextlib import redirect_stderr
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from typing import Any
 
@@ -504,8 +504,14 @@ def execute_workflow_command(raw_args: str) -> str:
     try:
         if not cmd_args:
             cmd_args = ["--help"]
-        rc = run_cli(workflow_root, cmd_args, require_workflow=name)
-        return f"workflow '{name}' exited with status {rc}" if rc != 0 else "ok"
+        stdout_buffer = io.StringIO()
+        with redirect_stdout(stdout_buffer):
+            rc = run_cli(workflow_root, cmd_args, require_workflow=name)
+        output = stdout_buffer.getvalue().strip()
+        if rc != 0:
+            suffix = f"\n{output}" if output else ""
+            return f"workflow '{name}' exited with status {rc}{suffix}"
+        return output or "ok"
     except Exception as exc:
         return f"sprints error: {exc}"
 

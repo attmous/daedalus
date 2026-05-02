@@ -21,7 +21,8 @@ workflows/
 |-- validation.py            # contract validation and readiness recommendations
 |-- bootstrap.py             # repo bootstrap and scaffold mechanics
 |-- orchestrator.py          # orchestrator prompt + decision schema
-|-- runner.py                # tick mechanics, state persistence, status, stall hook
+|-- runner.py                # CLI tick loop and actor/action dispatch
+|-- lanes.py                 # lane ledger, reconciliation, runtime/session state
 |-- actors.py                # actor runtime dispatch
 |-- actions.py               # deterministic action execution
 |-- paths.py                 # workflow root and runtime path helpers

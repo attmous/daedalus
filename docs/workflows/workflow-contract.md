@@ -23,12 +23,32 @@ tracker:
   kind: github
   github_slug: owner/repo
   active_states: [open]
+  terminal_states: [closed]
   required_labels: [active]
   exclude_labels: [blocked, needs-human, done]
 
 code-host:
   kind: github
   github_slug: owner/repo
+
+concurrency:
+  max-active-lanes: 1
+  max-implementers: 1
+  max-reviewers: 1
+  per-lane-lock: true
+
+recovery:
+  running-stale-seconds: 1800
+
+retry:
+  max-attempts: 3
+  initial-delay-seconds: 0
+  backoff-multiplier: 2
+  max-delay-seconds: 300
+
+completion:
+  remove_labels: [active]
+  add_labels: [done]
 
 orchestrator:
   actor: orchestrator
@@ -46,16 +66,23 @@ actors:
     runtime: codex
   implementer:
     runtime: codex
+    skills: [pull, debug, commit, push]
 
 stages:
-  entry:
+  deliver:
     actors: [implementer]
-    actions: []
-    gates: [entry-complete]
+    gates: [delivery-ready]
+    next: review
+
+  review:
+    actors: [reviewer]
+    gates: [review-ready]
     next: done
 
 gates:
-  entry-complete:
+  delivery-ready:
+    type: orchestrator-evaluated
+  review-ready:
     type: orchestrator-evaluated
 
 actions: {}
@@ -81,6 +108,18 @@ may be considered by the orchestrator only after the operator labels it.
 
 Tracker state is not engine ownership state.
 
+The runner filters tracker candidates mechanically before dispatch:
+
+- `active_states` must match the issue state.
+- `terminal_states` closes blockers and terminal issue snapshots.
+- `required_labels` must all be present.
+- `exclude_labels` must be absent.
+
+The orchestrator receives the filtered list under `facts.tracker.candidates`.
+The runner claims eligible candidates into durable lanes before dispatch.
+On each tick, the runner refreshes active lane issues and releases lanes that
+are no longer tracker-eligible.
+
 ### `code-host`
 
 Code-host config defines where branches, pull requests, reviews, and merge
@@ -100,10 +139,102 @@ Named runtime profiles. Supported `kind` values:
 
 Each actor names a runtime profile. There is no implicit runtime.
 
+Actors may also name bundled skills:
+
+```yaml
+actors:
+  implementer:
+    runtime: codex
+    skills: [pull, debug, commit, push]
+```
+
+The runner injects those skill docs into that actor prompt. This is required for
+runtime profiles that do not load Hermes plugin skills directly, including the
+default `codex-app-server` profile.
+
 ### `stages`
 
 Stages declare the actors, actions, gates, and next stage. `next: done` marks a
-terminal transition.
+terminal transition. Change delivery uses broad actor-owned stages:
+
+- `deliver`: implementer owns pull, edit, debug, commit, push, and PR creation.
+- `review`: reviewer owns review of one lane and PR.
+
+The runner stores progress in `state.lanes`, keyed by lane ID such as
+`github#20`.
+
+For `change-delivery`, the runner enforces two mechanical handoff contracts:
+
+- `deliver -> review` requires implementer `status: done`,
+  `pull_request.url`, and non-empty `verification`.
+- `review -> done` requires reviewer `status: approved` and
+  `pull_request.url`.
+
+If either contract fails, the lane moves to `operator_attention` instead of
+advancing.
+
+### `concurrency`
+
+Concurrency is explicit and enforced by the runner:
+
+```yaml
+concurrency:
+  max-active-lanes: 1
+  max-implementers: 1
+  max-reviewers: 1
+  per-lane-lock: true
+```
+
+The default is intentionally one active lane until runtime sessions can dispatch
+multiple non-blocking actor turns safely.
+
+### `recovery`
+
+The runner persists actor runtime metadata on each lane before dispatch and
+during progress callbacks:
+
+- runtime profile and kind
+- session name
+- session/thread/turn IDs when the runtime exposes them
+- latest runtime event and message
+- token and rate-limit snapshots
+
+If a later tick finds a lane still marked `running` beyond
+`running-stale-seconds`, it moves the lane to `operator_attention` with the
+runtime session artifacts attached. This keeps interrupted work recoverable
+instead of silently dispatching duplicate actor work.
+
+### `retry`
+
+Retry config is mechanical lane control:
+
+```yaml
+retry:
+  max-attempts: 3
+  initial-delay-seconds: 0
+  backoff-multiplier: 2
+  max-delay-seconds: 300
+```
+
+When the orchestrator returns `retry`, the runner stores `pending_retry` on the
+lane with target stage, target actor, feedback inputs, attempt, due time, and a
+retry history entry. The next actor dispatch receives that state as `retry`.
+The runner rejects dispatch before `pending_retry.due_at` and moves the lane to
+`operator_attention` when `max-attempts` is exhausted.
+
+### `completion`
+
+Completion cleanup is mechanical. Before a lane is marked complete, the runner
+applies configured label changes and only then releases the lane lock:
+
+```yaml
+completion:
+  remove_labels: [active]
+  add_labels: [done]
+```
+
+If cleanup fails, the lane moves to `operator_attention` instead of being
+released silently.
 
 ### `gates`
 
@@ -158,10 +289,14 @@ Allowed decisions:
 - `complete`
 - `operator_attention`
 
+Return at most one decision per lane in one tick. The runner validates the full
+decision batch before applying it, so duplicate lane decisions or actor
+concurrency violations fail before actors are dispatched.
+
 For `retry`, `stage` names the stage to retry and `target` names the actor or
 action to run again. The runner stores the retry request in workflow state and
-dispatches it on the next tick with `retry.reason`, `retry.attempt`, and any
-`inputs` from the decision.
+dispatches it when due with `retry.reason`, `retry.attempt`, `retry.due_at`, and
+any `inputs` from the decision.
 
 ### Actor
 

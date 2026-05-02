@@ -30,6 +30,10 @@ properties:
         type: array
         items:
           type: string
+      terminal_states:
+        type: array
+        items:
+          type: string
       required_labels:
         type: array
         items:
@@ -46,6 +50,56 @@ properties:
         type: string
       github_slug:
         type: string
+    additionalProperties: true
+  concurrency:
+    type: object
+    properties:
+      max-active-lanes:
+        type: integer
+        minimum: 1
+      max-implementers:
+        type: integer
+        minimum: 1
+      max-reviewers:
+        type: integer
+        minimum: 1
+      per-lane-lock:
+        type: boolean
+    additionalProperties: true
+  recovery:
+    type: object
+    properties:
+      running-stale-seconds:
+        type: integer
+        minimum: 0
+    additionalProperties: true
+  retry:
+    type: object
+    properties:
+      max-attempts:
+        type: integer
+        minimum: 1
+      initial-delay-seconds:
+        type: integer
+        minimum: 0
+      backoff-multiplier:
+        type: number
+        minimum: 1
+      max-delay-seconds:
+        type: integer
+        minimum: 0
+    additionalProperties: true
+  completion:
+    type: object
+    properties:
+      remove_labels:
+        type: array
+        items:
+          type: string
+      add_labels:
+        type: array
+        items:
+          type: string
     additionalProperties: true
   orchestrator:
     type: object
@@ -71,6 +125,10 @@ properties:
           type: string
         mode:
           type: string
+        skills:
+          type: array
+          items:
+            type: string
       additionalProperties: true
   stages:
     type: object

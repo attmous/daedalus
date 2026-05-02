@@ -187,6 +187,14 @@ class LinearTrackerClient:
         out.sort(key=issue_priority_sort_key)
         return out
 
+    def add_labels(self, issue_id: str | int | None, labels: list[str]) -> bool:
+        del issue_id, labels
+        return False
+
+    def remove_labels(self, issue_id: str | int | None, labels: list[str]) -> bool:
+        del issue_id, labels
+        return False
+
     def _query_issues_by_states(self, states: list[str]) -> list[dict[str, Any]]:
         if not states:
             return []

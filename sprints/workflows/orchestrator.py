@@ -19,6 +19,7 @@ class OrchestratorDecisionError(RuntimeError):
 class OrchestratorDecision:
     decision: str
     stage: str
+    lane_id: str | None = None
     target: str | None = None
     reason: str = ""
     inputs: dict[str, Any] = field(default_factory=dict)
@@ -26,12 +27,15 @@ class OrchestratorDecision:
 
     @classmethod
     def from_output(cls, output: str) -> "OrchestratorDecision":
-        try:
-            raw = json.loads(output)
-        except json.JSONDecodeError as exc:
+        decisions = parse_orchestrator_decisions(output)
+        if len(decisions) != 1:
             raise OrchestratorDecisionError(
-                f"orchestrator returned invalid JSON: {exc}"
-            ) from exc
+                f"expected one orchestrator decision, got {len(decisions)}"
+            )
+        return decisions[0]
+
+    @classmethod
+    def from_mapping(cls, raw: dict[str, Any]) -> "OrchestratorDecision":
         if not isinstance(raw, dict):
             raise OrchestratorDecisionError(
                 "orchestrator decision must be a JSON object"
@@ -57,9 +61,11 @@ class OrchestratorDecision:
                 "orchestrator decision inputs must be an object"
             )
         target = raw.get("target")
+        lane_id = raw.get("lane_id") or raw.get("lane-id")
         return cls(
             decision=decision,
             stage=stage,
+            lane_id=str(lane_id) if lane_id not in (None, "") else None,
             target=str(target) if target is not None else None,
             reason=str(raw.get("reason") or ""),
             inputs=inputs,
@@ -68,6 +74,32 @@ class OrchestratorDecision:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+def parse_orchestrator_decisions(output: str) -> list[OrchestratorDecision]:
+    try:
+        raw = json.loads(output)
+    except json.JSONDecodeError as exc:
+        raise OrchestratorDecisionError(
+            f"orchestrator returned invalid JSON: {exc}"
+        ) from exc
+    if not isinstance(raw, dict):
+        raise OrchestratorDecisionError("orchestrator decision must be a JSON object")
+    raw_decisions = raw.get("decisions")
+    if raw_decisions is None:
+        return [OrchestratorDecision.from_mapping(raw)]
+    if not isinstance(raw_decisions, list):
+        raise OrchestratorDecisionError("orchestrator decisions must be a list")
+    decisions = [
+        OrchestratorDecision.from_mapping(item)
+        for item in raw_decisions
+        if isinstance(item, dict)
+    ]
+    if len(decisions) != len(raw_decisions):
+        raise OrchestratorDecisionError(
+            "each orchestrator decision entry must be an object"
+        )
+    return decisions
 
 
 def render_prompt_template(

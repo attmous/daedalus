@@ -461,6 +461,46 @@ class GithubTrackerClient:
         ]
         return sorted(issues, key=issue_priority_sort_key)
 
+    def add_labels(self, issue_id: str | int | None, labels: list[str]) -> bool:
+        issue_number = _coerce_issue_number(issue_id)
+        normalized = [str(label).strip() for label in labels if str(label).strip()]
+        if issue_number is None or not normalized:
+            return False
+        self._run(
+            self._with_repo(
+                [
+                    "gh",
+                    "issue",
+                    "edit",
+                    issue_number,
+                    "--add-label",
+                    ",".join(normalized),
+                ]
+            ),
+            cwd=self._repo_path,
+        )
+        return True
+
+    def remove_labels(self, issue_id: str | int | None, labels: list[str]) -> bool:
+        issue_number = _coerce_issue_number(issue_id)
+        normalized = [str(label).strip() for label in labels if str(label).strip()]
+        if issue_number is None or not normalized:
+            return False
+        self._run(
+            self._with_repo(
+                [
+                    "gh",
+                    "issue",
+                    "edit",
+                    issue_number,
+                    "--remove-label",
+                    ",".join(normalized),
+                ]
+            ),
+            cwd=self._repo_path,
+        )
+        return True
+
 
 @register_code_host("github")
 class GithubCodeHostClient:

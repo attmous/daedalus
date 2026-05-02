@@ -55,8 +55,26 @@ def register(ctx):
         description="Sprints workflow engine control surface.",
     )
 
-    skill_md = PLUGIN_DIR / "skills" / "operator" / "SKILL.md"
-    if skill_md.exists():
+    for skill_md in sorted((PLUGIN_DIR / "skills").glob("*/SKILL.md")):
         ctx.register_skill(
-            "operator", skill_md, description="Operate the Sprints engine."
+            skill_md.parent.name,
+            skill_md,
+            description=_skill_description(skill_md),
         )
+
+
+def _skill_description(skill_md: Path) -> str:
+    try:
+        text = skill_md.read_text(encoding="utf-8")
+    except OSError:
+        return f"Sprints {skill_md.parent.name} skill."
+    in_front_matter = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped == "---":
+            in_front_matter = not in_front_matter
+            continue
+        if in_front_matter and stripped.startswith("description:"):
+            value = stripped.split(":", 1)[1].strip()
+            return value or f"Sprints {skill_md.parent.name} skill."
+    return f"Sprints {skill_md.parent.name} skill."

@@ -35,6 +35,12 @@ Sprints exposes two Hermes command roots.
 | --- | --- |
 | `/workflow` | List installed workflows. |
 | `/workflow change-delivery status` | Show change-delivery workflow state. |
+| `/workflow change-delivery lanes` | List lane summaries. |
+| `/workflow change-delivery lanes --attention` | List lanes blocked on operator attention. |
+| `/workflow change-delivery lanes <lane-id>` | Show one full lane record. |
+| `/workflow change-delivery retry <lane-id>` | Queue a retry after the operator fixed the blocker. |
+| `/workflow change-delivery release <lane-id>` | Release a lane without completing it. |
+| `/workflow change-delivery complete <lane-id>` | Complete a lane through normal completion cleanup. |
 | `/workflow change-delivery validate` | Validate the contract. |
 | `/workflow change-delivery tick` | Run one orchestrator tick. |
 

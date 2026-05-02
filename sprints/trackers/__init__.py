@@ -33,6 +33,10 @@ class TrackerClient(Protocol):
 
     def list_terminal(self) -> list[dict[str, Any]]: ...
 
+    def add_labels(self, issue_id: str | int | None, labels: list[str]) -> bool: ...
+
+    def remove_labels(self, issue_id: str | int | None, labels: list[str]) -> bool: ...
+
 
 class CodeHostConfigError(RuntimeError):
     """Raised when the code-host section is missing or invalid."""

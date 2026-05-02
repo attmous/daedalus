@@ -1,0 +1,1612 @@
+"""Lane ledger, tracker intake, reconciliation, and lane transitions."""
+
+from __future__ import annotations
+
+import os
+import time
+import uuid
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+
+from engine import EngineStore
+from trackers import (
+    build_code_host_client,
+    build_tracker_client,
+    issue_priority_sort_key,
+)
+from workflows.config import WorkflowConfig
+from workflows.orchestrator import OrchestratorDecision
+from workflows.paths import runtime_paths
+
+_RUNNER_INSTANCE_ID = f"{os.getpid()}:{uuid.uuid4().hex[:12]}"
+_TERMINAL_LANE_STATUSES = {"complete", "released"}
+
+
+def build_workflow_facts(config: WorkflowConfig, state: Any) -> dict[str, Any]:
+    tracker_facts = _tracker_facts(config=config, state=state)
+    concurrency = _concurrency_config(config)
+    current_active_lanes = active_lanes(state)
+    return {
+        "tracker": tracker_facts,
+        "engine": {
+            "lanes": state.lanes,
+            "active_lane_count": len(current_active_lanes),
+            "idle_reason": state.idle_reason,
+            "capacity": {
+                "max_active_lanes": concurrency["max_active_lanes"],
+                "available_lanes": max(
+                    concurrency["max_active_lanes"] - len(current_active_lanes), 0
+                ),
+            },
+        },
+        "concurrency": concurrency,
+        "recovery": _recovery_config(config),
+        "retry": _retry_config(config),
+    }
+
+
+def build_lane_status(
+    *, config: WorkflowConfig, state: dict[str, Any]
+) -> dict[str, Any]:
+    lanes = state.get("lanes") if isinstance(state.get("lanes"), dict) else {}
+    active = [
+        lane
+        for lane in lanes.values()
+        if isinstance(lane, dict) and not lane_is_terminal(lane)
+    ]
+    runtime_sessions = [
+        {
+            **dict(lane.get("runtime_session") or {}),
+            "lane_id": lane.get("lane_id"),
+            "stage": lane.get("stage"),
+            "actor": lane.get("actor"),
+        }
+        for lane in lanes.values()
+        if isinstance(lane, dict) and isinstance(lane.get("runtime_session"), dict)
+    ]
+    scheduler = _engine_store(config).read_scheduler() or {}
+    runtime_totals = (
+        scheduler.get("runtime_totals")
+        if isinstance(scheduler.get("runtime_totals"), dict)
+        else {}
+    )
+    return {
+        "status": state.get("status"),
+        "idle_reason": state.get("idle_reason"),
+        "lane_count": len(lanes),
+        "active_lane_count": len(active),
+        "running_count": _count_lanes_with_status(active, "running"),
+        "retry_count": _count_lanes_with_status(active, "retry_queued"),
+        "operator_attention_count": _count_lanes_with_status(
+            active, "operator_attention"
+        ),
+        "total_tokens": int(runtime_totals.get("total_tokens") or 0),
+        "runtime_totals": runtime_totals,
+        "latest_runs": _engine_store(config).latest_runs(limit=10),
+        "runtime_sessions": runtime_sessions,
+        "operator_attention_lanes": [
+            _lane_summary(lane)
+            for lane in active
+            if str(lane.get("status") or "") == "operator_attention"
+        ],
+        "retry_lanes": [
+            _lane_summary(lane)
+            for lane in active
+            if str(lane.get("status") or "") == "retry_queued"
+        ],
+        "lanes": lanes,
+    }
+
+
+def claim_new_lanes(*, config: WorkflowConfig, state: Any) -> dict[str, Any]:
+    tracker_cfg = _tracker_config(config)
+    if not tracker_cfg:
+        return _claim_manual_lane(config=config, state=state)
+    concurrency = _concurrency_config(config)
+    available = max(concurrency["max_active_lanes"] - len(active_lanes(state)), 0)
+    if available <= 0:
+        return {"status": "full", "reason": "lane capacity reached"}
+
+    facts = _tracker_facts(config=config, state=state)
+    candidates = facts.get("candidates") if isinstance(facts, dict) else []
+    if not isinstance(candidates, list) or not candidates:
+        return {
+            "status": "idle",
+            "reason": str(facts.get("error") or "no eligible tracker candidates"),
+            "facts": facts,
+        }
+
+    claimed: list[dict[str, Any]] = []
+    for issue in candidates:
+        if len(claimed) >= available:
+            break
+        lane_id = _lane_id(config=config, issue=issue)
+        if lane_id in state.lanes and not lane_is_terminal(state.lanes[lane_id]):
+            continue
+        lease = _acquire_lane_lease(config=config, lane_id=lane_id, issue=issue)
+        if not lease.get("acquired"):
+            continue
+        lane = _new_lane(
+            config=config,
+            lane_id=lane_id,
+            issue=issue,
+            lease=lease,
+        )
+        state.lanes[lane_id] = lane
+        _append_engine_event(
+            config=config,
+            lane=lane,
+            event_type=f"{config.workflow_name}.lane.claimed",
+            payload={"lane": lane},
+        )
+        claimed.append(lane)
+
+    if claimed:
+        return {
+            "status": "claimed",
+            "claimed": [lane["lane_id"] for lane in claimed],
+            "facts": facts,
+        }
+    return {
+        "status": "idle",
+        "reason": "all eligible tracker candidates are already claimed",
+        "facts": facts,
+    }
+
+
+def _claim_manual_lane(*, config: WorkflowConfig, state: Any) -> dict[str, Any]:
+    lane_id = f"{config.workflow_name}#manual"
+    if lane_id in state.lanes:
+        return {"status": "skipped", "reason": "manual lane already exists"}
+    if active_lanes(state):
+        return {"status": "full", "reason": "lane capacity reached"}
+    issue = {"id": "manual", "identifier": lane_id, "title": config.workflow_name}
+    lease = _acquire_lane_lease(config=config, lane_id=lane_id, issue=issue)
+    if not lease.get("acquired"):
+        return {"status": "idle", "reason": "manual lane is already claimed"}
+    lane = _new_lane(config=config, lane_id=lane_id, issue=issue, lease=lease)
+    state.lanes[lane_id] = lane
+    _append_engine_event(
+        config=config,
+        lane=lane,
+        event_type=f"{config.workflow_name}.lane.claimed",
+        payload={"lane": lane},
+    )
+    return {"status": "claimed", "claimed": [lane_id]}
+
+
+def reconcile_lanes(*, config: WorkflowConfig, state: Any) -> dict[str, Any]:
+    active = active_lanes(state)
+    if not active:
+        return {"status": "skipped", "reason": "no active lanes"}
+    runtime_result = reconcile_runtime_lanes(config=config, lanes=active)
+    tracker_result = _reconcile_tracker_lanes(config=config, lanes=active)
+    pr_result = _reconcile_pull_requests(config=config, lanes=active)
+    return {
+        "status": "ok",
+        "runtime": runtime_result,
+        "tracker": tracker_result,
+        "pull_requests": pr_result,
+    }
+
+
+def reconcile_runtime_lanes(
+    *, config: WorkflowConfig, lanes: list[dict[str, Any]]
+) -> dict[str, Any]:
+    cfg = _recovery_config(config)
+    stale_seconds = cfg["running_stale_seconds"]
+    if stale_seconds <= 0:
+        return {"status": "skipped", "reason": "running stale detection disabled"}
+    now = time.time()
+    interrupted: list[str] = []
+    for lane in lanes:
+        if str(lane.get("status") or "") != "running":
+            continue
+        timestamp = _runtime_updated_at(lane) or str(lane.get("last_progress_at") or "")
+        age = now - _iso_to_epoch(timestamp, default=now)
+        if age < stale_seconds:
+            continue
+        session = lane_mapping(lane, "runtime_session")
+        set_lane_operator_attention(
+            config=config,
+            lane=lane,
+            reason="actor_interrupted",
+            message=(
+                "actor was still marked running from an earlier tick; "
+                f"last update was {int(age)}s ago"
+            ),
+            artifacts={
+                "runtime_session": session,
+                "branch": lane.get("branch"),
+                "pull_request": lane.get("pull_request"),
+            },
+        )
+        session["status"] = "interrupted"
+        session["interrupted_at"] = _now_iso()
+        interrupted.append(str(lane.get("lane_id") or ""))
+    if interrupted:
+        return {"status": "interrupted", "lanes": interrupted}
+    return {"status": "ok", "interrupted": []}
+
+
+def _reconcile_tracker_lanes(
+    *, config: WorkflowConfig, lanes: list[dict[str, Any]]
+) -> dict[str, Any]:
+    tracker_cfg = _tracker_config(config)
+    if not tracker_cfg:
+        return {"status": "skipped", "reason": "no tracker config"}
+    issue_ids = [
+        str((lane.get("issue") or {}).get("id") or "").strip()
+        for lane in lanes
+        if isinstance(lane.get("issue"), dict)
+    ]
+    issue_ids = [issue_id for issue_id in issue_ids if issue_id]
+    if not issue_ids:
+        return {"status": "skipped", "reason": "no lane issue ids"}
+    try:
+        client = build_tracker_client(
+            workflow_root=config.workflow_root,
+            tracker_cfg=tracker_cfg,
+            repo_path=_repository_path(config),
+        )
+        refreshed = client.refresh(issue_ids)
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
+
+    updated: list[str] = []
+    released: list[str] = []
+    for lane in lanes:
+        issue = lane.get("issue") if isinstance(lane.get("issue"), dict) else {}
+        issue_id = str(issue.get("id") or "").strip()
+        fresh = refreshed.get(issue_id)
+        if not fresh:
+            continue
+        lane["issue"] = fresh
+        updated.append(str(lane.get("lane_id") or ""))
+        if not _issue_is_still_active(tracker_cfg=tracker_cfg, issue=fresh):
+            set_lane_status(
+                config=config,
+                lane=lane,
+                status="released",
+                reason="tracker issue is no longer eligible",
+            )
+            _release_lane_lease(
+                config=config, lane=lane, reason="tracker issue is no longer eligible"
+            )
+            released.append(str(lane.get("lane_id") or ""))
+    return {"status": "ok", "updated": updated, "released": released}
+
+
+def _reconcile_pull_requests(
+    *, config: WorkflowConfig, lanes: list[dict[str, Any]]
+) -> dict[str, Any]:
+    code_host_cfg = _code_host_config(config)
+    if not code_host_cfg:
+        return {"status": "skipped", "reason": "no code-host config"}
+    lanes_by_branch = {
+        str(lane.get("branch") or "").strip(): lane
+        for lane in lanes
+        if str(lane.get("branch") or "").strip()
+    }
+    if not lanes_by_branch:
+        return {"status": "skipped", "reason": "no lane branches"}
+    try:
+        client = build_code_host_client(
+            workflow_root=config.workflow_root,
+            code_host_cfg=code_host_cfg,
+            repo_path=_repository_path(config),
+        )
+        prs = client.list_open_pull_requests()
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
+
+    updated: list[str] = []
+    for pr in prs:
+        branch = str(pr.get("headRefName") or "").strip()
+        lane = lanes_by_branch.get(branch)
+        if not lane:
+            continue
+        lane["pull_request"] = _normalize_pull_request(pr)
+        lane["last_progress_at"] = _now_iso()
+        updated.append(str(lane.get("lane_id") or ""))
+    return {"status": "ok", "updated": updated}
+
+
+def _tracker_facts(*, config: WorkflowConfig, state: Any) -> dict[str, Any]:
+    tracker_cfg = _tracker_config(config)
+    if not tracker_cfg:
+        return {"enabled": False, "candidates": [], "candidate_count": 0}
+    base = {
+        "enabled": True,
+        "kind": str(tracker_cfg.get("kind") or ""),
+        "active_states": _configured_texts(
+            tracker_cfg, "active_states", "active-states"
+        ),
+        "terminal_states": _configured_texts(
+            tracker_cfg, "terminal_states", "terminal-states"
+        ),
+        "required_labels": _configured_texts(
+            tracker_cfg, "required_labels", "required-labels"
+        ),
+        "exclude_labels": _configured_texts(
+            tracker_cfg, "exclude_labels", "exclude-labels"
+        ),
+    }
+    try:
+        client = build_tracker_client(
+            workflow_root=config.workflow_root,
+            tracker_cfg=tracker_cfg,
+            repo_path=_repository_path(config),
+        )
+        raw_candidates = client.list_candidates()
+        terminal = client.list_terminal()
+    except Exception as exc:
+        return {
+            **base,
+            "error": str(exc),
+            "candidates": [],
+            "candidate_count": 0,
+            "terminal": [],
+            "terminal_count": 0,
+        }
+    candidates = _eligible_candidates(
+        config=config,
+        tracker_cfg=tracker_cfg,
+        issues=raw_candidates,
+        state=state,
+    )
+    return {
+        **base,
+        "candidates": candidates,
+        "candidate_count": len(candidates),
+        "terminal": terminal,
+        "terminal_count": len(terminal),
+    }
+
+
+def _eligible_candidates(
+    *,
+    config: WorkflowConfig,
+    tracker_cfg: dict[str, Any],
+    issues: list[dict[str, Any]],
+    state: Any,
+) -> list[dict[str, Any]]:
+    active_states = set(
+        _configured_texts(tracker_cfg, "active_states", "active-states")
+    )
+    terminal_states = set(
+        _configured_texts(tracker_cfg, "terminal_states", "terminal-states")
+    )
+    required_labels = set(
+        _configured_texts(tracker_cfg, "required_labels", "required-labels")
+    )
+    exclude_labels = set(
+        _configured_texts(tracker_cfg, "exclude_labels", "exclude-labels")
+    )
+    known_lane_ids = set(state.lanes)
+    candidates: list[dict[str, Any]] = []
+    for issue in issues:
+        lane_id = _lane_id(config=config, issue=issue)
+        if lane_id in known_lane_ids:
+            continue
+        issue_state = str(issue.get("state") or "").strip().lower()
+        if active_states and issue_state not in active_states:
+            continue
+        labels = _issue_labels(issue)
+        if required_labels and not required_labels.issubset(labels):
+            continue
+        if exclude_labels.intersection(labels):
+            continue
+        if _has_open_blockers(issue, terminal_states=terminal_states):
+            continue
+        candidates.append(issue)
+    return sorted(candidates, key=issue_priority_sort_key)
+
+
+def lane_for_decision(*, state: Any, decision: OrchestratorDecision) -> dict[str, Any]:
+    if decision.lane_id:
+        lane = state.lanes.get(decision.lane_id)
+        if isinstance(lane, dict):
+            return lane
+        raise RuntimeError(f"orchestrator selected unknown lane {decision.lane_id!r}")
+    active = active_lanes(state)
+    if len(active) == 1:
+        return active[0]
+    raise RuntimeError("orchestrator decision must include lane_id")
+
+
+def validate_decision_for_lane(
+    *, config: WorkflowConfig, lane: dict[str, Any], decision: OrchestratorDecision
+) -> None:
+    lane_status = str(lane.get("status") or "").strip()
+    if lane_status == "running":
+        raise RuntimeError(f"lane {lane.get('lane_id')} is already running")
+    if lane_status == "retry_queued":
+        _validate_retry_dispatch(lane=lane, decision=decision)
+    if lane_status == "operator_attention" and decision.decision not in {
+        "retry",
+        "operator_attention",
+    }:
+        raise RuntimeError(f"lane {lane.get('lane_id')} requires operator attention")
+    if decision.decision != "retry" and decision.stage != lane_stage(lane):
+        raise RuntimeError(
+            f"decision for lane {lane.get('lane_id')} uses stage {decision.stage!r}, "
+            f"but lane is at {lane_stage(lane)!r}"
+        )
+    if decision.decision == "retry" and decision.stage not in config.stages:
+        raise RuntimeError(f"retry target stage does not exist: {decision.stage}")
+    if lane_is_terminal(lane):
+        raise RuntimeError(f"lane {lane.get('lane_id')} is terminal")
+
+
+def _validate_retry_dispatch(
+    *, lane: dict[str, Any], decision: OrchestratorDecision
+) -> None:
+    if decision.decision not in {"run_actor", "run_action"}:
+        raise RuntimeError(
+            f"lane {lane.get('lane_id')} is retry queued; dispatch the retry target"
+        )
+    if not lane_retry_is_due(lane):
+        pending = (
+            lane.get("pending_retry")
+            if isinstance(lane.get("pending_retry"), dict)
+            else {}
+        )
+        raise RuntimeError(
+            f"lane {lane.get('lane_id')} retry is not due until "
+            f"{pending.get('due_at') or 'the configured retry time'}"
+        )
+    pending = (
+        lane.get("pending_retry") if isinstance(lane.get("pending_retry"), dict) else {}
+    )
+    retry_stage = str(pending.get("stage") or "").strip()
+    retry_target = str(pending.get("target") or "").strip()
+    if retry_stage and decision.stage != retry_stage:
+        raise RuntimeError(
+            f"lane {lane.get('lane_id')} retry targets stage {retry_stage!r}, "
+            f"not {decision.stage!r}"
+        )
+    if retry_target and decision.target and decision.target != retry_target:
+        raise RuntimeError(
+            f"lane {lane.get('lane_id')} retry targets {retry_target!r}, "
+            f"not {decision.target!r}"
+        )
+
+
+def validate_actor_capacity(
+    *,
+    config: WorkflowConfig,
+    actor_name: str,
+    dispatch_counts: dict[str, int],
+) -> None:
+    concurrency = _concurrency_config(config)
+    if actor_name == "implementer":
+        limit = concurrency["max_implementers"]
+    elif actor_name == "reviewer":
+        limit = concurrency["max_reviewers"]
+    else:
+        limit = concurrency["max_active_lanes"]
+    if dispatch_counts.get(actor_name, 0) >= limit:
+        raise RuntimeError(f"concurrency limit reached for actor {actor_name}")
+
+
+def advance_lane(
+    *, config: WorkflowConfig, lane: dict[str, Any], target: str | None
+) -> None:
+    next_stage = target or config.stages[lane_stage(lane)].next_stage
+    if not next_stage:
+        raise RuntimeError(f"stage {lane_stage(lane)} has no next stage")
+    if lane_stage(lane) == "deliver" and next_stage == "review":
+        failure = _delivery_contract_failure(lane)
+        if failure:
+            set_lane_operator_attention(
+                config=config,
+                lane=lane,
+                reason="delivery_contract_failed",
+                message=failure,
+                artifacts=_contract_artifacts(lane),
+            )
+            return
+    if next_stage == "done":
+        complete_lane(config=config, lane=lane, reason="completed")
+        return
+    if next_stage not in config.stages:
+        raise RuntimeError(f"unknown target stage: {next_stage}")
+    lane["stage"] = next_stage
+    lane["pending_retry"] = None
+    set_lane_status(
+        config=config,
+        lane=lane,
+        status="waiting",
+        reason=f"advanced to {next_stage}",
+    )
+
+
+def queue_lane_retry(
+    *, config: WorkflowConfig, lane: dict[str, Any], decision: OrchestratorDecision
+) -> dict[str, Any]:
+    retry = _retry_config(config)
+    current_attempt = max(int(lane.get("attempt") or 1), 1)
+    next_attempt = current_attempt + 1
+    record = _retry_record(
+        config=config,
+        lane=lane,
+        decision=decision,
+        current_attempt=current_attempt,
+        next_attempt=next_attempt,
+    )
+    retry_history = lane_list(lane, "retry_history")
+    if current_attempt >= retry["max_attempts"]:
+        record["status"] = "limit_exceeded"
+        retry_history.append(record)
+        set_lane_operator_attention(
+            config=config,
+            lane=lane,
+            reason="retry_limit_exceeded",
+            message=(
+                f"retry limit exceeded for stage {decision.stage!r}; "
+                f"attempt {current_attempt} reached max {retry['max_attempts']}"
+            ),
+            artifacts={
+                "retry": record,
+                "last_actor_output": lane.get("last_actor_output"),
+                "branch": lane.get("branch"),
+                "pull_request": lane.get("pull_request"),
+            },
+        )
+        return {
+            "lane_id": lane.get("lane_id"),
+            "decision": "retry",
+            "status": "operator_attention",
+            "reason": "retry_limit_exceeded",
+        }
+
+    delay_seconds = _retry_delay_seconds(config=config, next_attempt=next_attempt)
+    due_at_epoch = time.time() + delay_seconds
+    record.update(
+        {
+            "status": "queued",
+            "delay_seconds": delay_seconds,
+            "due_at": _epoch_to_iso(due_at_epoch),
+            "due_at_epoch": due_at_epoch,
+        }
+    )
+    lane["attempt"] = next_attempt
+    lane["stage"] = decision.stage
+    lane["operator_attention"] = None
+    lane["pending_retry"] = {
+        "stage": decision.stage,
+        "target": decision.target,
+        "reason": decision.reason,
+        "inputs": decision.inputs,
+        "attempt": next_attempt,
+        "queued_at": record["queued_at"],
+        "delay_seconds": delay_seconds,
+        "due_at": record["due_at"],
+        "due_at_epoch": due_at_epoch,
+        "max_attempts": retry["max_attempts"],
+    }
+    retry_history.append(record)
+    set_lane_status(
+        config=config,
+        lane=lane,
+        status="retry_queued",
+        reason=decision.reason or "retry requested",
+        actor=None,
+    )
+    return {
+        "lane_id": lane.get("lane_id"),
+        "decision": "retry",
+        "status": "queued",
+        "attempt": next_attempt,
+        "due_at": record["due_at"],
+    }
+
+
+def lane_retry_inputs(
+    *, lane: dict[str, Any], inputs: dict[str, Any]
+) -> dict[str, Any]:
+    if str(lane.get("status") or "").strip() != "retry_queued":
+        return inputs
+    pending = (
+        lane.get("pending_retry") if isinstance(lane.get("pending_retry"), dict) else {}
+    )
+    retry_inputs = (
+        pending.get("inputs") if isinstance(pending.get("inputs"), dict) else {}
+    )
+    return {**retry_inputs, **inputs, "retry": pending}
+
+
+def lane_retry_is_due(lane: dict[str, Any], *, now_epoch: float | None = None) -> bool:
+    pending = (
+        lane.get("pending_retry") if isinstance(lane.get("pending_retry"), dict) else {}
+    )
+    due_at_epoch = _retry_due_at_epoch(pending)
+    return (time.time() if now_epoch is None else now_epoch) >= due_at_epoch
+
+
+def complete_lane(*, config: WorkflowConfig, lane: dict[str, Any], reason: str) -> None:
+    failure = _completion_contract_failure(lane)
+    if failure:
+        set_lane_operator_attention(
+            config=config,
+            lane=lane,
+            reason="completion_contract_failed",
+            message=failure,
+            artifacts=_contract_artifacts(lane),
+        )
+        return
+    cleanup = _cleanup_completed_lane(config=config, lane=lane)
+    if cleanup.get("status") == "error":
+        set_lane_operator_attention(
+            config=config,
+            lane=lane,
+            reason="tracker_cleanup_failed",
+            message=str(cleanup.get("error") or "tracker cleanup failed"),
+            artifacts={"cleanup": cleanup},
+        )
+        return
+    lane["completion_cleanup"] = cleanup
+    set_lane_status(config=config, lane=lane, status="complete", reason=reason)
+    _release_lane_lease(config=config, lane=lane, reason=reason)
+
+
+def release_lane(*, config: WorkflowConfig, lane: dict[str, Any], reason: str) -> None:
+    lane["pending_retry"] = None
+    set_lane_status(
+        config=config,
+        lane=lane,
+        status="released",
+        reason=reason,
+        actor=None,
+    )
+    _release_lane_lease(config=config, lane=lane, reason=reason)
+
+
+def _cleanup_completed_lane(
+    *, config: WorkflowConfig, lane: dict[str, Any]
+) -> dict[str, Any]:
+    tracker_cfg = _tracker_config(config)
+    if not tracker_cfg:
+        return {"status": "skipped", "reason": "no tracker config"}
+    issue = lane.get("issue") if isinstance(lane.get("issue"), dict) else {}
+    issue_id = str(issue.get("id") or "").strip()
+    if not issue_id:
+        return {"status": "skipped", "reason": "lane issue is missing id"}
+    completion = _completion_labels(config)
+    try:
+        client = build_tracker_client(
+            workflow_root=config.workflow_root,
+            tracker_cfg=tracker_cfg,
+            repo_path=_repository_path(config),
+        )
+        removed = client.remove_labels(issue_id, completion["remove"])
+        added = client.add_labels(issue_id, completion["add"])
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
+    return {
+        "status": "ok",
+        "issue_id": issue_id,
+        "removed": completion["remove"] if removed else [],
+        "added": completion["add"] if added else [],
+    }
+
+
+def target_or_single(*, target: str | None, values: tuple[str, ...], kind: str) -> str:
+    if target:
+        if target not in values:
+            raise RuntimeError(
+                f"orchestrator selected {kind} {target!r}, not declared on current stage"
+            )
+        return target
+    if len(values) == 1:
+        return values[0]
+    raise RuntimeError(f"orchestrator decision must target one {kind}")
+
+
+def _new_lane(
+    *,
+    config: WorkflowConfig,
+    lane_id: str,
+    issue: dict[str, Any],
+    lease: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "lane_id": lane_id,
+        "issue": issue,
+        "stage": config.first_stage,
+        "status": "claimed",
+        "actor": None,
+        "thread_id": None,
+        "turn_id": None,
+        "runtime_session": {},
+        "branch": issue.get("branch_name"),
+        "pull_request": None,
+        "attempt": 1,
+        "last_progress_at": _now_iso(),
+        "last_actor_output": None,
+        "actor_outputs": {},
+        "action_results": {},
+        "stage_outputs": {},
+        "pending_retry": None,
+        "retry_history": [],
+        "operator_attention": None,
+        "claim": {"state": "Claimed", "lease": lease},
+    }
+
+
+def record_actor_output(
+    *,
+    config: WorkflowConfig,
+    lane: dict[str, Any],
+    actor_name: str,
+    output: dict[str, Any],
+) -> None:
+    actor_outputs = lane_mapping(lane, "actor_outputs")
+    actor_outputs[actor_name] = output
+    lane["last_actor_output"] = output
+    lane["last_progress_at"] = _now_iso()
+    lane["pending_retry"] = None
+    stage_outputs = lane_mapping(lane, "stage_outputs")
+    stage_outputs[lane_stage(lane)] = {
+        **dict(stage_outputs.get(lane_stage(lane)) or {}),
+        "last_actor": actor_name,
+    }
+    branch = _first_text(output, "branch", "branch_name", "branch-name")
+    if branch:
+        lane["branch"] = branch
+    pull_request = output.get("pull_request") or output.get("pr")
+    if isinstance(pull_request, dict):
+        lane["pull_request"] = _normalize_pull_request(pull_request)
+    elif pull_request:
+        lane["pull_request"] = {"url": str(pull_request)}
+    thread_id = _first_text(output, "thread_id", "thread-id")
+    if thread_id:
+        lane["thread_id"] = thread_id
+    turn_id = _first_text(output, "turn_id", "turn-id")
+    if turn_id:
+        lane["turn_id"] = turn_id
+    _append_engine_event(
+        config=config,
+        lane=lane,
+        event_type=f"{config.workflow_name}.lane.actor_output",
+        payload={"actor": actor_name, "output": output},
+    )
+
+
+def record_actor_runtime_start(
+    *,
+    config: WorkflowConfig,
+    lane: dict[str, Any],
+    actor_name: str,
+    stage_name: str,
+    runtime_meta: dict[str, Any],
+) -> None:
+    session = lane_mapping(lane, "runtime_session")
+    session.update(
+        {
+            **_runtime_meta_payload(runtime_meta),
+            "actor": actor_name,
+            "stage": stage_name,
+            "attempt": int(lane.get("attempt") or 0),
+            "status": "running",
+            "started_at": _now_iso(),
+            "updated_at": _now_iso(),
+        }
+    )
+    _apply_runtime_session_ids(lane=lane, session=session)
+    _append_engine_event(
+        config=config,
+        lane=lane,
+        event_type=f"{config.workflow_name}.lane.runtime_started",
+        payload={"runtime_session": session},
+    )
+
+
+def record_actor_runtime_progress(
+    *,
+    config: WorkflowConfig,
+    lane: dict[str, Any],
+    runtime_meta: dict[str, Any],
+) -> None:
+    session = lane_mapping(lane, "runtime_session")
+    session.update(_runtime_meta_payload(runtime_meta))
+    session["status"] = "running"
+    session["updated_at"] = _now_iso()
+    _apply_runtime_session_ids(lane=lane, session=session)
+    lane["last_progress_at"] = _now_iso()
+    _append_engine_event(
+        config=config,
+        lane=lane,
+        event_type=f"{config.workflow_name}.lane.runtime_progress",
+        payload={"runtime_session": session},
+    )
+
+
+def record_actor_runtime_result(
+    *,
+    config: WorkflowConfig,
+    lane: dict[str, Any],
+    runtime_meta: dict[str, Any],
+    status: str,
+) -> None:
+    session = lane_mapping(lane, "runtime_session")
+    session.update(_runtime_meta_payload(runtime_meta))
+    session["status"] = status
+    session["updated_at"] = _now_iso()
+    _apply_runtime_session_ids(lane=lane, session=session)
+    lane["last_progress_at"] = _now_iso()
+    _append_engine_event(
+        config=config,
+        lane=lane,
+        event_type=f"{config.workflow_name}.lane.runtime_{status}",
+        payload={"runtime_session": session},
+    )
+
+
+def record_action_result(
+    *,
+    config: WorkflowConfig,
+    lane: dict[str, Any],
+    action_name: str,
+    result: dict[str, Any],
+) -> None:
+    action_results = lane_mapping(lane, "action_results")
+    action_results[action_name] = result
+    stage_outputs = lane_mapping(lane, "stage_outputs")
+    stage_outputs[lane_stage(lane)] = {
+        **dict(stage_outputs.get(lane_stage(lane)) or {}),
+        "last_action": action_name,
+    }
+    lane["last_progress_at"] = now_iso()
+    append_lane_event(
+        config=config,
+        lane=lane,
+        event_type=f"{config.workflow_name}.lane.action",
+        payload={"action": action_name, "result": result},
+    )
+
+
+def save_scheduler_snapshot(*, config: WorkflowConfig, state: Any) -> None:
+    running_entries: dict[str, dict[str, Any]] = {}
+    retry_entries: dict[str, dict[str, Any]] = {}
+    runtime_sessions: dict[str, dict[str, Any]] = {}
+    runtime_totals = {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "turn_count": 0,
+    }
+    last_rate_limits: dict[str, Any] | None = None
+
+    for lane in state.lanes.values():
+        if not isinstance(lane, dict):
+            continue
+        lane_id = str(lane.get("lane_id") or "").strip()
+        if not lane_id:
+            continue
+        entry = _scheduler_entry(lane)
+        status = str(lane.get("status") or "")
+        if status == "running":
+            running_entries[lane_id] = entry
+        elif status == "retry_queued":
+            pending = (
+                lane.get("pending_retry")
+                if isinstance(lane.get("pending_retry"), dict)
+                else {}
+            )
+            retry_entries[lane_id] = {
+                **entry,
+                "due_at": pending.get("due_at"),
+                "due_at_epoch": _retry_due_at_epoch(pending),
+                "error": pending.get("reason") or "retry queued",
+                "current_attempt": lane.get("attempt"),
+                "max_attempts": pending.get("max_attempts"),
+            }
+        session = lane.get("runtime_session")
+        if isinstance(session, dict) and str(session.get("thread_id") or "").strip():
+            runtime_sessions[lane_id] = entry
+            tokens = (
+                session.get("tokens") if isinstance(session.get("tokens"), dict) else {}
+            )
+            runtime_totals["input_tokens"] += int(tokens.get("input_tokens") or 0)
+            runtime_totals["output_tokens"] += int(tokens.get("output_tokens") or 0)
+            runtime_totals["total_tokens"] += int(tokens.get("total_tokens") or 0)
+            runtime_totals["turn_count"] += int(session.get("turn_count") or 0)
+            rate_limits = session.get("rate_limits")
+            if isinstance(rate_limits, dict):
+                last_rate_limits = rate_limits
+    if last_rate_limits is not None:
+        runtime_totals["rate_limits"] = last_rate_limits
+
+    _engine_store(config).save_scheduler(
+        retry_entries=retry_entries,
+        running_entries=running_entries,
+        runtime_totals=runtime_totals,
+        runtime_sessions=runtime_sessions,
+    )
+
+
+def apply_actor_output_status(
+    *,
+    config: WorkflowConfig,
+    lane: dict[str, Any],
+    actor_name: str,
+    output: dict[str, Any],
+) -> None:
+    status = str(output.get("status") or "").strip().lower()
+    blockers = (
+        output.get("blockers") if isinstance(output.get("blockers"), list) else []
+    )
+    if not status:
+        set_lane_operator_attention(
+            config=config,
+            lane=lane,
+            reason="actor_output_contract_failed",
+            message=f"{actor_name} output is missing status",
+            artifacts={"actor": actor_name, "output": output},
+        )
+        return
+    if actor_name == "implementer":
+        if status not in {"done", "blocked", "failed"}:
+            set_lane_operator_attention(
+                config=config,
+                lane=lane,
+                reason="actor_output_contract_failed",
+                message=f"implementer returned unsupported status {status!r}",
+                artifacts={"actor": actor_name, "output": output},
+            )
+            return
+        if status == "done":
+            failure = _delivery_contract_failure(lane)
+            if failure:
+                set_lane_operator_attention(
+                    config=config,
+                    lane=lane,
+                    reason="actor_output_contract_failed",
+                    message=failure,
+                    artifacts=_contract_artifacts(lane),
+                )
+                return
+    if actor_name == "reviewer" and status not in {
+        "approved",
+        "blocked",
+        "failed",
+        "changes_requested",
+        "needs_changes",
+    }:
+        set_lane_operator_attention(
+            config=config,
+            lane=lane,
+            reason="actor_output_contract_failed",
+            message=f"reviewer returned unsupported status {status!r}",
+            artifacts={"actor": actor_name, "output": output},
+        )
+        return
+    if actor_name == "reviewer" and status in {"changes_requested", "needs_changes"}:
+        required_fixes = output.get("required_fixes")
+        if not isinstance(required_fixes, list) or not required_fixes:
+            set_lane_operator_attention(
+                config=config,
+                lane=lane,
+                reason="actor_output_contract_failed",
+                message="review changes require non-empty required_fixes",
+                artifacts={"actor": actor_name, "output": output},
+            )
+            return
+    if status in {"blocked", "failed"} or blockers:
+        set_lane_operator_attention(
+            config=config,
+            lane=lane,
+            reason=_blocker_reason(output) or status or "actor_blocked",
+            message=str(
+                output.get("summary") or f"{actor_name} returned {status or 'blockers'}"
+            ),
+            artifacts={
+                "actor": actor_name,
+                "blockers": blockers,
+                "branch": lane.get("branch"),
+                "pull_request": lane.get("pull_request"),
+                "artifacts": output.get("artifacts")
+                if isinstance(output.get("artifacts"), dict)
+                else {},
+            },
+        )
+        return
+    set_lane_status(
+        config=config,
+        lane=lane,
+        status="waiting",
+        actor=None,
+        reason=f"{actor_name} returned output",
+    )
+
+
+def _delivery_contract_failure(lane: dict[str, Any]) -> str:
+    implementation = lane_mapping(lane, "actor_outputs").get("implementer")
+    if not isinstance(implementation, dict):
+        return "delivery cannot advance before implementer output exists"
+    if str(implementation.get("status") or "").strip().lower() != "done":
+        return "delivery requires implementer status `done`"
+    if not _pull_request_url(lane):
+        return "delivery requires pull_request.url"
+    verification = implementation.get("verification")
+    if not isinstance(verification, list) or not verification:
+        return "delivery requires non-empty verification evidence"
+    return ""
+
+
+def _completion_contract_failure(lane: dict[str, Any]) -> str:
+    if lane_stage(lane) != "review":
+        return ""
+    review = lane_mapping(lane, "actor_outputs").get("reviewer")
+    if not isinstance(review, dict):
+        return "completion requires reviewer output"
+    if str(review.get("status") or "").strip().lower() != "approved":
+        return "completion requires reviewer status `approved`"
+    if not _pull_request_url(lane):
+        return "completion requires pull_request.url"
+    return ""
+
+
+def _pull_request_url(lane: dict[str, Any]) -> str:
+    pull_request = lane.get("pull_request")
+    if isinstance(pull_request, dict):
+        return str(pull_request.get("url") or "").strip()
+    return ""
+
+
+def _contract_artifacts(lane: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "stage": lane.get("stage"),
+        "actor_outputs": lane.get("actor_outputs"),
+        "pull_request": lane.get("pull_request"),
+        "branch": lane.get("branch"),
+    }
+
+
+def lane_mapping(lane: dict[str, Any], key: str) -> dict[str, Any]:
+    value = lane.get(key)
+    if isinstance(value, dict):
+        return value
+    lane[key] = {}
+    return lane[key]
+
+
+def lane_list(lane: dict[str, Any], key: str) -> list[Any]:
+    value = lane.get(key)
+    if isinstance(value, list):
+        return value
+    lane[key] = []
+    return lane[key]
+
+
+def _lane_id(*, config: WorkflowConfig, issue: dict[str, Any]) -> str:
+    tracker_cfg = _tracker_config(config)
+    prefix = str(tracker_cfg.get("kind") or "tracker").strip() or "tracker"
+    issue_id = str(issue.get("id") or issue.get("identifier") or "").strip()
+    if not issue_id:
+        raise RuntimeError("tracker issue is missing id")
+    return f"{prefix}#{issue_id.lstrip('#')}"
+
+
+def lane_stage(lane: dict[str, Any]) -> str:
+    return str(lane.get("stage") or "").strip()
+
+
+def lane_is_terminal(lane: dict[str, Any]) -> bool:
+    return str(lane.get("status") or "").strip() in _TERMINAL_LANE_STATUSES
+
+
+def _count_lanes_with_status(lanes: list[dict[str, Any]], status: str) -> int:
+    return sum(1 for lane in lanes if str(lane.get("status") or "") == status)
+
+
+def lane_by_id(state: Any, lane_id: str) -> dict[str, Any]:
+    lane = state.lanes.get(lane_id)
+    if not isinstance(lane, dict):
+        raise RuntimeError(f"unknown lane {lane_id!r}")
+    return lane
+
+
+def lane_summary(lane: dict[str, Any]) -> dict[str, Any]:
+    return _lane_summary(lane)
+
+
+def _lane_summary(lane: dict[str, Any]) -> dict[str, Any]:
+    issue = lane.get("issue") if isinstance(lane.get("issue"), dict) else {}
+    attention = (
+        lane.get("operator_attention")
+        if isinstance(lane.get("operator_attention"), dict)
+        else {}
+    )
+    pending_retry = (
+        lane.get("pending_retry") if isinstance(lane.get("pending_retry"), dict) else {}
+    )
+    return {
+        "lane_id": lane.get("lane_id"),
+        "status": lane.get("status"),
+        "stage": lane.get("stage"),
+        "actor": lane.get("actor"),
+        "attempt": lane.get("attempt"),
+        "issue": {
+            "identifier": issue.get("identifier") or issue.get("id"),
+            "title": issue.get("title"),
+            "url": issue.get("url"),
+        },
+        "branch": lane.get("branch"),
+        "pull_request": lane.get("pull_request"),
+        "operator_attention": attention or None,
+        "pending_retry": pending_retry or None,
+        "thread_id": lane.get("thread_id"),
+        "turn_id": lane.get("turn_id"),
+        "last_progress_at": lane.get("last_progress_at"),
+    }
+
+
+def active_lanes(state: Any) -> list[dict[str, Any]]:
+    return [
+        lane
+        for lane in state.lanes.values()
+        if isinstance(lane, dict) and not lane_is_terminal(lane)
+    ]
+
+
+def append_lane_event(
+    *,
+    config: WorkflowConfig,
+    lane: dict[str, Any],
+    event_type: str,
+    payload: dict[str, Any],
+) -> None:
+    _append_engine_event(
+        config=config,
+        lane=lane,
+        event_type=event_type,
+        payload=payload,
+    )
+
+
+def now_iso() -> str:
+    return _now_iso()
+
+
+def set_lane_status(
+    *,
+    config: WorkflowConfig,
+    lane: dict[str, Any],
+    status: str,
+    reason: str,
+    actor: str | None | object = ...,
+) -> None:
+    lane["status"] = status
+    if actor is not ...:
+        lane["actor"] = actor
+    lane["last_progress_at"] = _now_iso()
+    claim = lane_mapping(lane, "claim")
+    if status == "retry_queued":
+        claim["state"] = "RetryQueued"
+    elif status == "running":
+        claim["state"] = "Running"
+    elif status in _TERMINAL_LANE_STATUSES:
+        claim["state"] = "Released"
+    else:
+        claim["state"] = "Claimed"
+    claim["reason"] = reason
+    _append_engine_event(
+        config=config,
+        lane=lane,
+        event_type=f"{config.workflow_name}.lane.{status}",
+        payload={"lane_id": lane.get("lane_id"), "status": status, "reason": reason},
+    )
+
+
+def set_lane_operator_attention(
+    *,
+    config: WorkflowConfig,
+    lane: dict[str, Any],
+    reason: str,
+    message: str,
+    artifacts: dict[str, Any] | None = None,
+) -> None:
+    lane["operator_attention"] = {
+        "reason": reason,
+        "message": message,
+        "artifacts": dict(artifacts or {}),
+    }
+    set_lane_status(
+        config=config,
+        lane=lane,
+        status="operator_attention",
+        reason=reason,
+        actor=None,
+    )
+
+
+def _has_open_blockers(issue: dict[str, Any], *, terminal_states: set[str]) -> bool:
+    for blocker in issue.get("blocked_by") or []:
+        if not isinstance(blocker, dict):
+            return True
+        blocker_state = str(blocker.get("state") or "").strip().lower()
+        if not blocker_state or blocker_state not in terminal_states:
+            return True
+    return False
+
+
+def _issue_is_still_active(
+    *, tracker_cfg: dict[str, Any], issue: dict[str, Any]
+) -> bool:
+    active_states = set(
+        _configured_texts(tracker_cfg, "active_states", "active-states")
+    )
+    exclude_labels = set(
+        _configured_texts(tracker_cfg, "exclude_labels", "exclude-labels")
+    )
+    state = str(issue.get("state") or "").strip().lower()
+    if active_states and state not in active_states:
+        return False
+    if exclude_labels.intersection(_issue_labels(issue)):
+        return False
+    return True
+
+
+def _issue_labels(issue: dict[str, Any]) -> set[str]:
+    labels: set[str] = set()
+    for label in issue.get("labels") or []:
+        text = str(label.get("name") if isinstance(label, dict) else label).strip()
+        if text:
+            labels.add(text.lower())
+    return labels
+
+
+def _configured_texts(config: dict[str, Any], *keys: str) -> list[str]:
+    for key in keys:
+        value = config.get(key)
+        if isinstance(value, list):
+            return [str(item).strip().lower() for item in value if str(item).strip()]
+    return []
+
+
+def _concurrency_config(config: WorkflowConfig) -> dict[str, Any]:
+    raw = config.raw.get("concurrency")
+    cfg = raw if isinstance(raw, dict) else {}
+    return {
+        "max_active_lanes": _positive_int(
+            cfg, "max-active-lanes", "max_active_lanes", default=1
+        ),
+        "max_implementers": _positive_int(
+            cfg, "max-implementers", "max_implementers", default=1
+        ),
+        "max_reviewers": _positive_int(
+            cfg, "max-reviewers", "max_reviewers", default=1
+        ),
+        "per_lane_lock": bool(cfg.get("per-lane-lock", cfg.get("per_lane_lock", True))),
+    }
+
+
+def _recovery_config(config: WorkflowConfig) -> dict[str, Any]:
+    raw = config.raw.get("recovery")
+    cfg = raw if isinstance(raw, dict) else {}
+    return {
+        "running_stale_seconds": _nonnegative_int(
+            cfg, "running-stale-seconds", "running_stale_seconds", default=1800
+        )
+    }
+
+
+def _retry_config(config: WorkflowConfig) -> dict[str, Any]:
+    raw = config.raw.get("retry")
+    cfg = raw if isinstance(raw, dict) else {}
+    return {
+        "max_attempts": _positive_int(cfg, "max-attempts", "max_attempts", default=3),
+        "initial_delay_seconds": _nonnegative_int(
+            cfg,
+            "initial-delay-seconds",
+            "initial_delay_seconds",
+            default=0,
+        ),
+        "backoff_multiplier": _positive_float(
+            cfg,
+            "backoff-multiplier",
+            "backoff_multiplier",
+            default=2.0,
+        ),
+        "max_delay_seconds": _nonnegative_int(
+            cfg,
+            "max-delay-seconds",
+            "max_delay_seconds",
+            default=300,
+        ),
+    }
+
+
+def _retry_delay_seconds(*, config: WorkflowConfig, next_attempt: int) -> int:
+    cfg = _retry_config(config)
+    retry_index = max(next_attempt - 2, 0)
+    delay = cfg["initial_delay_seconds"] * (cfg["backoff_multiplier"] ** retry_index)
+    return int(min(delay, cfg["max_delay_seconds"]))
+
+
+def _retry_record(
+    *,
+    config: WorkflowConfig,
+    lane: dict[str, Any],
+    decision: OrchestratorDecision,
+    current_attempt: int,
+    next_attempt: int,
+) -> dict[str, Any]:
+    retry = _retry_config(config)
+    return {
+        "queued_at": _now_iso(),
+        "stage": decision.stage,
+        "target": decision.target,
+        "reason": decision.reason,
+        "inputs": decision.inputs,
+        "current_attempt": current_attempt,
+        "next_attempt": next_attempt,
+        "max_attempts": retry["max_attempts"],
+    }
+
+
+def _retry_due_at_epoch(pending_retry: dict[str, Any]) -> float:
+    value = pending_retry.get("due_at_epoch")
+    if value not in (None, ""):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            pass
+    return _iso_to_epoch(str(pending_retry.get("due_at") or ""), default=time.time())
+
+
+def _completion_labels(config: WorkflowConfig) -> dict[str, list[str]]:
+    raw = config.raw.get("completion")
+    cfg = raw if isinstance(raw, dict) else {}
+    return {
+        "remove": _configured_texts(cfg, "remove_labels", "remove-labels")
+        or ["active"],
+        "add": _configured_texts(cfg, "add_labels", "add-labels") or ["done"],
+    }
+
+
+def _positive_int(config: dict[str, Any], *keys: str, default: int) -> int:
+    for key in keys:
+        value = config.get(key)
+        if value not in (None, ""):
+            try:
+                return max(int(value), 1)
+            except (TypeError, ValueError):
+                return default
+    return default
+
+
+def _nonnegative_int(config: dict[str, Any], *keys: str, default: int) -> int:
+    for key in keys:
+        value = config.get(key)
+        if value not in (None, ""):
+            try:
+                return max(int(value), 0)
+            except (TypeError, ValueError):
+                return default
+    return default
+
+
+def _positive_float(config: dict[str, Any], *keys: str, default: float) -> float:
+    for key in keys:
+        value = config.get(key)
+        if value not in (None, ""):
+            try:
+                return max(float(value), 1.0)
+            except (TypeError, ValueError):
+                return default
+    return default
+
+
+def _tracker_config(config: WorkflowConfig) -> dict[str, Any]:
+    raw = config.raw.get("tracker")
+    return raw if isinstance(raw, dict) else {}
+
+
+def _code_host_config(config: WorkflowConfig) -> dict[str, Any]:
+    raw = config.raw.get("code-host")
+    return raw if isinstance(raw, dict) else {}
+
+
+def _repository_path(config: WorkflowConfig) -> Path | None:
+    raw = config.raw.get("repository")
+    if not isinstance(raw, dict):
+        return None
+    value = str(raw.get("local-path") or raw.get("local_path") or "").strip()
+    if not value:
+        return None
+    path = Path(value).expanduser()
+    return path if path.is_absolute() else (config.workflow_root / path).resolve()
+
+
+def _engine_store(config: WorkflowConfig) -> EngineStore:
+    return EngineStore(
+        db_path=runtime_paths(config.workflow_root)["db_path"],
+        workflow=config.workflow_name,
+    )
+
+
+def _append_engine_event(
+    *,
+    config: WorkflowConfig,
+    lane: dict[str, Any],
+    event_type: str,
+    payload: dict[str, Any],
+) -> None:
+    _engine_store(config).append_event(
+        event_type=event_type,
+        payload=payload,
+        work_id=str(lane.get("lane_id") or ""),
+    )
+
+
+def _acquire_lane_lease(
+    *, config: WorkflowConfig, lane_id: str, issue: dict[str, Any]
+) -> dict[str, Any]:
+    return _engine_store(config).acquire_lease(
+        lease_scope=_claim_lease_scope(config),
+        lease_key=lane_id,
+        owner_instance_id=_claim_owner(config),
+        owner_role="workflow-runner",
+        ttl_seconds=86_400,
+        metadata={"issue": issue, "lane_id": lane_id},
+    )
+
+
+def _release_lane_lease(
+    *, config: WorkflowConfig, lane: dict[str, Any], reason: str
+) -> dict[str, Any]:
+    claim = lane.get("claim") if isinstance(lane.get("claim"), dict) else {}
+    lease = claim.get("lease") if isinstance(claim.get("lease"), dict) else {}
+    owner = str(lease.get("owner_instance_id") or "").strip() or _claim_owner(config)
+    return _engine_store(config).release_lease(
+        lease_scope=_claim_lease_scope(config),
+        lease_key=str(lane.get("lane_id") or ""),
+        owner_instance_id=owner,
+        release_reason=reason,
+    )
+
+
+def _claim_lease_scope(config: WorkflowConfig) -> str:
+    return f"{config.workflow_name}:lane-claim"
+
+
+def _claim_owner(config: WorkflowConfig) -> str:
+    return f"{config.workflow_name}:{config.workflow_root}:{_RUNNER_INSTANCE_ID}"
+
+
+def _first_text(source: dict[str, Any], *keys: str) -> str:
+    for key in keys:
+        value = source.get(key)
+        if value not in (None, ""):
+            return str(value).strip()
+    return ""
+
+
+def _normalize_pull_request(value: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: item
+        for key, item in {
+            "number": value.get("number"),
+            "url": value.get("url"),
+            "title": value.get("title"),
+            "state": value.get("state"),
+            "head": value.get("head") or value.get("headRefName"),
+            "head_oid": value.get("head_oid") or value.get("headRefOid"),
+            "is_draft": value.get("is_draft")
+            if "is_draft" in value
+            else value.get("isDraft"),
+            "updated_at": value.get("updated_at") or value.get("updatedAt"),
+        }.items()
+        if item not in (None, "")
+    }
+
+
+def _runtime_meta_payload(runtime_meta: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: value
+        for key, value in dict(runtime_meta or {}).items()
+        if value not in (None, "", [], {})
+    }
+
+
+def _apply_runtime_session_ids(
+    *, lane: dict[str, Any], session: dict[str, Any]
+) -> None:
+    session_id = str(session.get("session_id") or "").strip()
+    thread_id = str(session.get("thread_id") or session_id or "").strip()
+    turn_id = str(session.get("turn_id") or "").strip()
+    if session_id:
+        session["session_id"] = session_id
+    if thread_id:
+        session["thread_id"] = thread_id
+        lane["thread_id"] = thread_id
+    if turn_id:
+        session["turn_id"] = turn_id
+        lane["turn_id"] = turn_id
+
+
+def _runtime_updated_at(lane: dict[str, Any]) -> str:
+    session = lane.get("runtime_session")
+    if isinstance(session, dict):
+        return str(session.get("updated_at") or session.get("started_at") or "")
+    return ""
+
+
+def _scheduler_entry(lane: dict[str, Any]) -> dict[str, Any]:
+    issue = lane.get("issue") if isinstance(lane.get("issue"), dict) else {}
+    session = (
+        lane.get("runtime_session")
+        if isinstance(lane.get("runtime_session"), dict)
+        else {}
+    )
+    return {
+        "issue_id": lane.get("lane_id"),
+        "identifier": issue.get("identifier") or lane.get("lane_id"),
+        "state": lane.get("status"),
+        "title": issue.get("title"),
+        "url": issue.get("url"),
+        "worker_id": lane.get("actor"),
+        "attempt": int(lane.get("attempt") or 0),
+        "worker_status": lane.get("status"),
+        "started_at_epoch": _iso_to_epoch(
+            str(session.get("started_at") or lane.get("last_progress_at") or ""),
+            default=time.time(),
+        ),
+        "heartbeat_at_epoch": _iso_to_epoch(
+            str(session.get("updated_at") or lane.get("last_progress_at") or ""),
+            default=time.time(),
+        ),
+        "thread_id": lane.get("thread_id") or session.get("thread_id"),
+        "turn_id": lane.get("turn_id") or session.get("turn_id"),
+        "session_name": session.get("session_name"),
+        "runtime_name": session.get("runtime_name"),
+        "runtime_kind": session.get("runtime_kind"),
+        "session_id": session.get("session_id"),
+        "status": session.get("status") or lane.get("status"),
+        "run_id": session.get("run_id"),
+        "actor": session.get("actor") or lane.get("actor"),
+        "stage": session.get("stage") or lane.get("stage"),
+        "branch": lane.get("branch"),
+        "pull_request": lane.get("pull_request"),
+        "last_event": session.get("last_event"),
+        "last_message": session.get("last_message"),
+        "tokens": session.get("tokens"),
+        "rate_limits": session.get("rate_limits"),
+        "turn_count": session.get("turn_count"),
+    }
+
+
+def _iso_to_epoch(value: str, *, default: float) -> float:
+    text = str(value or "").strip()
+    if not text:
+        return default
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return default
+
+
+def _epoch_to_iso(value: float) -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(value))
+
+
+def _blocker_reason(output: dict[str, Any]) -> str:
+    blockers = (
+        output.get("blockers") if isinstance(output.get("blockers"), list) else []
+    )
+    for blocker in blockers:
+        if not isinstance(blocker, dict):
+            continue
+        kind = str(blocker.get("kind") or "").strip()
+        if kind:
+            return kind
+    return ""
+
+
+def _now_iso() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())

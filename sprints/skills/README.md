@@ -1,20 +1,18 @@
 # Sprints Skills
 
-This directory is reserved for public, project-agnostic Sprints skills copied
-with the plugin install.
+Bundled Sprints skills are project-agnostic mechanics for actor work. Workflow
+policy stays in `WORKFLOW.md`; skills only describe repeatable execution steps.
 
-No public skills are currently bundled. Project-specific or deployment-only
-skills should stay in private project packs instead of this public plugin root.
-
-## Layout
+## Bundled Skills
 
 ```text
 skills/
-`-- README.md
+|-- pull/      # sync branch with origin/main
+|-- debug/     # diagnose blocked or failing actor work
+|-- commit/    # commit verified lane changes
+|-- push/      # push branch and create/update PR
+`-- land/      # operator/reviewer PR landing support
 ```
 
-## Adding A Public Skill
-
-1. Create one kebab-case directory per skill under `skills/`.
-2. Add a `SKILL.md` with YAML front matter.
-3. Keep the skill generic enough to ship with Sprints.
+The default `change-delivery` implementer uses `pull`, `debug`, `commit`, and
+`push`. The `push` skill owns pull request creation or update.
