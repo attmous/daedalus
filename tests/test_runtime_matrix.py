@@ -146,7 +146,7 @@ def test_runtime_matrix_cli_executes_selected_role(tmp_path):
         },
     )
 
-    output = tools.execute_raw_args(f"runtime-matrix --workflow-root {root} --role agent --execute --json")
+    output = tools.execute_raw_args(f"runtime-matrix --workflow-root {root.as_posix()} --role agent --execute --json")
     payload = json.loads(output)
 
     assert payload["ok"] is True

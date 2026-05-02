@@ -1,8 +1,8 @@
-from pathlib import Path
+﻿from pathlib import Path
 
 
 def test_runtime_protocol_declares_four_methods():
-    from workflows.change_delivery.runtimes import Runtime
+    from runtimes.types import Runtime
 
     # Protocol bodies are duck-typed; we verify the required method names exist
     # in the Protocol's namespace.
@@ -13,6 +13,7 @@ def test_runtime_protocol_declares_four_methods():
 
 
 def test_build_runtimes_returns_empty_dict_when_config_is_empty():
-    from workflows.change_delivery.runtimes import build_runtimes
+    from runtimes.registry import build_runtimes
 
     assert build_runtimes({}) == {}
+

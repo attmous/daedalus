@@ -1,8 +1,8 @@
-from pathlib import Path
+﻿from pathlib import Path
 
 
 def _make_runtime(**cfg_overrides):
-    from workflows.change_delivery.runtimes.claude_cli import ClaudeCliRuntime
+    from runtimes.claude_cli import ClaudeCliRuntime
 
     cfg = {
         "kind": "claude-cli",
@@ -69,7 +69,7 @@ def test_run_prompt_invokes_claude_cli_with_model(tmp_path):
 
 
 def test_run_prompt_supports_workspace_runner_without_timeout_kwarg(tmp_path):
-    from workflows.change_delivery.runtimes.claude_cli import ClaudeCliRuntime
+    from runtimes.claude_cli import ClaudeCliRuntime
 
     calls = []
 
@@ -96,7 +96,7 @@ def test_run_prompt_supports_workspace_runner_without_timeout_kwarg(tmp_path):
 
 
 def test_run_command_supports_workspace_runner_without_env_or_timeout_kwargs(tmp_path):
-    from workflows.change_delivery.runtimes.claude_cli import ClaudeCliRuntime
+    from runtimes.claude_cli import ClaudeCliRuntime
 
     calls = []
 
@@ -116,3 +116,4 @@ def test_run_command_supports_workspace_runner_without_env_or_timeout_kwargs(tmp
         env={"DAEDALUS_RUNTIME_KIND": "claude-cli"},
     ) == "ok"
     assert calls == [(["claude", "--print", "hi"], tmp_path)]
+

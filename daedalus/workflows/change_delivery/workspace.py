@@ -19,7 +19,7 @@ from engine.storage import write_text_atomic as _write_text
 from workflows.change_delivery.contract_model import compile_change_delivery_contract
 from workflows.change_delivery.migrations import get_ledger_field
 from workflows.change_delivery.storage import ensure_change_delivery_state_files
-from workflows.change_delivery.runtimes import build_runtimes
+from runtimes.registry import build_runtimes
 from workflows.paths import runtime_paths
 from integrations.code_hosts import build_code_host_client
 from integrations.trackers import build_tracker_client
@@ -2549,4 +2549,5 @@ def load_workspace_from_config(
     return make_workspace(
         workspace_root=workspace_root, config=load_workflow_contract(workspace_root).config
     )
+
 

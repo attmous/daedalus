@@ -1,4 +1,4 @@
-import importlib.util
+﻿import importlib.util
 from pathlib import Path
 
 
@@ -337,7 +337,7 @@ def test_ensure_session_via_runtime_routes_through_workspace_runtime_accessor():
     """sessions.ensure_session_via_runtime(workspace=..., runtime_name=..., ...) must
     resolve the runtime via ws.runtime() and delegate to its ensure_session."""
     from pathlib import Path
-    from workflows.change_delivery.runtimes import SessionHandle
+    from runtimes.types import SessionHandle
     from workflows.change_delivery import sessions
 
     captured = {}
@@ -461,3 +461,4 @@ def test_close_session_via_runtime_delegates_to_ws_runtime():
     )
     assert captured["runtime_name"] == "acpx-codex"
     assert captured["called"] == (Path("/tmp/wt"), "lane-224")
+

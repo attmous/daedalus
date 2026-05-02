@@ -1,4 +1,4 @@
-"""Phase A runtime-agnostic tests: hermes-agent adapter + dispatch_agent."""
+﻿"""Phase A runtime-agnostic tests: hermes-agent adapter + dispatch_agent."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -6,21 +6,21 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from workflows.change_delivery.runtimes import SessionHandle
+from runtimes.types import SessionHandle
 
 
 def test_acpx_runtime_has_run_command():
-    from workflows.change_delivery.runtimes.acpx_codex import AcpxCodexRuntime
+    from runtimes.acpx_codex import AcpxCodexRuntime
     assert hasattr(AcpxCodexRuntime, "run_command")
 
 
 def test_claude_cli_runtime_has_run_command():
-    from workflows.change_delivery.runtimes.claude_cli import ClaudeCliRuntime
+    from runtimes.claude_cli import ClaudeCliRuntime
     assert hasattr(ClaudeCliRuntime, "run_command")
 
 
 def test_acpx_run_command_invokes_run(tmp_path):
-    from workflows.change_delivery.runtimes.acpx_codex import AcpxCodexRuntime
+    from runtimes.acpx_codex import AcpxCodexRuntime
 
     fake_run = MagicMock(return_value=MagicMock(stdout="hello"))
     rt = AcpxCodexRuntime(
@@ -42,7 +42,7 @@ def test_acpx_run_command_invokes_run(tmp_path):
 
 
 def test_claude_cli_run_command_invokes_run(tmp_path):
-    from workflows.change_delivery.runtimes.claude_cli import ClaudeCliRuntime
+    from runtimes.claude_cli import ClaudeCliRuntime
 
     fake_run = MagicMock(return_value=MagicMock(stdout="ok"))
     rt = ClaudeCliRuntime(
@@ -59,14 +59,14 @@ def test_claude_cli_run_command_invokes_run(tmp_path):
 
 def test_hermes_agent_runtime_registered():
     # Trigger registration
-    from workflows.change_delivery import runtimes as runtime_module
-    from workflows.change_delivery.runtimes import hermes_agent  # noqa: F401
+    import runtimes as runtime_module
+    from runtimes import hermes_agent  # noqa: F401
 
     assert "hermes-agent" in runtime_module._RUNTIME_KINDS
 
 
 def test_hermes_agent_run_command(tmp_path):
-    from workflows.change_delivery.runtimes.hermes_agent import HermesAgentRuntime
+    from runtimes.hermes_agent import HermesAgentRuntime
 
     fake_run = MagicMock(return_value=MagicMock(stdout="agent-out"))
     rt = HermesAgentRuntime({"kind": "hermes-agent"}, run=fake_run, run_json=None)
@@ -78,7 +78,7 @@ def test_hermes_agent_run_command(tmp_path):
 
 
 def test_hermes_agent_final_mode_uses_scripted_one_shot(tmp_path):
-    from workflows.change_delivery.runtimes.hermes_agent import HermesAgentRuntime
+    from runtimes.hermes_agent import HermesAgentRuntime
 
     fake_run = MagicMock(return_value=MagicMock(stdout="final answer\n"))
     rt = HermesAgentRuntime(
@@ -109,7 +109,7 @@ def test_hermes_agent_final_mode_uses_scripted_one_shot(tmp_path):
 
 
 def test_hermes_agent_chat_mode_uses_quiet_query_with_session_options(tmp_path):
-    from workflows.change_delivery.runtimes.hermes_agent import HermesAgentRuntime
+    from runtimes.hermes_agent import HermesAgentRuntime
 
     fake_run = MagicMock(return_value=MagicMock(stdout="chat answer\n"))
     rt = HermesAgentRuntime(
@@ -156,7 +156,7 @@ def test_hermes_agent_chat_mode_uses_quiet_query_with_session_options(tmp_path):
 
 
 def test_hermes_agent_ensure_session_is_noop(tmp_path):
-    from workflows.change_delivery.runtimes.hermes_agent import HermesAgentRuntime
+    from runtimes.hermes_agent import HermesAgentRuntime
 
     rt = HermesAgentRuntime({"kind": "hermes-agent"}, run=MagicMock(), run_json=None)
     handle = rt.ensure_session(
@@ -168,7 +168,7 @@ def test_hermes_agent_ensure_session_is_noop(tmp_path):
 
 
 def test_hermes_agent_assess_health_always_healthy(tmp_path):
-    from workflows.change_delivery.runtimes.hermes_agent import HermesAgentRuntime
+    from runtimes.hermes_agent import HermesAgentRuntime
 
     rt = HermesAgentRuntime({"kind": "hermes-agent"}, run=MagicMock(), run_json=None)
     h = rt.assess_health(None, worktree=tmp_path)
@@ -176,7 +176,7 @@ def test_hermes_agent_assess_health_always_healthy(tmp_path):
 
 
 def test_build_runtimes_accepts_hermes_agent():
-    from workflows.change_delivery.runtimes import build_runtimes
+    from runtimes.registry import build_runtimes
 
     cfg = {"hermes-default": {"kind": "hermes-agent"}}
     rts = build_runtimes(cfg, run=MagicMock(), run_json=MagicMock())
@@ -185,7 +185,7 @@ def test_build_runtimes_accepts_hermes_agent():
 
 def _make_workspace(tmp_path, agents_cfg, runtimes_cfg, fake_run, *, workspace_dir=None):
     """Build a minimal workspace stand-in for dispatcher tests."""
-    from workflows.change_delivery.runtimes import build_runtimes
+    from runtimes.registry import build_runtimes
 
     runtimes = build_runtimes(runtimes_cfg, run=fake_run, run_json=MagicMock())
     cfg = {"agents": agents_cfg, "runtimes": runtimes_cfg}
@@ -337,7 +337,7 @@ def test_dispatch_agent_falls_back_to_bundled(tmp_path):
     ws.config = {"agents": {}}
     p = resolve_prompt_template_path(workspace=ws, role="coder", agent_cfg={})
     assert p.name == "coder.md"
-    assert "workflows/change_delivery/prompts" in str(p)
+    assert "workflows/change_delivery/prompts" in str(p).replace("\\", "/")
 
 
 def test_dispatch_agent_prefers_inline_prompt_template_from_config(tmp_path):
@@ -484,3 +484,4 @@ def test_dispatch_agent_uses_explicit_prompt_in_dispatched_command(tmp_path):
     argv = fake_run.call_args[0][0]
     prompt_files = [a for a in argv if a.endswith(".txt")]
     assert Path(prompt_files[0]).read_text() == "from-explicit-gpt-x"
+

@@ -9,7 +9,7 @@ import pytest
 
 def test_runtime_protocol_has_last_activity_ts():
     """The Runtime Protocol declares last_activity_ts (optional method)."""
-    from workflows.change_delivery.runtimes import Runtime
+    from runtimes.types import Runtime
 
     assert "last_activity_ts" in Runtime.__dict__ or hasattr(Runtime, "last_activity_ts"), \
         "Runtime Protocol must declare last_activity_ts"
@@ -17,7 +17,7 @@ def test_runtime_protocol_has_last_activity_ts():
 
 def test_claude_cli_runtime_updates_last_activity_on_stdout_line(monkeypatch):
     import time
-    from workflows.change_delivery.runtimes.claude_cli import ClaudeCliRuntime
+    from runtimes.claude_cli import ClaudeCliRuntime
 
     rt = ClaudeCliRuntime({"kind": "claude-cli", "max-turns-per-invocation": 1, "timeout-seconds": 60}, run=None, run_json=None)
     assert rt.last_activity_ts() is None  # no signal yet
@@ -32,7 +32,7 @@ def test_claude_cli_runtime_updates_last_activity_on_stdout_line(monkeypatch):
 
 def test_acpx_codex_runtime_updates_last_activity_on_app_server_event():
     import time
-    from workflows.change_delivery.runtimes.acpx_codex import AcpxCodexRuntime
+    from runtimes.acpx_codex import AcpxCodexRuntime
 
     rt = AcpxCodexRuntime(
         {"kind": "acpx-codex",
@@ -48,7 +48,7 @@ def test_acpx_codex_runtime_updates_last_activity_on_app_server_event():
 
 
 def test_hermes_agent_runtime_updates_last_activity_on_callback():
-    from workflows.change_delivery.runtimes.hermes_agent import HermesAgentRuntime
+    from runtimes.hermes_agent import HermesAgentRuntime
 
     rt = HermesAgentRuntime({"kind": "hermes-agent"}, run=None, run_json=None)
     assert rt.last_activity_ts() is None
@@ -66,7 +66,7 @@ def test_claude_cli_records_activity_before_run_returns(tmp_path):
     activity timestamp from inside the run callback.
     """
     import time
-    from workflows.change_delivery.runtimes.claude_cli import ClaudeCliRuntime
+    from runtimes.claude_cli import ClaudeCliRuntime
 
     captured: dict[str, float | None] = {}
 
@@ -302,4 +302,5 @@ def test_stall_emits_both_events_and_queues_retry(tmp_path, monkeypatch):
     assert [e["type"] for e in events] == [DAEDALUS_STALL_DETECTED, DAEDALUS_STALL_TERMINATED]
     assert terminated == ["i1"]
     assert retried == [("i1", "stall_timeout")]
+
 
