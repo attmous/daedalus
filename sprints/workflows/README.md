@@ -13,7 +13,7 @@ orchestrator decisions, and writing state.
 workflows/
 |-- __init__.py              # public workflow exports
 |-- __main__.py              # `python -m workflows --workflow-root <path> ...`
-|-- loader.py                # public workflow API facade
+|-- loader.py                # WORKFLOW.md contract loader facade
 |-- contracts.py             # WORKFLOW.md loading, rendering, and policy sections
 |-- registry.py              # workflow object registry and CLI dispatch
 |-- config.py                # typed front matter config

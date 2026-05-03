@@ -12,12 +12,13 @@ objects and call ``format_panel``.
 
 from __future__ import annotations
 
+import inspect as _inspect_for_self_register
 import os
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable, Literal, Mapping
+from typing import Any, Literal, Mapping
 
 # ─── Color & glyphs ────────────────────────────────────────────────
 
@@ -48,8 +49,6 @@ HINT_ARROW = "→"
 # sys.modules[cls.__module__] for type resolution, which crashes if the module
 # isn't there. Self-register the in-flight module so both direct execution and
 # spec-loaded test modules work.
-import inspect as _inspect_for_self_register
-
 _self_module = _inspect_for_self_register.getmodule(
     _inspect_for_self_register.currentframe()
 )

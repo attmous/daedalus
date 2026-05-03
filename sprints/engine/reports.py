@@ -10,7 +10,7 @@ from engine.state import (
     read_engine_runs,
 )
 from engine.store import EngineStore
-from workflows.loader import load_workflow_contract
+from workflows.contracts import load_workflow_contract
 from workflows.paths import runtime_paths
 
 

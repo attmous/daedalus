@@ -29,8 +29,6 @@ _PLUGIN_ROOT = str(Path(__file__).resolve().parent.parent)
 if _PLUGIN_ROOT not in sys.path:
     sys.path.insert(0, _PLUGIN_ROOT)
 
-from workflows import run_cli
-
 
 def _resolve_workflow_root(argv: list[str]) -> tuple[Path, list[str]]:
     """Peel --workflow-root / --workflow-root=<path> out of argv."""
@@ -62,6 +60,8 @@ def _resolve_workflow_root(argv: list[str]) -> tuple[Path, list[str]]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    from workflows import run_cli
+
     raw = list(argv) if argv is not None else sys.argv[1:]
     workflow_root, command_argv = _resolve_workflow_root(raw)
     try:

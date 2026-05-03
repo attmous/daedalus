@@ -9,7 +9,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from engine.state import read_engine_scheduler_state
-from workflows.loader import WorkflowContractError, load_workflow_contract
+from workflows.contracts import WorkflowContractError, load_workflow_contract
 from workflows.paths import runtime_paths
 
 CODEX_APP_SERVER_SERVICE_PREFIX = "sprints-codex-app-server"

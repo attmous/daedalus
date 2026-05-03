@@ -9,6 +9,7 @@ real TTY.
 from __future__ import annotations
 
 import json
+import sys
 import time
 from pathlib import Path
 from typing import Any, Mapping
@@ -163,11 +164,8 @@ def build_snapshot(workflow_root) -> dict[str, Any]:
     }
 
 
-import sys as _sys
-
-
 def _stdout_is_tty() -> bool:
-    return _sys.stdout.isatty()
+    return sys.stdout.isatty()
 
 
 def cmd_watch(args, parser) -> str:

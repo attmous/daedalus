@@ -2,7 +2,36 @@
 
 from __future__ import annotations
 
-from workflows.loader import (
+from workflows.bindings import (
+    RuntimePresetError,
+    available_runtime_presets,
+    build_runtime_matrix_report,
+    configure_runtime_contract,
+    runtime_availability_checks,
+    runtime_binding_checks,
+    runtime_stage_checks,
+)
+from workflows.contract_apply import (
+    WorkflowContractApplyError,
+    apply_workflow_contract,
+)
+from workflows.contracts import (
+    ActorPolicy,
+    WorkflowContract,
+    WorkflowContractError,
+    WorkflowPolicy,
+    WorkflowPolicyError,
+    find_repo_workflow_contract_path,
+    find_workflow_contract_path,
+    load_workflow_contract,
+    load_workflow_contract_file,
+    render_workflow_markdown,
+    workflow_contract_pointer_path,
+    workflow_markdown_path,
+    workflow_named_markdown_path,
+    write_workflow_contract_pointer,
+)
+from workflows.registry import (
     CONFIG_SCHEMA_PATH,
     DEFAULT_WORKFLOW_NAME,
     NAME,
@@ -11,39 +40,18 @@ from workflows.loader import (
     WORKFLOW,
     WORKFLOWS,
     SprintsWorkflow,
-    ActorPolicy,
-    RuntimePresetError,
     Workflow,
-    WorkflowContractApplyError,
-    WorkflowContract,
-    WorkflowContractError,
-    WorkflowPolicy,
-    WorkflowPolicyError,
-    apply_workflow_contract,
-    available_runtime_presets,
-    build_readiness_recommendations,
-    build_runtime_matrix_report,
-    configure_runtime_contract,
-    find_repo_workflow_contract_path,
-    find_workflow_contract_path,
     list_workflows,
     load_config,
-    load_workflow_contract,
-    load_workflow_contract_file,
     load_workflow_object,
     make_workspace,
-    render_workflow_markdown,
     run_cli,
-    runtime_availability_checks,
-    runtime_binding_checks,
-    runtime_stage_checks,
-    validate_workflow_contract,
-    workflow_contract_pointer_path,
-    workflow_markdown_path,
-    workflow_named_markdown_path,
-    write_workflow_contract_pointer,
 )
 from workflows.runner import main as cli_main
+from workflows.validation import (
+    build_readiness_recommendations,
+    validate_workflow_contract,
+)
 
 __all__ = [
     "NAME",
