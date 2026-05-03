@@ -876,7 +876,7 @@ def _plan_decisions(
         if decision.decision == "run_actor":
             actor_name = target_or_single(
                 target=decision.target,
-                values=config.stages[lane_stage(lane)].actors,
+                values=config.stages[decision.stage].actors,
                 kind="actor",
             )
             validate_actor_capacity(
@@ -917,6 +917,8 @@ def _apply_decision(
         advance_lane(config=config, lane=lane, target=decision.target)
         return {"lane_id": lane["lane_id"], "decision": "advance"}
     if decision.decision == "run_actor":
+        if decision.stage != lane_stage(lane):
+            advance_lane(config=config, lane=lane, target=decision.stage)
         actor_name = target_or_single(
             target=decision.target,
             values=config.stages[lane_stage(lane)].actors,
@@ -941,6 +943,8 @@ def _apply_decision(
             "result": result,
         }
     if decision.decision == "run_action":
+        if decision.stage != lane_stage(lane):
+            advance_lane(config=config, lane=lane, target=decision.stage)
         inputs = lane_retry_inputs(lane=lane, inputs=decision.inputs)
         action_name = target_or_single(
             target=decision.target,

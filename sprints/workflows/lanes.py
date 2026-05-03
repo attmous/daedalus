@@ -430,6 +430,13 @@ def validate_decision_for_lane(
     }:
         raise RuntimeError(f"lane {lane.get('lane_id')} requires operator attention")
     if decision.decision != "retry" and decision.stage != lane_stage(lane):
+        current_stage = config.stages.get(lane_stage(lane))
+        if (
+            lane_status == "waiting"
+            and current_stage is not None
+            and decision.stage == current_stage.next_stage
+        ):
+            return
         raise RuntimeError(
             f"decision for lane {lane.get('lane_id')} uses stage {decision.stage!r}, "
             f"but lane is at {lane_stage(lane)!r}"
