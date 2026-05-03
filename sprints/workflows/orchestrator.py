@@ -80,9 +80,11 @@ def parse_orchestrator_decisions(output: str) -> list[OrchestratorDecision]:
     try:
         raw = json.loads(output)
     except json.JSONDecodeError as exc:
-        raise OrchestratorDecisionError(
-            f"orchestrator returned invalid JSON: {exc}"
-        ) from exc
+        raw = _parse_trailing_json_object(output)
+        if raw is None:
+            raise OrchestratorDecisionError(
+                f"orchestrator returned invalid JSON: {exc}"
+            ) from exc
     if not isinstance(raw, dict):
         raise OrchestratorDecisionError("orchestrator decision must be a JSON object")
     raw_decisions = raw.get("decisions")
@@ -100,6 +102,22 @@ def parse_orchestrator_decisions(output: str) -> list[OrchestratorDecision]:
             "each orchestrator decision entry must be an object"
         )
     return decisions
+
+
+def _parse_trailing_json_object(output: str) -> dict[str, Any] | None:
+    decoder = json.JSONDecoder()
+    for index, char in enumerate(output):
+        if char != "{":
+            continue
+        try:
+            value, end = decoder.raw_decode(output[index:])
+        except json.JSONDecodeError:
+            continue
+        if output[index + end :].strip():
+            continue
+        if isinstance(value, dict):
+            return value
+    return None
 
 
 def render_prompt_template(
